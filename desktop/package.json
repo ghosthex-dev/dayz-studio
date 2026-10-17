@@ -1,0 +1,16 @@
+{
+  "name": "dayz-studio-desktop",
+  "version": "1.0.0",
+  "description": "DayZ Studio desktop shell - hosts the editor and embeds the real game window",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "koffi": "^2.16.3"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11"
+  }
+}

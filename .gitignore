@@ -1,0 +1,16 @@
+# game launches, profiles, logs, test servers
+_game/
+# data extracted from your own DayZ install (terrain, models, textures, scene) - Bohemia Interactive content, never upload
+data/*
+!data/README.txt
+maps/*
+!maps/README.txt
+# desktop shell dependencies (installed by run_desktop.bat)
+desktop/node_modules/
+desktop/_eval.js
+desktop/_eval.out
+# build output
+dist/
+__pycache__/
+*.pyc
+tools/sample_dabs_v8.dze

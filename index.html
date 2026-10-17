@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DayZ Studio — Map &amp; Quest Editor</title>
+<link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+<header id="topbar">
+  <div class="brand"><span class="brand-mark">◈</span><span class="brand-name">DayZ Studio</span></div>
+  <div class="tb-group">
+    <button class="btn" data-act="file" title="Project menu">File ▾</button>
+    <button class="btn icon" data-act="undo" title="Undo (Ctrl+Z)">↶</button>
+    <button class="btn icon" data-act="redo" title="Redo (Ctrl+Y)">↷</button>
+  </div>
+  <div class="tb-group seg" id="view-seg">
+    <button class="btn seg-btn" data-view="map" title="Map editor (Tab)">🗺 Map</button>
+    <button class="btn seg-btn" data-view="game" title="The real game with the DayZ Editor, linked to this project">🎮 Game</button>
+    <button class="btn seg-btn" data-view="view3d" title="Quick 3D preview">🧊 3D</button>
+    <button class="btn seg-btn" data-view="quests" title="Quest flow editor (Tab)">⎇ Quests</button>
+  </div>
+  <div class="tb-group" id="tool-group">
+    <button class="btn icon" data-tool="select" title="Select / move (V)">⌖</button>
+    <button class="btn icon" data-tool="pan" title="Pan (H) — or hold Space / middle mouse">✋</button>
+    <button class="btn icon" data-tool="measure" title="Measure distance (M)">📏</button>
+    <span class="tb-label">Snap</span>
+    <select id="snap-sel" class="inp sm" title="Grid snap (G cycles)">
+      <option value="0">Off</option><option value="1">1 m</option><option value="5">5 m</option>
+      <option value="10">10 m</option><option value="25">25 m</option><option value="50">50 m</option>
+    </select>
+  </div>
+  <div class="tb-spacer"></div>
+  <input id="proj-name" class="inp proj-name" type="text" spellcheck="false" title="Project name" />
+  <div class="tb-group">
+    <button class="btn" data-act="validate" title="Check the project for mistakes">✔ Check <span id="problem-badge" class="badge hidden">0</span></button>
+    <button class="btn primary" data-act="export" title="Generate server files">⇩ Export</button>
+    <button class="btn icon" data-act="help" title="Help &amp; shortcuts (F1)">?</button>
+  </div>
+</header>
+
+<main id="workspace">
+  <aside id="left" class="panel"></aside>
+  <section id="center">
+    <div id="map-wrap">
+      <canvas id="map" tabindex="0"></canvas>
+      <div id="pick-banner" class="pick-banner hidden"></div>
+      <div id="tool-hint" class="tool-hint"></div>
+    </div>
+    <div id="quest-wrap" class="hidden"></div>
+    <div id="view3d-wrap" class="hidden"></div>
+    <div id="game-wrap" class="hidden"></div>
+  </section>
+  <aside id="right" class="panel"></aside>
+</main>
+
+<footer id="statusbar">
+  <span id="st-coords" class="mono">X 0.0   Z 0.0</span>
+  <span class="sep"></span>
+  <span id="st-zoom" class="mono"></span>
+  <span class="sep"></span>
+  <span id="st-counts"></span>
+  <span class="tb-spacer"></span>
+  <span id="st-link" class="muted">Game link: off</span>
+  <span class="sep"></span>
+  <span id="st-save" class="muted">Saved</span>
+</footer>
+
+<div id="toasts"></div>
+<div id="modal-root"></div>
+
+<script src="js/util.js"></script>
+<script src="js/data.js"></script>
+<script src="js/state.js"></script>
+<script src="js/validate.js"></script>
+<script src="js/loot.js"></script>
+<script src="js/zones.js"></script>
+<script src="js/vendor/three.min.js"></script>
+<script src="js/terrain.js"></script>
+<script src="js/runtime.js"></script>
+<script src="js/exporters.js"></script>
+<script src="js/mapview.js"></script>
+<script src="js/nodeeditor.js"></script>
+<script src="js/inspector.js"></script>
+<script src="js/dialog.js"></script>
+<script src="js/importers.js"></script>
+<script src="js/disk.js"></script>
+<script src="js/models.js"></script>
+<script src="js/classes.js"></script>
+<script src="js/scene.js"></script>
+<script src="js/mapedits.js"></script>
+<script src="js/gizmo.js"></script>
+<script src="js/view3d.js"></script>
+<script src="js/game.js"></script>
+<script src="js/editorlink.js"></script>
+<script src="js/browser.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
