@@ -357,3 +357,10 @@ exactly that (verified: signed mod joins with verifySignatures = 2, no kick).
 Contains only DayZ Studio's own files plus FIRST_RUN.txt (requirements: DayZ, DayZ Tools, Python 3.10+ with
 pillow + numpy, optional Node.js for the desktop app). No data extracted from DayZ is included - it belongs to
 Bohemia Interactive; every user rebuilds data/ and maps/ from their own install on first run.
+
+
+## A Personal Note on the AI usage in creating this project
+I did use claude to assist with the creation of DayZ Studio, however, I only used it to assist.
+Many hours of digital blood, sweat, and tears of my own went into the creation of this project.
+It is not "slop" nor is it it just another 100 percent created in claude invention. Real work went into this.
+Please respect that work.
