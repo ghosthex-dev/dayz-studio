@@ -360,7 +360,4 @@ Bohemia Interactive; every user rebuilds data/ and maps/ from their own install 
 
 
 ## A Personal Note on the AI usage in creating this project
-I did use claude to assist with the creation of DayZ Studio, however, I only used it to assist.
-Many hours of digital blood, sweat, and tears of my own went into the creation of this project.
-It is not "slop" nor is it it just another 100 percent created in claude invention. Real work went into this.
-Please respect that work.
+While I utilized Claude to streamline aspects of development, DayZ Studio is by no means an automated AI creation. Countless hours of my own intense effort, problem-solving, and personal dedication went into building and refining this project. Far from being generic "AI slop," this is the result of genuine work and creative passion. I ask that you please respect the time and effort that went into bringing this project to life.
