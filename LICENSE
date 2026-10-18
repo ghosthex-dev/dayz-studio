@@ -1,10 +1,10 @@
-
 # END USER LICENSE AGREEMENT (EULA)
 
-**Software Name:** DayZ Studio
-**Effective Date:** October 17, 2026
-**Repository:** https://github.com/ghosthex-dev/dayz-studio
-**Licensor (Developer):** ghosthex-dev
+**Software Name:** DayZ Studio  
+**Effective Date:** October 17, 2026  
+**Repository:** https://github.com/ghosthex-dev/dayz-studio  
+**Licensor (Developer):** ghosthex-dev  
+
 By downloading, installing, cloning, or using DayZ Studio ("the Software"), you agree to be bound by the terms of this End User License Agreement ("Agreement"). If you do not agree to these terms, do not download, install, or use the Software.
 
 ---
@@ -12,31 +12,32 @@ By downloading, installing, cloning, or using DayZ Studio ("the Software"), you 
 ### 1. License Grant (Personal Use & Modification)
 
 Subject to the terms of this Agreement, the Licensor grants you a non-exclusive, non-transferable, revocable license to:
-• Download, install, and run the Software for your own personal, non-commercial use.
-• Modify, fork, or adapt the source code strictly for your own personal use and server testing.
+* Download, install, and run the Software for your own personal, non-commercial use.
+* Modify, fork, or adapt the source code strictly for your own personal use and server testing.
 
 ### 2. Restrictions on Use
 
 You strictly may not:
-• Sell, rent, lease, sub-license, or commercially exploit the Software, its source code, or any modified versions/forks of it.
-• Claim ownership of the Software, or present DayZ Studio (or any modified version) as your own original work.
-• Publicly redistribute modified versions of the Software's core code as a competing commercial product.
+* Sell, rent, lease, sub-license, or commercially exploit the Software, its source code, or any modified versions/forks of it.
+* Claim ownership of the Software, or present DayZ Studio (or any modified version) as your own original work.
+* Publicly redistribute modified versions of the Software's core code as a competing commercial product.
 
 ### 3. Third-Party Intellectual Property (DayZ / Bohemia Interactive)
 
 DayZ Studio is a fan-made tool and is not affiliated with, authorized, or endorsed by Bohemia Interactive.
-• This Software does not contain terrain, models, or textures belonging to Bohemia Interactive.
-• You agree that any game assets read or extracted by this tool from your local DayZ installation are protected under Bohemia Interactive's own licenses and must not be redistributed.
+* This Software does not contain terrain, models, or textures belonging to Bohemia Interactive.
+* You agree that any game assets read or extracted by this tool from your local DayZ installation are protected under Bohemia Interactive's own licenses and must not be redistributed.
 
 ### 4. "AS IS" WARRANTY DISCLAIMER
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
 THE LICENSOR DISCLAIMS ALL WARRANTIES, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
 IN NO EVENT SHALL THE LICENSOR OR CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE. THIS INCLUDES, BUT IS NOT LIMITED TO:
-• Game data corruption or loss.
-• DayZ game or server crashes.
-• Any actions taken against your Steam or Bohemia Interactive accounts.
+* Game data corruption or loss.
+* DayZ game or server crashes.
+* Any actions taken against your Steam or Bohemia Interactive accounts.
 
 ### 5. Termination
 
 This license terminates automatically and immediately if you violate any term of this Agreement. Upon termination, you must destroy all copies and modifications of the Software in your possession.
+
