@@ -54,6 +54,7 @@
       const x = S.project.quests.find((y) => y.id === id);
       return x ? chainLoop(x, seen) : false;
     });
+    { const ap = DS.Cond.problem(q.avail); if (ap) add('_quest', 'error', 'Server condition ' + ap + '.'); }
     if (chainLoop(q, new Set())) add('_quest', 'error', 'Quest chain loop: this quest (through others) needs itself to be completed first, so it can never unlock.');
 
     // bonus objectives: the "main" path is what can be reached without going through one
@@ -113,14 +114,13 @@
           d.lines.forEach((l, i) => {
             if (!String(l.text || '').trim()) add(n.id, 'warn', `Conversation (${k}) line ${i + 1} has no text.`);
             if (l.next && !ids.has(l.next)) add(n.id, 'error', `Conversation (${k}) line ${i + 1} continues to a line that was deleted.`);
+            const op = DS.Cond.problem(l.openIf);
+            if (op) add(n.id, 'error', `Conversation (${k}) line ${i + 1}: its opening condition ${op}.`);
             l.options.forEach((o) => {
               if (!String(o.text || '').trim()) add(n.id, 'warn', `Conversation (${k}) line ${i + 1} has a reply without text.`);
               if (o.next && !ids.has(o.next)) add(n.id, 'error', `Conversation (${k}) line ${i + 1}: a reply points to a deleted line.`);
-              const c = o.if || {};
-              if ((c.kind === 'has_item' || c.kind === 'lacks_item') && !String(c.cls || '').trim())
-                add(n.id, 'error', `Conversation (${k}) line ${i + 1}: reply “${o.text || '…'}” checks for an item but no item class is set.`);
-              if (c.kind && c.kind.startsWith('quest_') && !S.project.quests.some((x) => x.id === c.quest))
-                add(n.id, 'error', `Conversation (${k}) line ${i + 1}: reply “${o.text || '…'}” checks a quest that is not set or was deleted.`);
+              const cp = DS.Cond.problem(o.if);
+              if (cp) add(n.id, 'error', `Conversation (${k}) line ${i + 1}: reply “${o.text || '…'}” ${cp}.`);
               [...(o.give || []), ...(o.take || [])].forEach((it) => { if (!String(it.c || '').trim()) add(n.id, 'error', `Conversation (${k}) line ${i + 1}: reply “${o.text || '…'}” has an item row without a class name.`); });
               if (o.accept && k !== 'offer') add(n.id, 'warn', `Conversation (${k}) line ${i + 1}: “accepts quest” only works in the “before the quest” conversation.`);
             });
@@ -132,6 +132,9 @@
             add(n.id, 'error', 'The "before the quest" conversation has no reply that accepts the quest, so players could never start it.');
         });
       }
+      if (n.p.cond && n.p.cond.kind) { const cp = DS.Cond.problem(n.p.cond); if (cp) add(n.id, 'error', 'Condition ' + cp + '.'); }
+      if (n.type === 'act_setvar' && !String(n.p.var || '').trim()) add(n.id, 'error', 'Set Server Variable: no variable name.');
+      if ((n.type === 'trg_cond' || n.type === 'logic_wait' || n.type === 'obj_cond') && !(n.p.cond && n.p.cond.kind)) add(n.id, 'warn', 'The condition is “Always”, so this step passes immediately.');
       if (n.type === 'rew_script' && !String(n.p.code || '').replace(/\/\/.*$/gm, '').trim()) add(n.id, 'info', 'Script is empty or only comments.');
     });
 

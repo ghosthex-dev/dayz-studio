@@ -361,7 +361,11 @@
         const v = prompt('Give which item? Class name and amount, e.g.  Rag 4', 'Rag 4');
         if (v && v.trim()) flag('give', [v.trim()]);
       } }, '🎒 Give item…'),
-      resetp: el('button', { class: 'btn sm', onclick: () => flag('reset') }, '⟲ Reset progress'),
+      setvar: el('button', { class: 'btn sm', title: 'Change a server variable on the running server, e.g. to unlock a quest chain or make an NPC appear', onclick: () => {
+        const v = prompt('Set which server variable? Name and value, e.g.  bandits_defeated 1', (DS.Cond.varNames()[0] || 'my_flag') + ' 1');
+        if (v && v.trim()) flag('setvar', [v.trim()]);
+      } }, '⚑ Set server variable…'),
+      resetp: el('button', { class: 'btn sm', title: 'Forget all quest progress and server variables', onclick: () => flag('reset') }, '⟲ Reset progress'),
       stop: el('button', { class: 'btn sm', onclick: () => act('/api/server/stop', {}, 'Server stopped') }, '■ Stop server'),
     };
     const body = el('div', { class: 'srv' },
@@ -370,7 +374,7 @@
       el('div', { class: 'btn-row' }, btns.start, el('label', { class: 'chk' }, reset, ' start with fresh quest progress'),
         el('label', { class: 'chk', title: 'Installs the mod’s .bikey on the test server and turns signature checks on, like a real server' }, verify, ' check signatures'), btns.join),
       el('div', { class: 'mini-title' }, 'Test helpers (work while you are on the server)'),
-      el('div', { class: 'btn-row' }, btns.talk, btns.kill, btns.give, btns.resetp, btns.stop),
+      el('div', { class: 'btn-row' }, btns.talk, btns.kill, btns.give, btns.setvar, btns.resetp, btns.stop),
       el('div', { class: 'mini-title' }, 'Quest log on the server'), log,
       el('div', { class: 'ins-help' }, 'The server opens its own console window. Its logs and per-player progress are in the _game/server/profile folder.'));
     let alive = true;
@@ -390,9 +394,9 @@
       info.replaceChildren(...lines.map((t) => el('div', null, t)), ...(s.errors || []).map((e) => el('div', { class: 'problem error' }, e)));
       btns.start.disabled = s.running;
       btns.join.disabled = !s.running || s.loaded == null;
-      [btns.talk, btns.kill, btns.give, btns.resetp].forEach((b) => (b.disabled = !(s.progress && s.progress.hasPlayer)));
+      [btns.talk, btns.kill, btns.give, btns.setvar, btns.resetp].forEach((b) => (b.disabled = !(s.progress && s.progress.hasPlayer)));
       btns.stop.disabled = !s.running;
-      const pl = (s.progress && s.progress.log) || [];
+      const pl = ((s.progress && s.progress.vars) || []).map((v) => '⚑ ' + v).concat((s.progress && s.progress.log) || []);
       log.replaceChildren(...(pl.length ? pl.map((t) => el('div', null, t)) : [el('div', { class: 'muted' }, 'Nothing yet.')]));
     }
     refresh();

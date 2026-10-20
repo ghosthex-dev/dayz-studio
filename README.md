@@ -358,6 +358,33 @@ Contains only DayZ Studio's own files plus FIRST_RUN.txt (requirements: DayZ, Da
 pillow + numpy, optional Node.js for the desktop app). No data extracted from DayZ is included - it belongs to
 Bohemia Interactive; every user rebuilds data/ and maps/ from their own install on first run.
 
+## Conditions, server variables, time & weather
+
+One condition picker is used everywhere (conversation replies, opening lines, quest availability, NPC appearance
+and the condition nodes):
+
+| Condition | Checks |
+|---|---|
+| Item / quest | carries an item, does not carry it, a quest is done / running / never started |
+| **Player condition** | bleeding, sick (any disease or poisoning), broken legs, unconscious, blood, health, water, energy |
+| **Server variable** | a server-wide value (=, ≠, >, ≥, <, ≤) |
+| **Time of day** | an in-game time window; it may run past midnight (23 → 1); exactly midnight = 0 → 0.25 |
+| **Weather** | thunderstorm, clear sky, or rain / fog / clouds compared with a value (0–1) |
+| **Server uptime** | minutes since the server started, e.g. only in the first hour after a restart |
+
+New nodes:
+* **Set Server Variable** (reward) - set / add / subtract / toggle a variable every player shares; it survives
+  restarts (`$profile:DZStudioQuests/globals.json`).
+* **Condition Met** (trigger) - the quest starts when the condition holds.
+* **Wait Until** (logic) - the quest waits here, invisibly, until the condition holds (only during a storm, at
+  night, once a server variable is set…).
+* **Meet a Condition** (objective) - shown in the tracker, done when the condition holds ("Stop the bleeding",
+  "Get your blood above 4000").
+
+Also: **Quest settings ▸ Server condition** (the quest is only available while it holds), **Talk to NPC ▸ Only
+appears while** (the NPC shows up and leaves on its own, checked every 5 seconds - e.g. a faction that arrives once
+a variable is set), and in the conversation editor **Open with this line when…** (the NPC reacts first, e.g. when
+the player is bleeding). The local server test has **⚑ Set server variable…** and lists the server's variables.
 
 ## A Personal Note on the AI usage in creating this project
 While I utilized Claude to streamline aspects of development, DayZ Studio is by no means an automated AI creation. Countless hours of my own intense effort, problem-solving, and personal dedication went into building and refining this project. Far from being generic "AI slop," this is the result of genuine work and creative passion. I ask that you please respect the time and effort that went into bringing this project to life.

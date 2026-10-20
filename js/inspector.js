@@ -222,6 +222,17 @@
         f.list === 'dz-npcs' ? 'Pick one of the game’s survivor characters (M = male, F = female), or enter any class.'
           : f.list === 'dz-hands' ? 'Optional. A weapon or tool the NPC holds (no ammo is given). Leave empty for empty hands.'
             : 'Type to search known class names, or enter any class.');
+      case 'cond': {
+        if (!p[f.k]) p[f.k] = { kind: '' };
+        return el('div', { class: 'ins-row' }, el('span', { class: 'ins-label' }, f.label),
+          DS.Cond.widget(p[f.k], { kinds: f.kinds === 'world' ? DS.Cond.WORLD : null, onChange: ch, redraw: rerender }),
+          f.help ? el('span', { class: 'ins-help' }, f.help) : null);
+      }
+      case 'var': {
+        DS.Cond.varNames();
+        const i = textInp(p[f.k], (v) => { p[f.k] = v.replace(/[^A-Za-z0-9_]/g, ''); ch(); }, { list: 'dz-vars', ph: 'e.g. bandits_defeated' });
+        return row(f.label, i, 'Letters, digits and _ only. The same name in any quest means the same variable. New variables start at 0.');
+      }
       case 'outfit': return row(f.label, outfitWidget(p, rerender, ch),'Fills the clothing list and the item in hands — edit them afterwards as you like.');
       case 'classes': return row(f.label, classesWidget(p[f.k], ch));
       case 'items': return row(f.label, itemsWidget(p[f.k], ch, f.chance));
@@ -414,6 +425,9 @@
         q.repeatable ? row('Cooldown (play-time seconds)', numInp(q.cooldown, (v) => { q.cooldown = Math.max(0, v); ch(); }, { min: 0 })) : null,
         checkInp(q.failOnDeath, (v) => { q.failOnDeath = v; ch(); }, 'Restart quest if the player dies')),
       chainSection(q, ch),
+      section('Server condition',
+        el('div', { class: 'ins-help' }, 'Optional: the quest is only available while this holds for the whole server - e.g. after a server variable was set by another quest, only at night, or only during a storm.'),
+        DS.Cond.widget(q.avail || (q.avail = { kind: '' }), { kinds: DS.Cond.WORLD, label: 'Available', onChange: ch, redraw: () => I.render() })),
       section('Quest tools',
         el('div', { class: 'btn-row' },
           el('button', { class: 'btn sm', onclick: () => { const c = JSON.parse(JSON.stringify(q)); c.id = U.uid('q'); c.name += ' (copy)'; const idm = {}; c.nodes.forEach((n) => { const o = n.id; n.id = U.uid('n'); idm[o] = n.id; }); c.links.forEach((l) => { l.id = U.uid('l'); l.from = idm[l.from]; l.to = idm[l.to]; }); S.project.quests.push(c); S.activeQuest = c.id; S.structure(); S.commit(); } }, 'Duplicate quest'),

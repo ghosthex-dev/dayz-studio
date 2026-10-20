@@ -196,6 +196,8 @@ select.inp { cursor: pointer; }
 .problem.warn { background: #2a2517; border-left-color: var(--warn); }
 .problem.info { background: #17222a; border-left-color: var(--accent); }
 .problem:hover { filter: brightness(1.2); }
+.cond-w { display: grid; gap: 4px; flex: 1; min-width: 0; }
+.cond-w .dlg-opt-row { flex-wrap: wrap; }
 .v3-pickhint { color: #ff8a8a; font-weight: 600; }
 .removed-list { display: grid; gap: 2px; max-height: 240px; overflow: auto; margin: 4px 0; }
 .removed-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 6px; align-items: center; font-size: 12px; }

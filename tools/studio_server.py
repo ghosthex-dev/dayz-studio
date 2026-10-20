@@ -550,11 +550,11 @@ def local_server_flag(body):
     qdir = os.path.join(SRV_PROFILE, 'DZStudioQuests')
     os.makedirs(qdir, exist_ok=True)
     what = body.get('flag')
-    if what not in ('talk', 'simkill', 'reset', 'reload', 'give'):
+    if what not in ('talk', 'simkill', 'reset', 'reload', 'give', 'setvar'):
         return {'ok': False, 'error': 'unknown flag'}
-    lines = [re.sub(r'[^A-Za-z0-9_@ ]', '', str(x)) for x in body.get('lines', [])]
+    lines = [re.sub(r'[^A-Za-z0-9_@ .\-]', '', str(x)) for x in body.get('lines', [])]
     with open(os.path.join(qdir, what + '.flag'), 'w') as f:
-        f.write('\n'.join(lines) if what in ('simkill', 'give') else str(int(body.get('index', 0) or 0)) if what == 'talk' else '1')
+        f.write('\n'.join(lines) if what in ('simkill', 'give', 'setvar') else str(int(body.get('index', 0) or 0)) if what == 'talk' else '1')
     return {'ok': True}
 
 

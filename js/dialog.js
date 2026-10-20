@@ -68,26 +68,13 @@
   ];
   const ALL_KINDS = KINDS.map((k) => k[0]);
 
-  /* reply conditions: option.if = { kind, cls, n, quest } */
-  const CONDS = [
-    ['', 'Always'],
-    ['has_item', 'Player carries an item'],
-    ['lacks_item', 'Player does NOT carry an item'],
-    ['quest_done', 'A quest is completed'],
-    ['quest_active', 'A quest is in progress'],
-    ['quest_new', 'A quest was never started'],
-  ];
-  const questName = (id) => { const q = S.project.quests.find((x) => x.id === id); return q ? q.name : '(missing quest)'; };
+  /* reply conditions: option.if = a condition (see conditions.js) */
 
   /** short text describing what a reply needs / does, e.g. "if carrying 2× Rag · gives 1× Apple" */
   D.optionTags = function (o) {
     const t = [];
-    const c = o.if || {};
-    if (c.kind === 'has_item') t.push(`if carrying ${c.n || 1}× ${c.cls || '?'}`);
-    else if (c.kind === 'lacks_item') t.push(`if not carrying ${c.n || 1}× ${c.cls || '?'}`);
-    else if (c.kind === 'quest_done') t.push(`if “${questName(c.quest)}” is done`);
-    else if (c.kind === 'quest_active') t.push(`if “${questName(c.quest)}” is running`);
-    else if (c.kind === 'quest_new') t.push(`if “${questName(c.quest)}” not started`);
+    const ct = DS.Cond ? DS.Cond.text(o.if) : '';
+    if (ct) t.push(ct);
     const list = (a) => a.filter((i) => i.c).map((i) => `${i.n || 1}× ${i.c}`).join(', ');
     if ((o.take || []).some((i) => i.c)) t.push('takes ' + list(o.take));
     if ((o.give || []).some((i) => i.c)) t.push('gives ' + list(o.give) + ((o.take || []).some((i) => i.c) ? '' : ' (once)'));
@@ -142,25 +129,7 @@
   /** the "only show if… / gives / takes" panel of one reply */
   function replyExtras(o, onChange, redraw) {
     const box = el('div', { class: 'dlg-extra' });
-    const c = o.if || (o.if = { kind: '', cls: '', n: 1, quest: '' });
-    const kindSel = el('select', { class: 'inp' });
-    CONDS.forEach(([v, lab]) => kindSel.append(el('option', { value: v, selected: (c.kind || '') === v }, lab)));
-    kindSel.addEventListener('change', () => { c.kind = kindSel.value; onChange(); S.commit(); redraw(); });
-    const condRow = el('div', { class: 'dlg-opt-row' }, el('span', { class: 'ins-help' }, 'Show this reply'), kindSel);
-    if (c.kind === 'has_item' || c.kind === 'lacks_item') {
-      const cls = el('input', { class: 'inp', type: 'text', value: c.cls || '', placeholder: 'Item class', list: 'dz-classes' });
-      cls.addEventListener('input', () => { c.cls = cls.value.trim(); onChange(); });
-      cls.addEventListener('change', () => { S.commit(); redraw(); });
-      const n = el('input', { class: 'inp num', type: 'number', min: 1, step: 1, value: c.n || 1, title: 'Amount' });
-      n.addEventListener('change', () => { c.n = Math.max(1, Math.round(+n.value || 1)); onChange(); S.commit(); redraw(); });
-      condRow.append(cls, n);
-    } else if (c.kind) {
-      const qs = el('select', { class: 'inp' });
-      qs.append(el('option', { value: '' }, 'Pick a quest…'));
-      S.project.quests.forEach((q) => qs.append(el('option', { value: q.id, selected: c.quest === q.id }, q.name)));
-      qs.addEventListener('change', () => { c.quest = qs.value; onChange(); S.commit(); redraw(); });
-      condRow.append(qs);
-    }
+    const condRow = DS.Cond.widget(o.if || (o.if = { kind: '' }), { label: 'Show this reply', onChange, redraw });
     if (!o.take) o.take = [];
     if (!o.give) o.give = [];
     const changedItems = () => { onChange(); };
@@ -254,6 +223,10 @@
             el('span', { class: 'ins-help' }, 'Plays when this line appears.'));
         }
         form.append(el('div', { class: 'ins-row' }, el('span', { class: 'ins-label' }, 'Voice'), snd));
+        // the NPC reacts first: open the conversation with this line when a condition holds
+        form.append(el('div', { class: 'ins-row' }, el('span', { class: 'ins-label' }, 'Open with this line when'),
+          DS.Cond.widget(l.openIf || (l.openIf = { kind: '' }), { onChange: changed, redraw: draw }),
+          el('span', { class: 'ins-help' }, 'Optional. E.g. “If the player is bleeding” → “You’re bleeding! Sit down, let me help.” The first line whose condition holds opens the conversation; otherwise it starts at the first line.')));
 
         // replies
         form.append(el('div', { class: 'ins-sec-title' }, 'Player replies'));

@@ -154,6 +154,7 @@
       case 'obj_collect': return `Collect ${p.count} x ${p.item}`;
       case 'obj_deliver': return `Deliver ${p.count} x ${p.item}`;
       case 'obj_survive': return `Survive for ${p.seconds} seconds`;
+      case 'obj_cond': return DS.Cond ? DS.Cond.text(p.cond) || 'Meet the condition' : 'Meet the condition';
     }
     return '';
   }
@@ -171,6 +172,7 @@
     };
     const items = (arr) => (arr || []).filter((i) => String(i.c).trim()).map((i) => ({ c: i.c.trim(), n: Math.max(1, Math.round(i.n || 1)), chance: i.chance == null ? 1 : i.chance }));
     if (p.nomark) o.nomark = true;
+    if (p.cond && p.cond.kind) o.cond = DS.Cond.out(p.cond);   // trg_cond / logic_wait / obj_cond, NPC appearance
     if (p.optional && DS.NODE_TYPES[n.type] && DS.NODE_TYPES[n.type].cat === 'objective') o.optional = true;
     switch (n.type) {
       case 'start': o.seconds = p.delay || 0; break;
@@ -193,6 +195,8 @@
       case 'rew_modifier': o.stat = p.stat; o.amount = p.amount || 0; break;
       case 'rew_spawn': o.cls = p.cls; o.count = p.count; setPos(p.pos); o.radius = p.radius; o.text = p.text || ''; break;
       case 'logic_delay': o.seconds = p.seconds; break;
+      case 'act_setvar': o.var = String(p.var || ''); o.varOp = p.varOp || 'set'; o.varValue = +p.varValue || 0; o.text = p.text || ''; break;
+      case 'obj_cond': o.title = nodeObjectiveText(n); break;
       case 'end': o.text = p.text || ''; break;
     }
     return o;
@@ -204,14 +208,11 @@
       start: d.start || d.lines[0].id,
       lines: d.lines.map((l) => ({
         id: l.id, text: l.text || '', sound: l.sound && l.sound.id ? l.sound.id : '', next: l.next || '',
+        openIf: DS.Cond.out(l.openIf),
         options: (l.options || []).map((o) => {
           const r = { text: o.text || '', next: o.next || '', accept: !!o.accept };
-          const c = o.if || {};
-          if (c.kind) {
-            r.cond = c.kind;
-            if (c.kind === 'has_item' || c.kind === 'lacks_item') { r.cls = String(c.cls || '').trim(); r.n = Math.max(1, Math.round(c.n || 1)); }
-            else r.quest = c.quest || '';
-          }
+          const w = DS.Cond.out(o.if);
+          if (w) r.when = w;
           const it = (arr) => (arr || []).filter((i) => String(i.c || '').trim()).map((i) => ({ c: i.c.trim(), n: Math.max(1, Math.round(i.n || 1)), chance: 1 }));
           if ((o.give || []).length) r.give = it(o.give);
           if ((o.take || []).length) r.take = it(o.take);
@@ -250,6 +251,7 @@
           id: q.id, name: q.name, description: q.description || '', repeatable: !!q.repeatable,
           cooldown: q.cooldown || 0, failOnDeath: !!q.failOnDeath,
           requires: (q.requires || []).filter((id) => P.quests.some((x) => x.id === id && x.id !== q.id)),
+          avail: DS.Cond.out(q.avail),
           nodes: q.nodes.map((n) => runtimeNode(q, n)),
         })),
       },
