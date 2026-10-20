@@ -386,5 +386,26 @@ appears while** (the NPC shows up and leaves on its own, checked every 5 seconds
 a variable is set), and in the conversation editor **Open with this line when…** (the NPC reacts first, e.g. when
 the player is bleeding). The local server test has **⚑ Set server variable…** and lists the server's variables.
 
+## Prefab stamps, effects and the performance heatmap
+
+**Prefab stamps** - select a group of placed objects (box-select / Shift+click) and use **⭐ Save as prefab
+stamp…** (inspector or 3D toolbar). The stamp keeps every part's offset, rotation, tilt, scale and height above the
+ground, and goes into your library in `Documents/DayZStudio/Prefabs` - shared by every project (share the .json
+files with others). Pick it under **My prefab stamps** in the asset list: click the map to stamp it (Q/E rotate),
+or in the 3D tab paint it with the Scatter / Line / Ring brushes.
+
+**Effects & sounds** - asset list ▸ Effects & sounds places an effect marker (presets: campfire, burning wreck, toxic
+anomaly, electric anomaly, alarm, generator hum, signal smoke, glow light, your own ambient sound). Each effect can
+combine vanilla **particles** (fires, smoke, steam, toxic gas, sparks, flares; one-shots can replay every N seconds),
+a coloured **light** and a looping **sound** (vanilla sound sets or your own .ogg/.wav), with a range in metres. It is
+on always, **only while** a world condition holds (night, storm, server variable…), or **starts off** and is switched
+by the **Turn Effect On / Off** quest node (the switch survives restarts). Effects are played by the exported mod on
+each player's PC; they are not spawned objects.
+
+**Performance heatmap** - Project ▸ World ▸ **🔥 Show performance heatmap**: the 2D map shades every area by the
+weighted objects within 150 m (DayZ's near network range; buildings weigh most, loot points a little) - green, yellow,
+orange, red - and lists the hotspots with a jump button. **Check** warns about orange and red areas. It is a rule of
+thumb to find crowded spots before they cost FPS or cause desync, not a measurement of the server.
+
 ## A Personal Note on the AI usage in creating this project
 While I utilized Claude to streamline aspects of development, DayZ Studio is by no means an automated AI creation. Countless hours of my own intense effort, problem-solving, and personal dedication went into building and refining this project. Far from being generic "AI slop," this is the result of genuine work and creative passion. I ask that you please respect the time and effort that went into bringing this project to life.

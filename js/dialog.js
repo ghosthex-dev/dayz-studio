@@ -38,6 +38,8 @@
       if (!d) return;
       ALL_KINDS.forEach((k) => d[k] && d[k].lines.forEach((l) => { if (l.sound && l.sound.id) out.set(l.sound.id, l.sound); }));
     }));
+    // placed effects with your own sound file
+    S.project.objects.forEach((o) => { if (o.kind === 'fx' && o.fx && o.fx.soundset === '@file' && o.fx.sound && o.fx.sound.id) out.set(o.fx.sound.id, o.fx.sound); });
     return [...out.values()];
   };
 

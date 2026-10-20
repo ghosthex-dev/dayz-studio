@@ -569,6 +569,7 @@
     const B = V.brush, a = S.asset;
     const list = [];
     const mk = (px, pz, yaw) => {
+      if (a.prefab) { list.push(...DS.Stamps.place(a.prefab, px, pz, yaw)); return; }   // paint whole stamps
       const o = S.makeObject({ c: a.c, kind: a.kind || 'prop', label: a.label }, px, pz, {
         yaw: U.round(U.wrap360(yaw), 1),
         scale: B.sMin === B.sMax ? B.sMin : U.round(rnd(B.sMin, B.sMax), 2),
@@ -623,7 +624,7 @@
     if (S.tool === 'place' && S.asset && S.asset.kind !== 'lootgroup') {
       const h = terrainHit(e);
       if (!h) return;
-      if (V.brush.mode === 'single' || S.asset.prefab) DS.MapView.placeAt(DS.MapView.snap(h[0]), DS.MapView.snap(h[2]));
+      if (V.brush.mode === 'single') DS.MapView.placeAt(DS.MapView.snap(h[0]), DS.MapView.snap(h[2]));
       else brushAt(h[0], h[2], e);
       return;
     }
@@ -797,7 +798,7 @@
       [...toolsEl.childNodes].forEach((n) => { if (n.nodeType === 3) n.remove(); });
       return;
     }
-    if (S.tool === 'place' && S.asset && !S.asset.prefab) {
+    if (S.tool === 'place' && S.asset) {
       const B = V.brush;
       const num = (key, label, min, max, step) => el('label', { class: 'gv-tog' }, label,
         el('input', { class: 'inp sm', type: 'number', style: { width: '58px' }, value: B[key], min, max, step: step || 1, onchange: (ev) => { B[key] = +ev.target.value; } }));
@@ -835,6 +836,7 @@
       el('button', { class: 'btn sm', disabled: !has, title: 'Tilt selected objects to follow the terrain slope (N)', onclick: () => V.alignToTerrain() }, '◢ Align to terrain'),
       el('button', { class: 'btn sm', disabled: !has, title: 'Reset pitch, roll and scale', onclick: () => V.resetTilt() }, '↺ Reset tilt'),
       el('button', { class: 'btn sm', disabled: !has, title: 'Duplicate (Ctrl+D)', onclick: () => DS.actions.duplicate() }, '⧉ Duplicate'),
+      el('button', { class: 'btn sm', disabled: !has, title: 'Save the selected objects as a reusable prefab stamp', onclick: () => DS.Stamps.saveSelection() }, '⭐ Stamp'),
       el('button', { class: 'btn sm danger', disabled: !has, title: 'Delete', onclick: () => DS.actions.deleteSelection() }, '🗑'),
       el('span', { class: 'sep' }),
       el('button', { class: 'btn sm', title: 'Remove vanilla trees, rocks, walls or buildings from the map (exported in the mod)', onclick: () => V.setMapPick(true) }, '✂ Remove map objects'));

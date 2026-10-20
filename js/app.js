@@ -441,7 +441,7 @@
         el('button', { class: 'btn', onclick: () => { const f = files[curIdx]; if (f) U.download(f.path.split('/').pop(), typeof f.data === 'function' ? f.data() : f.data); } }, 'Download this file'),
         el('button', { class: 'btn', onclick: () => { const f = files[curIdx]; if (f && typeof f.data === 'string') navigator.clipboard.writeText(f.data).then(() => DS.toast('Copied to clipboard', 'ok', 1200)); } }, 'Copy'),
         el('span', { class: 'tb-spacer' }),
-        el('button', { class: 'btn', title: 'Packs quests and removed map objects into a ready-to-install mod (PBO) + profile files, no DayZ Tools needed', disabled: !S.project.quests.length && !(S.project.removed || []).length, onclick: () => A.buildMod() }, '🧰 Build installable mod (PBO)…'),
+        el('button', { class: 'btn', title: 'Packs quests and removed map objects into a ready-to-install mod (PBO) + profile files, no DayZ Tools needed', disabled: !S.project.quests.length && !(S.project.removed || []).length && !S.project.objects.some((o) => o.kind === 'fx'), onclick: () => A.buildMod() }, '🧰 Build installable mod (PBO)…'),
         (S.project.removed || []).length ? el('div', { class: 'ins-help' }, `${S.project.removed.length} removed map object(s) are hidden by this mod — on the server and for every player (players need the mod).`) : null,
         el('button', { class: 'btn primary', onclick: () => { if (!files.length) return DS.toast('Nothing to export yet.', 'warn'); U.download(DS.exporters.zipName(), U.zip(files.map((f) => ({ path: f.path, data: typeof f.data === 'function' ? f.data() : f.data })))); DS.toast(`Exported ${files.length} files as ZIP`, 'ok'); } }, '⇩ Download ZIP'),
         el('button', { class: 'btn', onclick: close }, 'Close'),

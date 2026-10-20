@@ -178,6 +178,38 @@
   }
 
   /* ---------- node form (schema driven) ---------- */
+  /** placed effect: particles + light + looping sound, when it is on */
+  function fxSection(o, ch) {
+    const f = o.fx || (o.fx = { particle: '', repeat: 0, light: false, color: '#ffaa55', radius: 10, brightness: 5, soundset: '', sound: null, range: 300, startOff: false, when: { kind: '' } });
+    const re = () => { ch(); S.commit(); I.render(); };
+    const snd = el('div', { class: 'btn-row' });
+    if (f.soundset === '@file') {
+      if (f.sound) snd.append(el('span', { class: 'dlg-fname' }, '🔊 ' + f.sound.name), el('button', { class: 'btn sm', onclick: () => DS.Sounds.play(f.sound) }, '▶'), el('button', { class: 'btn sm', onclick: () => { f.sound = null; re(); } }, 'Remove'));
+      else {
+        const file = el('input', { type: 'file', accept: DS.Sounds.ACCEPT, class: 'hidden' });
+        file.addEventListener('change', async () => {
+          if (!file.files[0]) return;
+          try { f.sound = await DS.Sounds.upload(file.files[0]); re(); } catch (e) { DS.toast(String(e.message || e), 'error', 6000); }
+        });
+        snd.append(file, el('button', { class: 'btn sm', onclick: () => file.click() }, '🎙 Choose a sound file (.ogg / .wav)…'));
+      }
+    }
+    return section('Effect',
+      row('Particles', selectInp(f.particle, DS.FX_PARTICLES, (v) => { f.particle = v; re(); })),
+      f.particle ? row('Replay every (s)', numInp(f.repeat, (v) => { f.repeat = Math.max(0, v); ch(); }, { min: 0, step: 0.5 }), '0 = play once and let it loop itself (fire, smoke, gas). Sparks and explosions are one-shots: give them a few seconds.') : null,
+      checkInp(f.light, (v) => { f.light = v; re(); }, 'Light'),
+      f.light ? row('Light colour', (() => { const i = el('input', { type: 'color', value: f.color || '#ffaa55' }); i.addEventListener('input', () => { f.color = i.value; ch(); }); i.addEventListener('change', () => S.commit()); return i; })()) : null,
+      f.light ? row('Light radius (m)', numInp(f.radius, (v) => { f.radius = Math.max(1, v); ch(); }, { min: 1 })) : null,
+      f.light ? row('Brightness', numInp(f.brightness, (v) => { f.brightness = Math.max(0.1, v); ch(); }, { min: 0.1, step: 0.5 })) : null,
+      row('Sound (loops)', selectInp(f.soundset, DS.FX_SOUNDS, (v) => { f.soundset = v; re(); })),
+      f.soundset === '@file' ? snd : null,
+      row('Range (m)', numInp(f.range, (v) => { f.range = Math.max(10, v); ch(); }, { min: 10, step: 10 }), 'Players closer than this see and hear it.'),
+      checkInp(f.startOff, (v) => { f.startOff = v; re(); }, 'Starts off — a “Turn Effect On / Off” quest node switches it on'),
+      el('div', { class: 'ins-row' }, el('span', { class: 'ins-label' }, 'Only while'),
+        DS.Cond.widget(f.when || (f.when = { kind: '' }), { kinds: DS.Cond.WORLD, onChange: ch, redraw: () => I.render() })),
+      el('div', { class: 'ins-help' }, 'Played by the quest mod on each player’s PC (Export ▸ Build installable mod). Test it with “Test this exact mod” or the local server.'));
+  }
+
   /** NPC outfit presets + a random casual look */
   function outfitWidget(p, rerender, ch) {
     const wrap = el('div', { class: 'btn-row' });
@@ -222,6 +254,11 @@
         f.list === 'dz-npcs' ? 'Pick one of the game’s survivor characters (M = male, F = female), or enter any class.'
           : f.list === 'dz-hands' ? 'Optional. A weapon or tool the NPC holds (no ammo is given). Leave empty for empty hands.'
             : 'Type to search known class names, or enter any class.');
+      case 'fxpick': {
+        const fxs = S.project.objects.filter((o) => o.kind === 'fx');
+        if (!fxs.length) return row(f.label, el('span', { class: 'ins-help' }, 'Place an effect first (asset list ▸ Effects & sounds).'));
+        return row(f.label, selectInp(p[f.k], [['', 'Pick an effect…']].concat(fxs.map((o) => [o.id, (o.label || 'Effect') + ' @ ' + Math.round(o.x) + ', ' + Math.round(o.z)])), (v) => { p[f.k] = v; ch(); rerender(); }));
+      }
       case 'cond': {
         if (!p[f.k]) p[f.k] = { kind: '' };
         return el('div', { class: 'ins-row' }, el('span', { class: 'ins-label' }, f.label),
@@ -309,6 +346,7 @@
           row('Scale (all)', numInp(1, (v) => { sx('scale', Math.max(0.1, v)); S.changed('objects'); }, { step: 0.1 }))),
         section('Organise',
           el('div', { class: 'btn-row' },
+            el('button', { class: 'btn sm', title: 'Save the selected objects as a reusable stamp in your prefab library', onclick: () => DS.Stamps.saveSelection() }, '⭐ Save as prefab stamp…'),
             el('button', { class: 'btn sm', onclick: DS.actions.group }, 'Group'),
             el('button', { class: 'btn sm', onclick: DS.actions.ungroup }, 'Ungroup'),
             el('button', { class: 'btn sm', onclick: DS.actions.duplicate }, 'Duplicate'),
@@ -361,6 +399,7 @@
           el('button', { class: 'btn sm', onclick: () => DS.MapView.focusSelection() }, 'Frame'),
           el('button', { class: 'btn sm danger', onclick: DS.actions.deleteSelection }, 'Delete')))
     );
+    if (o.kind === 'fx') box.append(fxSection(o, ch));
     if (DS.Loot && (o.kind === 'building' || o.kind === 'prop')) {
       const hasProto = !!DS.Loot.proto(o.c);
       box.append(section('Loot spawns (Central Economy)',
@@ -457,7 +496,9 @@
         checkInp(m.brighten !== false, (v) => { m.brighten = v; ch(); DS.MapView.invalidate(); }, 'Brighten terrain (the raw satellite is dark)'),
         el('div', { class: 'ins-help' }, { ok: '✔ Terrain imagery loaded for this map.', loading: 'Loading terrain…', none: 'No terrain imagery for this map yet. Run tools/extract_maps.py (reads your DayZ install), or load your own image below.' }[DS.MapView.terrainState()]),
         checkInp(m.showTowns !== false, (v) => { m.showTowns = v; ch(); DS.MapView.invalidate(); }, 'Show town labels'),
-        checkInp(m.showRef !== false, (v) => { m.showRef = v; ch(); DS.MapView.invalidate(); }, 'Show vanilla building layer (if imported)')),
+        checkInp(m.showRef !== false, (v) => { m.showRef = v; ch(); DS.MapView.invalidate(); }, 'Show vanilla building layer (if imported)'),
+        checkInp(!!m.showDensity, (v) => { m.showDensity = v; ch(); DS.MapView.invalidate(); I.render(); }, '🔥 Show performance heatmap (object density)'),
+        m.showDensity ? densityPanel() : null),
       section('Map background',
         el('div', { class: 'btn-row' },
           el('button', { class: 'btn sm', onclick: () => DS.app.loadBackground() }, 'Load image…'),
@@ -469,6 +510,18 @@
       removedSection()
     );
     return body;
+  }
+
+  /** hotspots of the performance heatmap */
+  function densityPanel() {
+    const D = DS.Density, c = D.compute();
+    const kids = [el('div', { class: 'ins-help' }, `Weighted objects within ${D.RADIUS} m (DayZ's near network range): buildings count most, loot points a little. Green < ${D.WARN} · yellow < ${D.HIGH} · orange < ${D.DANGER} · red above. A rule of thumb to spot crowded areas before they cost FPS or cause desync.`)];
+    if (!c.spots.length) kids.push(el('div', { class: 'ins-help' }, '✔ No crowded areas.'));
+    c.spots.forEach((s) => kids.push(el('div', { class: 'removed-row' },
+      el('span', { class: 'removed-name dens-' + D.level(s.score) }, `${s.score} · ${D.label(s.score)}`),
+      el('span', { class: 'muted' }, `${s.count} obj${s.buildings ? ', ' + s.buildings + ' bldg' : ''}`),
+      el('button', { class: 'btn sm', title: 'Show it on the map', onclick: () => DS.MapView.centerOn(s.x, s.z, 1.2) }, '⌖'), el('span'))));
+    return el('div', { class: 'dens-panel' }, ...kids);
   }
 
   /** vanilla map objects removed in this project */

@@ -36,7 +36,39 @@
     animal: { name: 'Animal', color: '#fb923c', shape: 'cross' },
     npc: { name: 'NPC / Survivor', color: '#c084fc', shape: 'star' },
     event: { name: 'Event Spawn Point', color: '#f472b6', shape: 'diamond' },
+    fx: { name: 'Effect / Sound', color: '#e879f9', shape: 'circle' },
   };
+
+  /* ---- placed effects: vanilla particles (ParticleList) and sound sets, all checked against DayZ 1.30 scripts ---- */
+  DS.FX_PARTICLES = [
+    ['', 'None'],
+    ['CAMP_SMALL_FIRE', 'Small fire'], ['CAMP_NORMAL_FIRE', 'Campfire'], ['BONFIRE_FIRE', 'Bonfire'], ['HOUSE_NORMAL_FIRE', 'House fire'],
+    ['BARREL_NORMAL_FIRE', 'Barrel fire'], ['CAMP_NORMAL_SMOKE', 'Campfire smoke'], ['BONFIRE_SMOKE', 'Bonfire smoke'],
+    ['SMOKE_GENERIC_WRECK', 'Burning wreck smoke (big)'], ['POWER_GENERATOR_SMOKE', 'Generator exhaust'], ['SMOKING_BARREL_STEAM', 'Steam'],
+    ['GRENADE_RDG2_WHITE_LOOP', 'White smoke'], ['GRENADE_RDG2_BLACK_LOOP', 'Black smoke'], ['GRENADE_M18_GREEN_LOOP', 'Green signal smoke'],
+    ['CONTAMINATED_AREA_GAS_AROUND', 'Toxic gas cloud'], ['CONTAMINATED_AREA_GAS_GROUND', 'Toxic gas on the ground'], ['CONTAMINATED_AREA_GAS_TINY', 'Small toxic gas'],
+    ['LEVER_SPARKS', 'Electric sparks (one-shot)'], ['BARBED_WIRE_SPARKS', 'Short-circuit sparks (one-shot)'],
+    ['FLAREPROJ_ACTIVATE_RED', 'Red flare'], ['FLAREPROJ_ACTIVATE_GREEN', 'Green flare'], ['RGD5', 'Explosion (one-shot)'],
+  ];
+  DS.FX_SOUNDS = [
+    ['', 'None'], ['@file', 'My own sound file (.ogg / .wav)…'],
+    ['AlarmClock_Ring_Loop_SoundSet', 'Alarm bell'], ['KitchenTimer_Ticking_Loop_SoundSet', 'Ticking'],
+    ['Bunker_Lamp_Hum_SoundSet', 'Electric hum'], ['Power_Station_generator_overpowered_SoundSet', 'Overloaded generator'],
+    ['ContaminatedArea_SoundSet', 'Toxic zone'], ['Geyser_bubbling_loop_SoundSet', 'Bubbling'], ['HeavyFire_SoundSet', 'Big fire'],
+    ['LightFire_SoundSet', 'Small fire'], ['Blowtorch_Loop_SoundSet', 'Blowtorch'], ['DustWindGust_SoundSet', 'Wind gust'],
+  ];
+  const FX = (o) => Object.assign({ particle: '', repeat: 0, light: false, color: '#ffaa55', radius: 10, brightness: 5, soundset: '', sound: null, range: 300, startOff: false, when: { kind: '' } }, o);
+  DS.FX_PRESETS = [
+    { name: 'Campfire', fx: FX({ particle: 'CAMP_NORMAL_FIRE', light: true, color: '#ff8c3a', radius: 12, brightness: 4, soundset: 'LightFire_SoundSet' }) },
+    { name: 'Burning wreck', fx: FX({ particle: 'SMOKE_GENERIC_WRECK', light: true, color: '#ff7a2a', radius: 15, brightness: 3, soundset: 'HeavyFire_SoundSet', range: 800 }) },
+    { name: 'Toxic anomaly', fx: FX({ particle: 'CONTAMINATED_AREA_GAS_AROUND', light: true, color: '#7dff5a', radius: 18, brightness: 6, soundset: 'ContaminatedArea_SoundSet', range: 500 }) },
+    { name: 'Electric anomaly', fx: FX({ particle: 'LEVER_SPARKS', repeat: 1.5, light: true, color: '#7fb2ff', radius: 10, brightness: 8, soundset: 'Bunker_Lamp_Hum_SoundSet' }) },
+    { name: 'Alarm', fx: FX({ light: true, color: '#ff3030', radius: 8, brightness: 6, soundset: 'AlarmClock_Ring_Loop_SoundSet', range: 200 }) },
+    { name: 'Generator hum', fx: FX({ particle: 'POWER_GENERATOR_SMOKE', soundset: 'Power_Station_generator_overpowered_SoundSet', range: 150 }) },
+    { name: 'Signal smoke (green)', fx: FX({ particle: 'GRENADE_M18_GREEN_LOOP', repeat: 20, range: 1500 }) },
+    { name: 'Glow light', fx: FX({ light: true, color: '#ffe8a0', radius: 10, brightness: 5 }) },
+    { name: 'Ambient sound (my file)', fx: FX({ soundset: '@file', range: 120 }) },
+  ];
 
   /* ---- asset catalog.  entry: [className, label]  ---- */
   DS.CATALOG = [
@@ -296,6 +328,11 @@
         { k: 'varValue', t: 'num', label: 'Value', def: 1, show: (p) => p.varOp !== 'toggle' },
         { k: 'text', t: 'area', label: 'Message to the player (optional)', def: '' }],
       sum: (p) => `${p.var || '?'} ${{ set: '=', add: '+=', sub: '-=', toggle: 'toggle' }[p.varOp] || '='}${p.varOp === 'toggle' ? '' : ' ' + p.varValue}` },
+    act_fx: { cat: 'reward', title: 'Turn Effect On / Off', icon: '✦',
+      desc: 'Switches a placed effect (sound, particles, light) on or off for everyone - e.g. start the alarm when the quest begins. The switch survives restarts.',
+      fields: [{ k: 'fx', t: 'fxpick', label: 'Effect', def: '' },
+        { k: 'on', t: 'select', label: 'Switch', def: 'on', opts: [['on', 'On'], ['off', 'Off']] }],
+      sum: (p) => { const o = DS.store.obj(p.fx); return `${o ? o.label || 'effect' : '?'} ${p.on === 'off' ? 'off' : 'on'}`; } },
     rew_notify: { cat: 'reward', title: 'Show Message', icon: '✉',
       desc: 'Pop-up notification (and optional chat line).',
       fields: [{ k: 'title', t: 'text', label: 'Title', def: 'Quest' }, { k: 'text', t: 'area', label: 'Message', def: '' },

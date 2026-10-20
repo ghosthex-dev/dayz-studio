@@ -198,6 +198,8 @@ select.inp { cursor: pointer; }
 .problem:hover { filter: brightness(1.2); }
 .cond-w { display: grid; gap: 4px; flex: 1; min-width: 0; }
 .cond-w .dlg-opt-row { flex-wrap: wrap; }
+.dens-panel { display: grid; gap: 3px; padding: 4px 0; }
+.dens-warn { color: #facc15; } .dens-high { color: #fb923c; } .dens-danger { color: #f87171; font-weight: 600; }
 .v3-pickhint { color: #ff8a8a; font-weight: 600; }
 .removed-list { display: grid; gap: 2px; max-height: 240px; overflow: auto; margin: 4px 0; }
 .removed-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 6px; align-items: center; font-size: 12px; }

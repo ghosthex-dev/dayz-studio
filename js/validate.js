@@ -133,6 +133,7 @@
         });
       }
       if (n.p.cond && n.p.cond.kind) { const cp = DS.Cond.problem(n.p.cond); if (cp) add(n.id, 'error', 'Condition ' + cp + '.'); }
+      if (n.type === 'act_fx' && !S.obj(n.p.fx)) add(n.id, 'error', 'Turn Effect On / Off: pick a placed effect (it may have been deleted).');
       if (n.type === 'act_setvar' && !String(n.p.var || '').trim()) add(n.id, 'error', 'Set Server Variable: no variable name.');
       if ((n.type === 'trg_cond' || n.type === 'logic_wait' || n.type === 'obj_cond') && !(n.p.cond && n.p.cond.kind)) add(n.id, 'warn', 'The condition is “Always”, so this step passes immediately.');
       if (n.type === 'rew_script' && !String(n.p.code || '').replace(/\/\/.*$/gm, '').trim()) add(n.id, 'info', 'Script is empty or only comments.');
@@ -157,6 +158,12 @@
       if (seen.has(key)) list.push({ level: 'warn', msg: `${name} is stacked exactly on top of another identical object.`, target: t });
       seen.set(key, true);
       if (o.kind === 'event' && !String(o.event || '').trim()) list.push({ level: 'error', msg: `${name}: event spawn has no event name.`, target: t });
+      if (o.kind === 'fx' && o.fx) {
+        if (o.fx.soundset === '@file' && !(o.fx.sound && o.fx.sound.id)) list.push({ level: 'warn', msg: `${name}: set to play your own sound file, but no file is attached.`, target: t });
+        if (!o.fx.particle && !o.fx.light && !o.fx.soundset) list.push({ level: 'warn', msg: `${name}: the effect has no particles, light or sound.`, target: t });
+        const cp = DS.Cond.problem(o.fx.when);
+        if (cp) list.push({ level: 'error', msg: `${name}: its condition ${cp}.`, target: t });
+      }
       if ((o.kind === 'loot' || o.kind === 'prop') && o.loot.some((l) => !String(l.c).trim())) list.push({ level: 'error', msg: `${name}: loot table has a row without a class name.`, target: t });
     });
     const idSeen = new Set();
@@ -169,6 +176,9 @@
         iss[k].forEach((i) => list.push({ level: i.level, msg: `[${q.name}] ${i.msg}`, target: k === '_quest' ? { kind: 'quest', id: q.id } : { kind: 'node', id: k, quest: q.id } }))
       );
     });
+    // crowded areas (performance heatmap)
+    if (DS.Density) DS.Density.compute().spots.filter((s) => s.score >= DS.Density.HIGH).forEach((s) =>
+      list.push({ level: 'warn', msg: `Crowded area around ${Math.round(s.x)}, ${Math.round(s.z)}: load score ${s.score} (${DS.Density.label(s.score)}) - ${s.count} objects within ${DS.Density.RADIUS} m. Spread them out or remove some.`, target: s.near ? { kind: 'object', id: s.near.id } : null }));
     // the same NPC (same name + class) in several quests should stand on the same spot to become one character
     const npcs = [];
     P.quests.forEach((q) => q.nodes.forEach((n) => { if (n.type === 'trg_npc' && n.p.name) npcs.push({ q, n, r: DS.resolvePos(n.p.pos) }); }));

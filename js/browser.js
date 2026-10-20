@@ -18,7 +18,7 @@
     const q = el('input', { class: 'inp search', type: 'search', placeholder: 'Search…', oninput: (e) => { search = e.target.value.toLowerCase(); draw(); } });
     body = el('div', { class: 'pane-scroll' });
     root.append(tabs, q, body);
-    ['structure', 'selection', 'tool', 'asset', 'loot', 'zones', 'game', 'terrain3d', 'classes'].forEach((ev) => S.on(ev, draw));
+    ['structure', 'selection', 'tool', 'asset', 'loot', 'zones', 'game', 'terrain3d', 'classes', 'stamps'].forEach((ev) => S.on(ev, draw));
     S.on('changed', U.debounce(draw, 250));
     draw();
   };
@@ -55,6 +55,22 @@
       el('div', { class: 'mini-title' }, 'Custom class'),
       inp, kind,
       el('button', { class: 'btn sm', onclick: () => { if (inp.value.trim()) useAsset({ c: inp.value.trim(), kind: kind.value, label: inp.value.trim() }); } }, 'Place this class')));
+
+    // your own prefab stamps (library shared by every project)
+    const mine = (DS.Stamps ? DS.Stamps.list : []).filter((p) => !search || p.name.toLowerCase().includes(search));
+    if (mine.length || !search)
+      body.append(group('stamps', 'My prefab stamps', mine.length, mine.length ? mine.map((p) =>
+        el('div', { class: 'asset' + (S.asset && S.asset.prefab && S.asset.prefab.id === p.id ? ' active' : ''), title: 'Click, then click the map to stamp it (R / wheel rotates). In 3D, the brushes paint it.', onclick: () => useAsset({ c: p.name, kind: 'prop', label: p.name, prefab: p }) },
+          el('span', { class: 'dot', style: { background: '#f59e0b' } }), el('span', { class: 'asset-name' }, p.name), el('span', { class: 'asset-sub' }, p.parts.length + ' parts'),
+          el('button', { class: 'btn icon', title: 'Delete this stamp from your library', onclick: (e) => { e.stopPropagation(); DS.Stamps.remove(p.id); } }, '✕'))) :
+        [el('div', { class: 'hint-box' }, 'Select a group of placed objects and use “⭐ Save as prefab stamp…” to make your own reusable layouts.')]));
+
+    // placed effects: sounds, particles, lights (played by the quest mod)
+    const fx = DS.FX_PRESETS.filter((p) => !search || p.name.toLowerCase().includes(search) || 'effect sound particle light'.includes(search));
+    if (fx.length)
+      body.append(group('fx', 'Effects & sounds', fx.length, fx.map((p) =>
+        el('div', { class: 'asset' + (S.asset && S.asset.kind === 'fx' && S.asset.label === p.name ? ' active' : ''), title: 'Click, then click the map to place it. Edit the sound, particles and light in the inspector.', onclick: () => useAsset({ c: 'DZS_Effect', kind: 'fx', label: p.name, fx: p.fx }) },
+          el('span', { class: 'dot', style: { background: DS.KINDS.fx.color } }), el('span', { class: 'asset-name' }, p.name), el('span', { class: 'asset-sub' }, 'effect')))));
 
     // prefabs
     const pf = DS.PREFABS.filter((p) => !search || p.name.toLowerCase().includes(search));

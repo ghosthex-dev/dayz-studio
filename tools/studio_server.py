@@ -638,6 +638,42 @@ BACKUPS_DIR = os.path.join(os.path.expanduser('~'), 'Documents', 'DayZStudio', '
 
 
 KEYS_DIR = os.path.join(os.path.expanduser('~'), 'Documents', 'DayZStudio', 'Keys')
+PREFABS_DIR = os.path.join(os.path.expanduser('~'), 'Documents', 'DayZStudio', 'Prefabs')
+
+
+def prefab_list():
+    """the user's prefab stamps (shared by every project)"""
+    out = []
+    if os.path.isdir(PREFABS_DIR):
+        for fn in sorted(os.listdir(PREFABS_DIR)):
+            if fn.endswith('.json'):
+                try:
+                    with open(os.path.join(PREFABS_DIR, fn), encoding='utf-8') as f:
+                        j = json.load(f)
+                    if isinstance(j.get('parts'), list):
+                        out.append({'id': fn[:-5], 'name': str(j.get('name') or fn[:-5]), 'parts': j['parts'], 'desc': str(j.get('desc') or '')})
+                except (OSError, ValueError):
+                    continue
+    return {'ok': True, 'prefabs': out, 'dir': PREFABS_DIR}
+
+
+def prefab_save(body):
+    pid = re.sub(r'[^A-Za-z0-9_\-]', '', str(body.get('id') or ''))
+    parts = body.get('parts')
+    if not pid or not isinstance(parts, list) or not parts:
+        return {'ok': False, 'error': 'nothing to save'}
+    os.makedirs(PREFABS_DIR, exist_ok=True)
+    with open(os.path.join(PREFABS_DIR, pid + '.json'), 'w', encoding='utf-8') as f:
+        json.dump({'name': str(body.get('name') or pid)[:80], 'desc': str(body.get('desc') or '')[:200], 'parts': parts}, f, indent=1)
+    return {'ok': True, 'id': pid}
+
+
+def prefab_delete(body):
+    pid = re.sub(r'[^A-Za-z0-9_\-]', '', str(body.get('id') or ''))
+    path = os.path.join(PREFABS_DIR, pid + '.json')
+    if pid and os.path.isfile(path):
+        os.remove(path)
+    return {'ok': True}
 
 
 def sign_pbo(env, pbo, mod_dir, key_name):
@@ -1021,6 +1057,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(link_state())
         if u.path == '/api/server/status':
             return self._json(local_server_status())
+        if u.path == '/api/prefabs':
+            return self._json(prefab_list())
         if u.path == '/api/project/list':
             return self._json(proj_list())
         if u.path == '/api/project/load':
@@ -1061,6 +1099,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(link_send(body))
         if u.path == '/api/mod/build':
             return self._json(build_export(body))
+        if u.path == '/api/prefabs/save':
+            return self._json(prefab_save(body))
+        if u.path == '/api/prefabs/delete':
+            return self._json(prefab_delete(body))
         if u.path == '/api/project/save':
             return self._json(proj_save(body))
         if u.path == '/api/audio/upload':

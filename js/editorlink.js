@@ -36,7 +36,7 @@
 
   const gidOf = (o) => o.gid || 'dzs_' + o.id;
   const sig = (o) => [o.c, o.x, o.y, o.z, o.yaw, o.pitch || 0, o.roll || 0, o.scale || 1].join('|');
-  const spawnable = (o) => o.kind !== 'event' && String(o.c || '').trim() !== '';
+  const spawnable = (o) => o.kind !== 'event' && o.kind !== 'fx' && String(o.c || '').trim() !== '';
 
   async function api(path, body) {
     const r = await fetch(path, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

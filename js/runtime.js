@@ -27,6 +27,7 @@ const int DSQ_RPC_JOURNAL = 77430005;  // server -> client: the player's quest l
 const int DSQ_RPC_ABANDON = 77430006;  // client -> server: abandon a quest from the journal
 const int DSQ_RPC_HELLO = 77430007;    // client -> server: (re)send me the NPC list and journal
 const int DSQ_RPC_OPTION = 77430008;   // client -> server: picked a reply that gives / takes items
+const int DSQ_RPC_FX = 77430009;       // server -> client: which effects are switched on ("id,id,...")
 
 class DSJObjective
 {
@@ -462,6 +463,9 @@ class DSQuests
 	float m_SaveT;
 	ref map<int, string> m_Chunks;
 	ref map<string, float> m_Globals;        // server: persistent server-wide variables
+	string m_FxActive;                       // server: effects switched on right now ("id,id,...")
+	float m_FxT;
+	ref map<string, string> m_FxSent;        // server: what each player was told last
 	float m_NpcT;           // client: pieces of a long message still arriving
 
 	void DSQuests()
@@ -469,6 +473,7 @@ class DSQuests
 		m_Talk = new map<string, string>;
 		m_Chunks = new map<int, string>;
 		m_Globals = new map<string, float>;
+		m_FxSent = new map<string, string>;
 		m_Players = new map<string, ref DSPlayerData>;
 		m_Session = new map<string, float>;
 		m_LogLines = new array<string>;
@@ -896,6 +901,7 @@ class DSQuests
 		m_Session.Remove(id);
 		m_NpcSent.Remove(id);
 		m_JournalLast.Remove(id);
+		m_FxSent.Remove(id);
 	}
 
 	// ---------------- NPC spawn ----------------
@@ -970,6 +976,23 @@ class DSQuests
 		}
 	}
 
+	// an NPC that leaves takes its clothes and gear along (deleting only the body leaves them floating in the world)
+	static void DeleteNpc(Object o)
+	{
+		EntityAI e = EntityAI.Cast(o);
+		if (e)
+		{
+			array<EntityAI> gear = new array<EntityAI>;
+			e.GetInventory().EnumerateInventory(InventoryTraversalType.POSTORDER, gear);
+			for (int i = 0; i < gear.Count(); i++)
+			{
+				if (gear.Get(i) && gear.Get(i) != e)
+					GetGame().ObjectDelete(gear.Get(i));
+			}
+		}
+		GetGame().ObjectDelete(o);
+	}
+
 	// every few seconds: NPCs with an appearance condition come and go (e.g. a faction that shows up once a
 	// server variable is set, a night trader, a storm hermit)
 	void UpdateNpcs()
@@ -1005,7 +1028,7 @@ class DSQuests
 					if (at < m_NpcObjs.Count())
 						m_NpcObjs.Remove(at);
 					if (gone && m_NpcObjs.Find(gone) < 0)
-						GetGame().ObjectDelete(gone);
+						DeleteNpc(gone);
 					Print("[DZStudio] NPC " + n.title + " leaves (" + q.name + ")");
 					changed = true;
 				}
@@ -1054,6 +1077,12 @@ class DSQuests
 			TickPlayer(pb, step);
 		}
 
+		m_FxT += step;
+		if (m_FxT >= 2 || m_FxActive == "")
+		{
+			m_FxT = 0;
+			m_FxActive = FxActiveList();
+		}
 		m_NpcT += step;
 		if (m_NpcT >= 5)
 		{
@@ -1083,6 +1112,7 @@ class DSQuests
 		string id = data.id;
 		m_Session.Set(id, m_Session.Get(id) + step);
 		SendNpcList(p, id);
+		SendFx(p, id);
 
 		for (int i = 0; i < m_File.quests.Count(); i++)
 			ProcessQuest(p, data, m_File.quests.Get(i), step);
@@ -1343,6 +1373,46 @@ class DSQuests
 		return true;
 	}
 
+	// ---------------- placed effects (sound / particle / light) ----------------
+	bool FxOn(DSFxDef d)
+	{
+		float v = GetVar("fx_" + d.id);
+		if (d.startOff)
+		{
+			if (v != 1)
+				return false;
+		}
+		else if (v == -1)
+			return false;
+		if (d.cond && d.cond.kind != "" && !CondOk(null, null, d.cond))
+			return false;
+		return true;
+	}
+
+	string FxActiveList()
+	{
+		DSFx.Defs();
+		string active = ",";   // never empty, so "nothing on" is a real state
+		for (int i = 0; i < DSFx.s_Defs.Count(); i++)
+		{
+			DSFxDef d = DSFx.s_Defs.Get(i);
+			if (FxOn(d))
+				active = active + d.id + ",";
+		}
+		return active;
+	}
+
+	void SendFx(PlayerBase p, string id)
+	{
+		if (m_FxActive == "")
+			m_FxActive = FxActiveList();
+		string last;
+		if (m_FxSent.Find(id, last) && last == m_FxActive)
+			return;
+		m_FxSent.Set(id, m_FxActive);
+		SendToClient(p, DSQ_RPC_FX, m_FxActive);
+	}
+
 	// quest chains: every required quest has been completed at least once
 	bool PrereqsMet(DSPlayerData data, DSQuest q)
 	{
@@ -1557,7 +1627,13 @@ class DSQuests
 	// ---------------- instant node actions ----------------
 	void RunInstant(PlayerBase p, DSQuest q, DSNode n)
 	{
-		if (n.type == "act_setvar")
+		if (n.type == "act_fx")
+		{
+			// effects remember their switch in a server variable, so it survives restarts
+			SetVar("fx_" + n.var, "set", n.varValue);
+			m_FxActive = FxActiveList();
+		}
+		else if (n.type == "act_setvar")
 		{
 			SetVar(n.var, n.varOp, n.varValue);
 			if (n.text != "")
@@ -2404,6 +2480,10 @@ class DSQuests
 			else
 				Print("[DZStudio] client: could not read the NPC list: " + err);
 		}
+		else if (rpc == DSQ_RPC_FX)
+		{
+			DSFx.SetActive(json);
+		}
 		else if (rpc == DSQ_RPC_JOURNAL)
 		{
 			DSJournal jn = new DSJournal();
@@ -2434,7 +2514,7 @@ class DSQuests
 
 	void HandleRPC(PlayerBase p, PlayerIdentity sender, int rpc, ParamsReadContext ctx)
 	{
-		if (rpc == DSQ_RPC_NPCS || rpc == DSQ_RPC_OPEN || rpc == DSQ_RPC_JOURNAL)
+		if (rpc == DSQ_RPC_NPCS || rpc == DSQ_RPC_OPEN || rpc == DSQ_RPC_JOURNAL || rpc == DSQ_RPC_FX)
 		{
 			// long messages arrive in pieces (see SendToClient): put them back together
 			Param3<int, int, string> a = new Param3<int, int, string>(0, 1, "");
@@ -2472,6 +2552,7 @@ class DSQuests
 				{
 					m_NpcSent.Remove(PlayerId(p));
 					m_JournalLast.Remove(PlayerId(p));
+					m_FxSent.Remove(PlayerId(p));
 				}
 			}
 			else
@@ -2484,6 +2565,7 @@ class DSQuests
 	{
 		if (GetGame().IsDedicatedServer())
 			return;
+		DSFx.ClientUpdate(dt);
 		if (!m_UI)
 			m_UI = new DSDialogUI();
 		if (!m_JUI)
@@ -3816,6 +3898,189 @@ class DSJournalUI
 	}
 }
 
+// ---- placed effects: looping sounds, particles and lights at map positions ------
+// Definitions are compiled into the mod (DSFxData in DSCustom.c). The server decides which are on (condition, quest
+// switch) and tells the players; each player's game plays the ones within range.
+class DSFxDef
+{
+	string id;
+	vector pos;
+	int particle;        // ParticleList id, -1 = none
+	float repeat;        // seconds: replay a one-shot particle (sparks, explosion); 0 = play once / loops itself
+	bool light;
+	float r;
+	float g;
+	float b;
+	float radius;
+	float brightness;
+	string soundset;     // vanilla or DSQFX_<id>_SoundSet for your own file; "" = none
+	float range;         // metres: players closer than this see / hear it
+	bool startOff;       // off until a "Turn Effect On" quest node switches it on
+	ref DSCond cond;     // only while this holds (server-side)
+}
+
+class DSFxLight extends PointLightBase
+{
+	void DSFxLight()
+	{
+		SetVisibleDuringDaylight(true);
+		SetCastShadow(false);
+		SetFlareVisible(false);
+	}
+}
+
+class DSFxRun
+{
+	ParticleSource p;
+	ref EffectSound snd;
+	DSFxLight light;
+	float t;
+}
+
+class DSFx
+{
+	static ref array<ref DSFxDef> s_Defs;
+	static ref map<string, bool> s_On;          // client: switched on by the server
+	static ref map<string, ref DSFxRun> s_Run;  // client: playing right now
+	static float s_T;
+
+	static void Defs()
+	{
+		if (s_Defs)
+			return;
+		s_Defs = new array<ref DSFxDef>;
+		DSFxData.Fill();
+	}
+
+	static DSFxDef Add(string id, float x, float y, float z, int particle, float repeat, bool light, float r, float g, float b, float radius, float brightness, string soundset, float range, bool startOff)
+	{
+		DSFxDef d = new DSFxDef();
+		d.id = id;
+		d.pos = Vector(x, y, z);
+		if (y == 0)
+			d.pos[1] = GetGame().SurfaceY(x, z);
+		d.particle = particle;
+		d.repeat = repeat;
+		d.light = light;
+		d.r = r;
+		d.g = g;
+		d.b = b;
+		d.radius = radius;
+		d.brightness = brightness;
+		d.soundset = soundset;
+		d.range = range;
+		d.startOff = startOff;
+		s_Defs.Insert(d);
+		return d;
+	}
+
+	static DSCond C(string kind, string var, string op, float value, float to, string stat)
+	{
+		DSCond c = new DSCond();
+		c.kind = kind;
+		c.var = var;
+		c.op = op;
+		c.value = value;
+		c.to = to;
+		c.stat = stat;
+		return c;
+	}
+
+	// client: the server's list "id,id,"
+	static void SetActive(string list)
+	{
+		if (!s_On)
+			s_On = new map<string, bool>;
+		s_On.Clear();
+		TStringArray ids = new TStringArray;
+		list.Split(",", ids);
+		for (int i = 0; i < ids.Count(); i++)
+		{
+			if (ids.Get(i) != "")
+				s_On.Set(ids.Get(i), true);
+		}
+	}
+
+	static void Stop(DSFxRun run)
+	{
+		if (run.p)
+			run.p.StopParticle();
+		if (run.snd)
+			run.snd.SoundStop();
+		if (run.light)
+			run.light.FadeOut(1);
+	}
+
+	static void ClientUpdate(float dt)
+	{
+		Defs();
+		if (!s_On)
+			s_On = new map<string, bool>;
+		if (!s_Run)
+			s_Run = new map<string, ref DSFxRun>;
+		s_T += dt;
+		if (s_T < 0.5)
+			return;
+		float step = s_T;
+		s_T = 0;
+		vector cam = GetGame().GetCurrentCameraPosition();
+		for (int i = 0; i < s_Defs.Count(); i++)
+		{
+			DSFxDef d = s_Defs.Get(i);
+			bool want = false;   // (plain ifs: Enforce mis-evaluates && chains assigned to a bool)
+			if (s_On.Contains(d.id))
+			{
+				if (vector.Distance(cam, d.pos) < d.range)
+					want = true;
+			}
+			DSFxRun run = null;
+			s_Run.Find(d.id, run);
+			if (!want)
+			{
+				if (run)
+				{
+					Stop(run);
+					s_Run.Remove(d.id);
+					Print("[DZStudio] effect " + d.id + " stops");
+				}
+				continue;
+			}
+			if (!run)
+			{
+				run = new DSFxRun();
+				s_Run.Set(d.id, run);
+				Print("[DZStudio] effect " + d.id + " starts");
+				if (d.particle >= 0)
+					run.p = ParticleManager.GetInstance().PlayInWorld(d.particle, d.pos);
+				if (d.soundset != "")
+					run.snd = SEffectManager.PlaySound(d.soundset, d.pos, 1, 1, true);
+				if (d.light)
+				{
+					run.light = DSFxLight.Cast(ScriptedLightBase.CreateLight(DSFxLight, d.pos + Vector(0, 1, 0)));
+					if (run.light)
+					{
+						run.light.SetDiffuseColor(d.r, d.g, d.b);
+						run.light.SetAmbientColor(d.r, d.g, d.b);
+						run.light.SetRadiusTo(d.radius);
+						run.light.SetBrightnessTo(d.brightness);
+					}
+				}
+				continue;
+			}
+			// one-shot particles (sparks, explosions) replay every few seconds
+			if (d.particle >= 0 && d.repeat > 0)
+			{
+				run.t += step;
+				if (run.t >= d.repeat)
+				{
+					run.t = 0;
+					run.p = ParticleManager.GetInstance().PlayInWorld(d.particle, d.pos);
+				}
+			}
+		}
+	}
+}
+
 // ---- removed map objects --------------------------------------------------------
 // The list is compiled into the mod (DSMapEditsData in DSCustom.c), so the server and every player hide the same
 // objects: matched by class or model path near the saved position, then hidden like CF's ObjectManager does it.
@@ -3956,7 +4221,7 @@ modded class PlayerBase
 	override void OnRPC(PlayerIdentity sender, int rpc_type, ParamsReadContext ctx)
 	{
 		super.OnRPC(sender, rpc_type, ctx);
-		if (rpc_type >= DSQ_RPC_NPCS && rpc_type <= DSQ_RPC_OPTION)
+		if (rpc_type >= DSQ_RPC_NPCS && rpc_type <= DSQ_RPC_FX)
 			DSQuests.Get().HandleRPC(this, sender, rpc_type, ctx);
 	}
 

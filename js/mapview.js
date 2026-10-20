@@ -479,14 +479,7 @@
     }
     let created = [];
     if (a.prefab) {
-      const g = U.uid('g');
-      const yawR = U.deg2rad(placeYaw);
-      created = a.prefab.parts.map((p) => {
-        const dx = p[2] * Math.cos(yawR) + p[3] * Math.sin(yawR);
-        const dz = -p[2] * Math.sin(yawR) + p[3] * Math.cos(yawR);
-        const k = p[1];
-        return S.makeObject({ c: p[0], kind: k, label: '' }, x + dx, z + dz, { yaw: U.wrap360(p[4] + placeYaw), group: g });
-      });
+      created = DS.Stamps.place(a.prefab, x, z, placeYaw);
     } else {
       created = [S.makeObject(a, x, z, { yaw: placeYaw })];
     }
@@ -606,6 +599,9 @@
       }
     }
 
+    // performance heatmap (object density per network bubble)
+    if (S.project.meta.showDensity && DS.Density) DS.Density.draw(ctx, w2s);
+
     // vanilla map objects removed in the project: red crosses
     const removed = S.project.removed || [];
     if (removed.length) {
@@ -659,6 +655,15 @@
         ctx.fillStyle = 'rgba(240,244,250,.95)';
         ctx.fillText(lt, x + r + 5, y);
       }
+    });
+    // range of selected effects
+    if (selSet) S.project.objects.forEach((o) => {
+      if (o.kind !== 'fx' || !selSet.has(o.id) || !o.fx) return;
+      const [x, y] = w2s(o.x, o.z);
+      ctx.strokeStyle = 'rgba(232,121,249,.7)';
+      ctx.setLineDash([6, 5]);
+      ctx.beginPath(); ctx.arc(x, y, (o.fx.range || 300) * view.s, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
     });
 
     // loot spawns (Central Economy)

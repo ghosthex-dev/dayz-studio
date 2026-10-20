@@ -202,6 +202,7 @@
         id: U.uid('o'), c: a.c, kind: a.kind || 'prop', label: a.label && a.label !== a.c ? a.label : '',
         x: U.round(x, 2), y: 0, z: U.round(z, 2), yaw: 0, pitch: 0, roll: 0, scale: 1, snap: true,
         init: '', group: '', loot: [], event: a.kind === 'event' ? a.c : '', hidden: false, locked: false,
+        fx: a.fx ? JSON.parse(JSON.stringify(a.fx)) : undefined,
       },
       extra || {}
     );
