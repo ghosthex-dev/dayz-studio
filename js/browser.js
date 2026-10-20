@@ -144,7 +144,10 @@
   function drawQuests() {
     body.append(el('div', { class: 'btn-row pad' },
       el('button', { class: 'btn sm primary', onclick: () => { S.setView('quests'); S.newQuest(); S.commit(); } }, '+ New quest'),
-      el('button', { class: 'btn sm', onclick: () => DS.app.templates() }, 'Templates…')));
+      el('button', { class: 'btn sm', onclick: () => DS.app.templates() }, 'Templates…'),
+      el('button', { class: 'btn sm', title: 'XP, reputation, skills - item requirements - HUD and character sheet', onclick: () => DS.Stats.open() }, '📊 Player stats'),
+      el('button', { class: 'btn sm', title: 'Your own node blocks made from Enforce Script', onclick: () => DS.CustomNodes.manager() }, '🧩 Custom nodes'),
+      el('button', { class: 'btn sm', title: 'Live script.log of the local test server, errors explained', onclick: () => DS.Console.open() }, '⌨ Console')));
     if (!S.project.quests.length)
       body.append(el('div', { class: 'hint-box' }, 'Quests are built from nodes: a Trigger starts it, Objectives are the tasks, Rewards pay out. Create a quest or start from a template.'));
     S.project.quests.forEach((q) => {

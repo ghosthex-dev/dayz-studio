@@ -28,6 +28,8 @@ const int DSQ_RPC_ABANDON = 77430006;  // client -> server: abandon a quest from
 const int DSQ_RPC_HELLO = 77430007;    // client -> server: (re)send me the NPC list and journal
 const int DSQ_RPC_OPTION = 77430008;   // client -> server: picked a reply that gives / takes items
 const int DSQ_RPC_FX = 77430009;       // server -> client: which effects are switched on ("id,id,...")
+const int DSQ_RPC_USE = 77430010;      // client -> server: pressed F on a usable object (quest, node)
+const int DSQ_RPC_MSG = 77430011;      // server -> client: a short message for the tracker banner ("title|text")
 
 class DSJObjective
 {
@@ -64,15 +66,41 @@ class DSJMark
 	float z;
 }
 
+// one of the player's stats as the client sees it (HUD, character sheet, item requirements)
+class DSJStat
+{
+	string id;
+	string name;
+	float v;
+	float min;
+	float max;
+	bool sheet;
+	int color;
+}
+
 class DSJournal
 {
 	ref array<ref DSJQuest> quests;
 	ref array<ref DSJMark> givers;    // NPCs with a quest this player can take now (map markers)
+	ref array<ref DSJStat> stats;     // the player's stats
+	ref array<string> uses;           // "quest|node" of objects this player can use right now
 
 	void DSJournal()
 	{
 		quests = new array<ref DSJQuest>;
 		givers = new array<ref DSJMark>;
+		stats = new array<ref DSJStat>;
+		uses = new array<string>;
+	}
+
+	DSJStat Stat(string id)
+	{
+		for (int i = 0; i < stats.Count(); i++)
+		{
+			if (stats.Get(i).id == id)
+				return stats.Get(i);
+		}
+		return null;
 	}
 }
 
@@ -94,7 +122,10 @@ TextWidget DSQText(float x, float y, float w, float h, int size, int color, int 
 Widget DSQRect(float x, float y, float w, float h, int color, int sort)
 {
 	WorkspaceWidget ws = GetGame().GetWorkspace();
-	return ws.CreateWidget(ImageWidgetTypeID, x, y, w, h, WidgetFlags.VISIBLE | WidgetFlags.EXACTSIZE | WidgetFlags.EXACTPOS, color, sort);
+	Widget r = ws.CreateWidget(ImageWidgetTypeID, x, y, w, h, WidgetFlags.VISIBLE | WidgetFlags.EXACTSIZE | WidgetFlags.EXACTPOS, color, sort);
+	int a = (color >> 24) & 0xFF;   // CreateWidget ignores the alpha byte
+	r.SetAlpha(a / 255.0);
+	return r;
 }
 
 void DSQWrap(string text, int maxChars, array<string> lines)
@@ -134,6 +165,7 @@ class DSCond
 	float value;     // compare value; time: from hour; uptime: from minute
 	float to;        // time: to hour (may wrap past midnight); uptime: to minute
 	string stat;     // player: bleeding sick fracture unconscious blood health water energy | weather: storm rain fog overcast clear
+	bool neg;        // NOT: the condition holds when the check fails
 }
 
 class DSDlgOption
@@ -200,13 +232,27 @@ class DSNpcInfo
 	float radius;
 }
 
+// a placed object the player can use (F) for a "Use Object" trigger or objective
+class DSUseInfo
+{
+	string quest;
+	string node;
+	string prompt;
+	float x;
+	float y;
+	float z;
+	float radius;
+}
+
 class DSNpcList
 {
 	ref array<ref DSNpcInfo> npcs;
+	ref array<ref DSUseInfo> uses;
 
 	void DSNpcList()
 	{
 		npcs = new array<ref DSNpcInfo>;
+		uses = new array<ref DSUseInfo>;
 	}
 }
 
@@ -251,9 +297,13 @@ class DSNode
 	bool nomark;            // no map / screen marker for this objective or quest giver
 	bool optional;          // bonus objective: never needed to finish the quest
 	ref DSCond cond;        // trg_cond / logic_wait / obj_cond: the condition; trg_npc: the NPC only appears while it holds
-	string var;             // act_setvar: server variable name
-	string varOp;           // act_setvar: set | add | sub | toggle
+	string var;             // act_setvar: server variable name; act_pvar: stat id; act_fx: effect id
+	string varOp;           // act_setvar: set | add | sub | toggle; act_pvar: add | sub | set
 	float varValue;
+	ref array<string> args; // custom nodes (cna_* / cno_*): their settings, in order
+	string prompt;          // trg_object / obj_use: the interaction prompt ("Open the gate")
+	string okText;          // trg_object / obj_use: message when it worked
+	bool removeObj;         // trg_object / obj_use: remove the placed object once used
 
 	void DSNode()
 	{
@@ -282,13 +332,45 @@ class DSQuest
 	}
 }
 
+// a per-player stat (XP, reputation, skills) defined in Studio
+class DSStatDef
+{
+	string id;
+	string name;
+	float start;
+	float min;
+	float max;           // max <= min: no limits
+	bool resetOnDeath;
+	bool sheet;          // shown on the character sheet
+	int color;
+}
+
 class DSQuestFile
 {
 	ref array<ref DSQuest> quests;
+	ref array<ref DSStatDef> stats;
 
 	void DSQuestFile()
 	{
 		quests = new array<ref DSQuest>;
+		stats = new array<ref DSStatDef>;
+	}
+}
+
+// ---- server-wide persistent variables ($profile:DZStudioQuests/globals.json) ---------------
+class DSGVar
+{
+	string k;
+	float v;
+}
+
+class DSGlobalFile
+{
+	ref array<ref DSGVar> vars;
+
+	void DSGlobalFile()
+	{
+		vars = new array<ref DSGVar>;
 	}
 }
 
@@ -344,11 +426,23 @@ class DSPlayerData
 	float play;     // accumulated play seconds (used for cooldowns)
 	ref array<ref DSQuestState> quests;
 	ref array<string> used;   // one-time conversation gifts already received
+	ref array<ref DSGVar> stats;   // the player's stats (XP, reputation, skills)
 
 	void DSPlayerData()
 	{
 		quests = new array<ref DSQuestState>;
 		used = new array<string>;
+		stats = new array<ref DSGVar>;
+	}
+
+	DSGVar FindStat(string sid)
+	{
+		for (int i = 0; i < stats.Count(); i++)
+		{
+			if (stats.Get(i).k == sid)
+				return stats.Get(i);
+		}
+		return null;
 	}
 
 	DSQuestState FindQuest(string questId)
@@ -414,22 +508,7 @@ class DSProgress
 	}
 }
 
-// ---- server-wide persistent variables ($profile:DZStudioQuests/globals.json) ---------------
-class DSGVar
-{
-	string k;
-	float v;
-}
 
-class DSGlobalFile
-{
-	ref array<ref DSGVar> vars;
-
-	void DSGlobalFile()
-	{
-		vars = new array<ref DSGVar>;
-	}
-}
 
 // ---- the manager ------------------------------------------------------------
 class DSQuests
@@ -448,6 +527,8 @@ class DSQuests
 	float m_ProgT;
 	ref array<string> m_LogLines;
 	ref array<ref DSNpcInfo> m_NpcInfo;    // quest NPCs (server: spawned ones, client: received list)
+	ref array<ref DSUseInfo> m_UseInfo;    // usable objects ("Use Object" nodes)
+	ref map<string, float> m_MsgT;         // server: last requirement message per player + item (no spam)
 	ref array<Object> m_NpcObjs;           // server only, same order as m_NpcInfo
 	ref map<string, bool> m_NpcSent;
 	ref DSDialogUI m_UI;
@@ -463,7 +544,6 @@ class DSQuests
 	float m_SaveT;
 	ref map<int, string> m_Chunks;
 	ref map<string, float> m_Globals;        // server: persistent server-wide variables
-	string m_FxActive;                       // server: effects switched on right now ("id,id,...")
 	float m_FxT;
 	ref map<string, string> m_FxSent;        // server: what each player was told last
 	float m_NpcT;           // client: pieces of a long message still arriving
@@ -478,6 +558,8 @@ class DSQuests
 		m_Session = new map<string, float>;
 		m_LogLines = new array<string>;
 		m_NpcInfo = new array<ref DSNpcInfo>;
+		m_UseInfo = new array<ref DSUseInfo>;
+		m_MsgT = new map<string, float>;
 		m_NpcObjs = new array<Object>;
 		m_NpcSent = new map<string, bool>;
 		m_JournalLast = new map<string, string>;
@@ -514,6 +596,7 @@ class DSQuests
 		m_File = new DSQuestFile();
 		JsonFileLoader<DSQuestFile>.JsonLoadFile(path, m_File);
 		SpawnNpcs();
+		CollectUses();
 		m_Ready = true;
 		m_Debug = FileExist(ROOT + "/playtest.flag");
 		Print("[DZStudio] Loaded " + m_File.quests.Count() + " quest(s).");
@@ -625,7 +708,7 @@ class DSQuests
 		}
 		if (FileExist(ROOT + "/give.flag") && p)
 		{
-			// play-test helper: "ClassName amount" per line
+			// play-test helper: "ClassName amount" per line ("ClassName 1 hands": put it in the hands like a player would, "@die": die)
 			FileHandle gh = OpenFile(ROOT + "/give.flag", FileMode.READ);
 			string gl;
 			array<string> gives = new array<string>;
@@ -644,11 +727,33 @@ class DSQuests
 			{
 				TStringArray gp = new TStringArray;
 				gives.Get(gi).Split(" ", gp);
+				if (gp.Get(0) == "@die")
+				{
+					p.SetHealth("", "", 0);   // play-test: die (stats that reset on death, quests that fail on death)
+					Say("killed the player");
+					continue;
+				}
 				int gn = 1;
 				if (gp.Count() > 1)
 					gn = gp.Get(1).ToInt();
 				if (gn < 1)
 					gn = 1;
+				if (gp.Count() > 2 && gp.Get(2) == "hands")
+				{
+					EntityAI he = EntityAI.Cast(GetGame().CreateObjectEx(gp.Get(0), p.GetPosition(), ECE_PLACE_ON_SURFACE));
+					if (he && p.GetHumanInventory().CanAddEntityInHands(he))
+					{
+						p.ServerTakeEntityToHands(he);
+						Say("took " + gp.Get(0) + " into the hands");
+					}
+					else
+					{
+						Say("hands refused " + gp.Get(0));
+						if (he)
+							he.Delete();
+					}
+					continue;
+				}
 				GiveItem(p, gp.Get(0), gn);
 				Say("gave " + gn + "x " + gp.Get(0));
 			}
@@ -698,7 +803,7 @@ class DSQuests
 			for (int i = 0; i < near.Count(); i++)
 			{
 				Object o = near.Get(i);
-				if (o && !o.IsMan() && !o.IsTree() && !o.IsBush())
+				if (o && !o.IsMan() && !o.IsTree() && !o.IsBush() && !o.IsInherited(InventoryItem))
 					blocked = true;
 			}
 			if (!blocked)
@@ -853,7 +958,7 @@ class DSQuests
 
 	bool IsTrigger(string t)
 	{
-		return t == "start" || t == "trg_zone" || t == "trg_npc" || t == "trg_item" || t == "trg_time" || t == "trg_cond";
+		return t == "start" || t == "trg_zone" || t == "trg_npc" || t == "trg_item" || t == "trg_time" || t == "trg_cond" || t == "trg_object";
 	}
 
 	// ---------------- player data ----------------
@@ -1077,12 +1182,6 @@ class DSQuests
 			TickPlayer(pb, step);
 		}
 
-		m_FxT += step;
-		if (m_FxT >= 2 || m_FxActive == "")
-		{
-			m_FxT = 0;
-			m_FxActive = FxActiveList();
-		}
 		m_NpcT += step;
 		if (m_NpcT >= 5)
 		{
@@ -1112,7 +1211,7 @@ class DSQuests
 		string id = data.id;
 		m_Session.Set(id, m_Session.Get(id) + step);
 		SendNpcList(p, id);
-		SendFx(p, id);
+		SendFx(p, data);
 
 		for (int i = 0; i < m_File.quests.Count(); i++)
 			ProcessQuest(p, data, m_File.quests.Get(i), step);
@@ -1242,9 +1341,23 @@ class DSQuests
 	{
 		if (!c || c.kind == "")
 			return true;
+		bool r = CondRaw(p, data, c);
+		if (c.neg)
+			return !r;
+		return r;
+	}
+
+	bool CondRaw(PlayerBase p, DSPlayerData data, DSCond c)
+	{
 		string k = c.kind;
 		if (k == "var")
 			return Cmp(GetVar(c.var), c.op, c.value);
+		if (k == "pvar")
+		{
+			if (!data)
+				return false;
+			return Cmp(StatVal(data, c.var), c.op, c.value);
+		}
 		if (k == "time")
 		{
 			int yr, mo, dy, hr, mi;
@@ -1374,7 +1487,8 @@ class DSQuests
 	}
 
 	// ---------------- placed effects (sound / particle / light) ----------------
-	bool FxOn(DSFxDef d)
+	// per player: an effect can be on for one player and off for another (their quests, stats, condition)
+	bool FxOn(DSFxDef d, PlayerBase p, DSPlayerData data)
 	{
 		float v = GetVar("fx_" + d.id);
 		if (d.startOff)
@@ -1384,33 +1498,250 @@ class DSQuests
 		}
 		else if (v == -1)
 			return false;
-		if (d.cond && d.cond.kind != "" && !CondOk(null, null, d.cond))
+		if (d.cond && d.cond.kind != "" && !CondOk(p, data, d.cond))
 			return false;
 		return true;
 	}
 
-	string FxActiveList()
+	string FxActiveList(PlayerBase p, DSPlayerData data)
 	{
 		DSFx.Defs();
 		string active = ",";   // never empty, so "nothing on" is a real state
 		for (int i = 0; i < DSFx.s_Defs.Count(); i++)
 		{
 			DSFxDef d = DSFx.s_Defs.Get(i);
-			if (FxOn(d))
+			if (FxOn(d, p, data))
 				active = active + d.id + ",";
 		}
 		return active;
 	}
 
-	void SendFx(PlayerBase p, string id)
+	void SendFx(PlayerBase p, DSPlayerData data)
 	{
-		if (m_FxActive == "")
-			m_FxActive = FxActiveList();
+		string now = FxActiveList(p, data);
 		string last;
-		if (m_FxSent.Find(id, last) && last == m_FxActive)
+		if (m_FxSent.Find(data.id, last) && last == now)
 			return;
-		m_FxSent.Set(id, m_FxActive);
-		SendToClient(p, DSQ_RPC_FX, m_FxActive);
+		m_FxSent.Set(data.id, now);
+		SendToClient(p, DSQ_RPC_FX, now);
+	}
+
+	// ---------------- player stats (XP, reputation, skills) ----------------
+	DSStatDef StatDef(string id)
+	{
+		if (!m_File)
+			return null;
+		for (int i = 0; i < m_File.stats.Count(); i++)
+		{
+			if (m_File.stats.Get(i).id == id)
+				return m_File.stats.Get(i);
+		}
+		return null;
+	}
+
+	float StatVal(DSPlayerData data, string id)
+	{
+		DSGVar v = data.FindStat(id);
+		if (v)
+			return v.v;
+		DSStatDef sd = StatDef(id);
+		if (sd)
+			return sd.start;
+		return 0;
+	}
+
+	void SetStat(PlayerBase p, DSPlayerData data, string id, string op, float value, string msg)
+	{
+		if (id == "")
+			return;
+		float nv = value;
+		if (op == "add")
+			nv = StatVal(data, id) + value;
+		else if (op == "sub")
+			nv = StatVal(data, id) - value;
+		DSStatDef sd = StatDef(id);
+		if (sd && sd.max > sd.min)
+		{
+			if (nv < sd.min)
+				nv = sd.min;
+			if (nv > sd.max)
+				nv = sd.max;
+		}
+		DSGVar v = data.FindStat(id);
+		if (!v)
+		{
+			v = new DSGVar();
+			v.k = id;
+			data.stats.Insert(v);
+		}
+		v.v = nv;
+		SaveData(data);
+		string title = id;
+		if (sd && sd.name != "")
+			title = sd.name;
+		Say(title + " = " + nv);
+		if (msg != "")
+			Notify(p, title, msg, false);
+	}
+
+	// ---------------- short messages on the player's tracker banner ----------------
+	void SendMsg(PlayerBase p, string title, string text)
+	{
+		SendToClient(p, DSQ_RPC_MSG, title + "|" + text);
+	}
+
+	// on the player's PC: the same pop-up as the server's quest messages
+	void ShowMsg(string title, string text)
+	{
+		NotificationSystem.AddNotificationExtended(5, title, text, "");
+	}
+
+	// ---------------- item requirements (both sides: the client for instant feedback, the server decides) ----------------
+	bool CondFor(PlayerBase p, DSCond c)
+	{
+		if (!c || c.kind == "")
+			return true;
+		if (GetGame().IsDedicatedServer() || !GetGame().IsMultiplayer())
+		{
+			if (!m_Ready)
+				return true;
+			return CondOk(p, GetData(p), c);
+		}
+		bool r = ClientCond(p, c);
+		if (c.neg)
+			return !r;
+		return r;
+	}
+
+	// what the client can know about itself: its stats and quests (from the journal), inventory, health, weather
+	bool ClientCond(PlayerBase p, DSCond c)
+	{
+		string k = c.kind;
+		if (k == "var" || k == "uptime")
+			return true;            // server-only; the server checks it again anyway
+		if (!m_Journal)
+			return true;            // nothing received yet: do not block
+		if (k == "pvar")
+		{
+			DSJStat st = m_Journal.Stat(c.var);
+			float v = 0;
+			if (st)
+				v = st.v;
+			return Cmp(v, c.op, c.value);
+		}
+		if (k == "quest_done" || k == "quest_active" || k == "quest_new")
+		{
+			int status = 0;
+			for (int i = 0; i < m_Journal.quests.Count(); i++)
+			{
+				if (m_Journal.quests.Get(i).id == c.quest)
+					status = m_Journal.quests.Get(i).status;
+			}
+			if (k == "quest_done")
+				return status == 2;
+			if (k == "quest_active")
+				return status == 1;
+			return status == 0;
+		}
+		return CondRaw(p, null, c);
+	}
+
+	// ---------------- usable objects ("Use Object" trigger / objective) ----------------
+	void CollectUses()
+	{
+		m_UseInfo.Clear();
+		for (int i = 0; i < m_File.quests.Count(); i++)
+		{
+			DSQuest q = m_File.quests.Get(i);
+			for (int j = 0; j < q.nodes.Count(); j++)
+			{
+				DSNode n = q.nodes.Get(j);
+				if (n.type != "trg_object" && n.type != "obj_use")
+					continue;
+				DSUseInfo u = new DSUseInfo();
+				u.quest = q.id;
+				u.node = n.id;
+				u.prompt = n.prompt;
+				if (u.prompt == "")
+					u.prompt = "Use";
+				u.x = n.x;
+				u.y = GroundPos(n.x, n.y, n.z)[1];
+				u.z = n.z;
+				u.radius = n.radius;
+				if (u.radius < 1.5)
+					u.radius = 1.5;
+				m_UseInfo.Insert(u);
+			}
+		}
+	}
+
+	// can this player use node n of quest q right now?
+	bool UseReady(DSPlayerData data, DSQuest q, DSNode n)
+	{
+		if (n.type == "trg_object")
+			return TalkState(data, q) == "offer";
+		DSQuestState qs = data.FindQuest(q.id);
+		if (!qs || qs.status != 1)
+			return false;
+		return qs.Node(n.id).status == 1;
+	}
+
+	// server: the player pressed F on a usable object
+	void ServerUse(PlayerBase p, string questId, string nodeId)
+	{
+		if (!m_Ready || !p)
+			return;
+		DSQuest q = FindQuestById(questId);
+		if (!q)
+			return;
+		DSNode n = FindNode(q, nodeId);
+		if (!n || (n.type != "trg_object" && n.type != "obj_use"))
+			return;
+		if (Dist2D(p.GetPosition(), n.x, n.z) > n.radius + 4)
+			return;
+		DSPlayerData data = GetData(p);
+		if (!data || !UseReady(data, q, n))
+			return;
+		string title = n.prompt;
+		if (title == "")
+			title = q.name;
+		if (!CondOk(p, data, n.cond))
+		{
+			string why = n.text;
+			if (why == "")
+				why = "You can't do that yet.";
+			Notify(p, title, why, false);
+			return;
+		}
+		// pay with the required item (e.g. a key) when asked to
+		if (n.flag && n.cond && n.cond.kind == "has_item")
+		{
+			int need = n.cond.n;
+			if (need < 1)
+				need = 1;
+			RemoveItems(p, n.cond.cls, need);
+		}
+		if (n.removeObj && n.cls != "")
+		{
+			array<Object> near = new array<Object>;
+			GetGame().GetObjectsAtPosition(Vector(n.x, n.y, n.z), 2.5, near, null);
+			for (int i = 0; i < near.Count(); i++)
+			{
+				if (near.Get(i) && near.Get(i).GetType() == n.cls)
+				{
+					GetGame().ObjectDelete(near.Get(i));
+					break;
+				}
+			}
+		}
+		if (n.okText != "")
+			Notify(p, title, n.okText, false);
+		DSQuestState qs = data.GetQuest(q.id);
+		if (n.type == "trg_object")
+			StartQuest(p, data, q, qs, n);
+		else
+			CompleteNode(p, data, q, qs, n, 0);
+		m_JournalLast.Remove(data.id);   // usable objects changed
 	}
 
 	// quest chains: every required quest has been completed at least once
@@ -1442,6 +1773,8 @@ class DSQuests
 			return CountItems(p, n.cls) >= n.count;
 		if (n.type == "trg_cond")
 			return CondOk(p, data, n.cond);
+		if (n.type == "trg_object")
+			return false;   // started by using the object (F), see ServerUse
 		if (n.type == "trg_time")
 		{
 			if (n.mode == "hour")
@@ -1463,7 +1796,7 @@ class DSQuests
 		ts.status = 2;
 
 		string msg = q.description;
-		if (trigger.text != "" && trigger.type != "trg_npc")
+		if (trigger.text != "" && trigger.type != "trg_npc" && trigger.type != "trg_object")   // trg_object: text is the "locked" message
 			msg = trigger.text;
 		Notify(p, "New quest: " + q.name, msg, true);
 
@@ -1535,7 +1868,7 @@ class DSQuests
 
 		ns.status = 1;
 
-		if (n.type == "obj_kill" || n.type == "obj_travel" || n.type == "obj_collect" || n.type == "obj_deliver" || n.type == "obj_survive" || n.type == "obj_cond")
+		if (IsObjectiveType(n.type))
 		{
 			string label = n.title;
 			if (label == "")
@@ -1622,16 +1955,27 @@ class DSQuests
 			if (ns.progress >= n.count)
 				CompleteNode(p, data, q, qs, n, 0);
 		}
+		else if (n.type.IndexOf("cno_") == 0)
+		{
+			// custom check node (Studio ▸ Custom nodes): done when its code returns true
+			if (DSCustom.CheckNode(n.type, p, Vector(n.x, n.y, n.z), n.args))
+				CompleteNode(p, data, q, qs, n, 0);
+		}
 	}
 
 	// ---------------- instant node actions ----------------
 	void RunInstant(PlayerBase p, DSQuest q, DSNode n)
 	{
-		if (n.type == "act_fx")
+		if (n.type == "act_pvar")
+		{
+			DSPlayerData sdata = GetData(p);
+			if (sdata)
+				SetStat(p, sdata, n.var, n.varOp, n.varValue, n.text);
+		}
+		else if (n.type == "act_fx")
 		{
 			// effects remember their switch in a server variable, so it survives restarts
 			SetVar("fx_" + n.var, "set", n.varValue);
-			m_FxActive = FxActiveList();
 		}
 		else if (n.type == "act_setvar")
 		{
@@ -1691,6 +2035,11 @@ class DSQuests
 		else if (n.type == "rew_script")
 		{
 			DSCustom.Run(n.id, p, Vector(n.x, n.y, n.z));
+		}
+		else if (n.type.IndexOf("cna_") == 0)
+		{
+			// custom action node (Studio ▸ Custom nodes)
+			DSCustom.RunNode(n.type, p, Vector(n.x, n.y, n.z), n.args);
 		}
 	}
 
@@ -1901,13 +2250,25 @@ class DSQuests
 			if (qs && qs.status == 1 && q.failOnDeath)
 				qs.Reset();
 		}
+		// stats that reset on death go back to their start value
+		for (int s = 0; s < m_File.stats.Count(); s++)
+		{
+			DSStatDef sd = m_File.stats.Get(s);
+			if (!sd.resetOnDeath)
+				continue;
+			DSGVar v = data.FindStat(sd.id);
+			if (v)
+				data.stats.RemoveItem(v);
+		}
 		SaveData(data);
 	}
 
 	// ======================= journal / tracker =======================
 	bool IsObjectiveType(string t)
 	{
-		return t == "obj_kill" || t == "obj_travel" || t == "obj_collect" || t == "obj_deliver" || t == "obj_survive" || t == "obj_cond";
+		if (t.IndexOf("cno_") == 0)
+			return true;
+		return t == "obj_kill" || t == "obj_travel" || t == "obj_collect" || t == "obj_deliver" || t == "obj_survive" || t == "obj_cond" || t == "obj_use";
 	}
 
 	string ObjectiveLabel(DSNode n)
@@ -1996,6 +2357,13 @@ class DSQuests
 						jo.z = n.z;
 					}
 				}
+				else if (n.type == "obj_use")
+				{
+					jo.target = 1;
+					jo.hasPos = !n.nomark;
+					jo.x = n.x;
+					jo.z = n.z;
+				}
 				else if (n.type == "obj_travel")
 				{
 					jo.target = 1;
@@ -2010,6 +2378,31 @@ class DSQuests
 				jq.objectives.Insert(jo);
 			}
 			jn.quests.Insert(jq);
+		}
+		// the player's stats
+		for (int st = 0; st < m_File.stats.Count(); st++)
+		{
+			DSStatDef sd = m_File.stats.Get(st);
+			DSJStat js1 = new DSJStat();
+			js1.id = sd.id;
+			js1.name = sd.name;
+			js1.v = StatVal(data, sd.id);
+			js1.min = sd.min;
+			js1.max = sd.max;
+			js1.sheet = sd.sheet;
+			js1.color = sd.color;
+			jn.stats.Insert(js1);
+		}
+		// objects this player can use right now
+		for (int uq = 0; uq < m_File.quests.Count(); uq++)
+		{
+			DSQuest uqq = m_File.quests.Get(uq);
+			for (int un = 0; un < uqq.nodes.Count(); un++)
+			{
+				DSNode unn = uqq.nodes.Get(un);
+				if ((unn.type == "trg_object" || unn.type == "obj_use") && UseReady(data, uqq, unn))
+					jn.uses.Insert(uqq.id + "|" + unn.id);
+			}
 		}
 		// quest givers with something to offer this player right now
 		for (int g = 0; g < m_NpcInfo.Count(); g++)
@@ -2133,6 +2526,8 @@ class DSQuests
 				ServerAbandon(me, a);
 			else if (rpc == DSQ_RPC_OPTION)
 				ServerOption(me, a, b);
+			else if (rpc == DSQ_RPC_USE)
+				ServerUse(me, a, b);
 			return;
 		}
 		GetGame().RPCSingleParam(me, rpc, new Param2<string, string>(a, b), true);
@@ -2148,6 +2543,8 @@ class DSQuests
 		DSNpcList list = new DSNpcList();
 		for (int i = 0; i < m_NpcInfo.Count(); i++)
 			list.npcs.Insert(m_NpcInfo.Get(i));
+		for (int u = 0; u < m_UseInfo.Count(); u++)
+			list.uses.Insert(m_UseInfo.Get(u));
 		string json;
 		JsonSerializer js = new JsonSerializer();
 		js.WriteToString(list, false, json);
@@ -2474,6 +2871,7 @@ class DSQuests
 			if (js.ReadFromString(list, json, err))
 			{
 				m_NpcInfo = list.npcs;
+				m_UseInfo = list.uses;
 				m_GotNpcs = true;
 				Print("[DZStudio] client: " + m_NpcInfo.Count() + " quest NPC(s)");
 			}
@@ -2483,6 +2881,13 @@ class DSQuests
 		else if (rpc == DSQ_RPC_FX)
 		{
 			DSFx.SetActive(json);
+		}
+		else if (rpc == DSQ_RPC_MSG)
+		{
+			TStringArray mp = new TStringArray;
+			json.Split("|", mp);
+			if (mp.Count() >= 2)
+				ShowMsg(mp.Get(0), mp.Get(1));
 		}
 		else if (rpc == DSQ_RPC_JOURNAL)
 		{
@@ -2514,7 +2919,7 @@ class DSQuests
 
 	void HandleRPC(PlayerBase p, PlayerIdentity sender, int rpc, ParamsReadContext ctx)
 	{
-		if (rpc == DSQ_RPC_NPCS || rpc == DSQ_RPC_OPEN || rpc == DSQ_RPC_JOURNAL || rpc == DSQ_RPC_FX)
+		if (rpc == DSQ_RPC_NPCS || rpc == DSQ_RPC_OPEN || rpc == DSQ_RPC_JOURNAL || rpc == DSQ_RPC_FX || rpc == DSQ_RPC_MSG)
 		{
 			// long messages arrive in pieces (see SendToClient): put them back together
 			Param3<int, int, string> a = new Param3<int, int, string>(0, 1, "");
@@ -2532,7 +2937,7 @@ class DSQuests
 			m_Chunks.Remove(rpc);
 			ClientReceive(rpc, sofar);
 		}
-		else if (rpc == DSQ_RPC_TALK || rpc == DSQ_RPC_ACCEPT || rpc == DSQ_RPC_ABANDON || rpc == DSQ_RPC_HELLO || rpc == DSQ_RPC_OPTION)
+		else if (rpc == DSQ_RPC_TALK || rpc == DSQ_RPC_ACCEPT || rpc == DSQ_RPC_ABANDON || rpc == DSQ_RPC_HELLO || rpc == DSQ_RPC_OPTION || rpc == DSQ_RPC_USE)
 		{
 			if (!GetGame().IsServer())
 				return;
@@ -2545,6 +2950,8 @@ class DSQuests
 				ServerAccept(p, b.param1, b.param2);
 			else if (rpc == DSQ_RPC_OPTION)
 				ServerOption(p, b.param1, b.param2);
+			else if (rpc == DSQ_RPC_USE)
+				ServerUse(p, b.param1, b.param2);
 			else if (rpc == DSQ_RPC_HELLO)
 			{
 				// the client was not ready when we first sent these: send them again on the next tick
@@ -2584,6 +2991,9 @@ class DSQuests
 				SendToServer(DSQ_RPC_HELLO, "", "");
 			}
 		}
+		bool covered = m_UI.IsOpen() || m_JUI.IsOpen() || GetGame().GetUIManager().GetMenu() != null;
+		DSHud.Update(dt, covered, m_Journal);
+		DSSheet.Update(dt, covered, m_Journal);
 		if (m_UI.IsOpen() || m_JUI.IsOpen())
 			return;
 
@@ -2613,7 +3023,42 @@ class DSQuests
 			}
 		}
 		m_Looked = best;
-		if (best >= 0)
+		// usable objects ("Use Object" nodes): only the ones this player can use right now
+		int bestUse = -1;
+		if (me && me.IsAlive() && m_UseInfo.Count() > 0 && m_Journal && !GetGame().GetUIManager().GetMenu())
+		{
+			vector up = GetGame().GetCurrentCameraPosition();
+			vector ud = GetGame().GetCurrentCameraDirection();
+			float useDot = 0.94;
+			if (best >= 0)
+				useDot = 0.985;   // an NPC in view wins unless the object is right in the centre
+			for (int ui = 0; ui < m_UseInfo.Count(); ui++)
+			{
+				DSUseInfo uinfo = m_UseInfo.Get(ui);
+				if (m_Journal.uses.Find(uinfo.quest + "|" + uinfo.node) < 0)
+					continue;
+				vector at = Vector(uinfo.x, uinfo.y + 1.0, uinfo.z);
+				vector uto = at - up;
+				float udist = uto.Length();
+				if (udist > uinfo.radius + 2.5 || udist < 0.2)
+					continue;
+				uto.Normalize();
+				float udot = vector.Dot(uto, ud);
+				if (udot > useDot)
+				{
+					useDot = udot;
+					bestUse = ui;
+				}
+			}
+		}
+		if (bestUse >= 0)
+		{
+			DSUseInfo pick = m_UseInfo.Get(bestUse);
+			m_UI.ShowPrompt("[F]  " + pick.prompt);
+			if (key && !m_TalkKey)
+				SendToServer(DSQ_RPC_USE, pick.quest, pick.node);
+		}
+		else if (best >= 0)
 		{
 			m_UI.ShowPrompt("[F]  Talk to " + m_NpcInfo.Get(best).name);
 			if (key && !m_TalkKey)
@@ -2691,6 +3136,8 @@ class DSQuests
 	// Esc closes our screens; the game must not also open its pause menu with that key press
 	bool BlockPause()
 	{
+		if (DSSheet.IsOpen())
+			return true;
 		return (m_UI && m_UI.IsOpen()) || (m_JUI && m_JUI.IsOpen());
 	}
 
@@ -3898,6 +4345,23 @@ class DSJournalUI
 	}
 }
 
+// a condition built by generated code (effects, item requirements)
+DSCond DSMakeCond(string kind, string cls, int n, string quest, string var, string op, float value, float to, string stat, bool neg)
+{
+	DSCond c = new DSCond();
+	c.kind = kind;
+	c.cls = cls;
+	c.n = n;
+	c.quest = quest;
+	c.var = var;
+	c.op = op;
+	c.value = value;
+	c.to = to;
+	c.stat = stat;
+	c.neg = neg;
+	return c;
+}
+
 // ---- placed effects: looping sounds, particles and lights at map positions ------
 // Definitions are compiled into the mod (DSFxData in DSCustom.c). The server decides which are on (condition, quest
 // switch) and tells the players; each player's game plays the ones within range.
@@ -3974,17 +4438,6 @@ class DSFx
 		return d;
 	}
 
-	static DSCond C(string kind, string var, string op, float value, float to, string stat)
-	{
-		DSCond c = new DSCond();
-		c.kind = kind;
-		c.var = var;
-		c.op = op;
-		c.value = value;
-		c.to = to;
-		c.stat = stat;
-		return c;
-	}
 
 	// client: the server's list "id,id,"
 	static void SetActive(string list)
@@ -4078,6 +4531,389 @@ class DSFx
 				}
 			}
 		}
+	}
+}
+
+// ---- item requirements: "you need Rifle skill 5 to use the M4A1" --------------------
+// Rules are compiled into the mod (DSReqData in DSCustom.c). Both sides check: the player's PC for instant feedback
+// (with the stats and quests it was sent), the server decides.
+class DSReqDef
+{
+	string cls;
+	bool exact;          // this class only (otherwise every class that inherits from it)
+	ref DSCond cond;
+	string msg;
+}
+
+class DSItemGate
+{
+	static ref array<ref DSReqDef> s_Reqs;
+	static float s_LastT;
+	static string s_LastCls;
+
+	static void Defs()
+	{
+		if (s_Reqs)
+			return;
+		s_Reqs = new array<ref DSReqDef>;
+		DSReqData.Fill();
+	}
+
+	static DSReqDef Add(string cls, bool exact, string msg)
+	{
+		DSReqDef d = new DSReqDef();
+		d.cls = cls;
+		d.exact = exact;
+		d.msg = msg;
+		s_Reqs.Insert(d);
+		return d;
+	}
+
+	static bool Allow(PlayerBase p, EntityAI item)
+	{
+		Defs();
+		if (s_Reqs.Count() == 0)
+			return true;
+		if (!item || !p)
+			return true;
+		DSQuests dq = DSQuests.Get();
+		if (dq.m_NpcObjs.Find(p) >= 0)
+			return true;   // quest NPCs wear whatever Studio gave them
+		bool server = GetGame().IsServer();
+		bool mp = GetGame().IsMultiplayer();
+		if (server && mp && !p.GetIdentity())
+			return true;   // NPCs / AI on a server
+		if (server && mp)
+		{
+			if (!dq.m_Players.Contains(dq.PlayerId(p)))
+				return true;   // the character is still loading (items restored into the hands at login)
+		}
+		if (!server && p != GetGame().GetPlayer())
+			return true;   // a player's PC only judges its own character
+		for (int i = 0; i < s_Reqs.Count(); i++)
+		{
+			DSReqDef r = s_Reqs.Get(i);
+			bool match = false;
+			if (r.exact)
+			{
+				if (item.GetType() == r.cls)
+					match = true;
+			}
+			else if (item.IsKindOf(r.cls))
+				match = true;
+			if (!match)
+				continue;
+			if (dq.CondFor(p, r.cond))
+				continue;
+			Tell(p, item, r.msg);
+			return false;
+		}
+		return true;
+	}
+
+	// these checks run often (looking at an item, dragging it): one message per item every few seconds
+	static void Tell(PlayerBase p, EntityAI item, string msg)
+	{
+		if (msg == "")
+			msg = "You can't use this yet.";
+		float now = GetGame().GetTickTime();
+		DSQuests dq = DSQuests.Get();
+		if (GetGame().IsDedicatedServer())
+		{
+			string key = dq.PlayerId(p) + "|" + item.GetType();
+			float last = -100;
+			dq.m_MsgT.Find(key, last);
+			if (now - last < 6)
+				return;
+			dq.m_MsgT.Set(key, now);
+			dq.SendMsg(p, "Requirement", msg);
+			return;
+		}
+		if (item.GetType() == s_LastCls && now - s_LastT < 6)
+			return;
+		s_LastCls = item.GetType();
+		s_LastT = now;
+		dq.ShowMsg("Requirement", msg);
+	}
+}
+
+// ---- HUD widgets made in Studio (bars and text bound to the player's stats) ------------
+class DSHudDef
+{
+	string id;
+	string type;      // bar | text | panel
+	float x;          // fractions of the screen
+	float y;
+	float w;
+	float h;
+	int color;
+	int bg;
+	int size;
+	string stat;      // bar: the stat it shows
+	string text;      // "{xp} / {xp.max} XP" - {id}, {id.max}, {id.name}
+	float px;
+	float py;
+	float pw;
+	float ph;
+	Widget wBg;
+	Widget wFill;
+	TextWidget wText;
+}
+
+class DSHud
+{
+	static ref array<ref DSHudDef> s_Defs;
+	static bool s_Built;
+	static float s_T;
+
+	static void Defs()
+	{
+		if (s_Defs)
+			return;
+		s_Defs = new array<ref DSHudDef>;
+		DSHudData.Fill();
+	}
+
+	static DSHudDef Add(string id, string type, float x, float y, float w, float h, int color, int bg, int size, string stat, string text)
+	{
+		DSHudDef d = new DSHudDef();
+		d.id = id;
+		d.type = type;
+		d.x = x;
+		d.y = y;
+		d.w = w;
+		d.h = h;
+		d.color = color;
+		d.bg = bg;
+		d.size = size;
+		d.stat = stat;
+		d.text = text;
+		s_Defs.Insert(d);
+		return d;
+	}
+
+	static void Build()
+	{
+		int sw, sh;
+		GetScreenSize(sw, sh);
+		for (int i = 0; i < s_Defs.Count(); i++)
+		{
+			DSHudDef d = s_Defs.Get(i);
+			d.px = d.x * sw;
+			d.py = d.y * sh;
+			d.pw = d.w * sw;
+			d.ph = d.h * sh;
+			if (d.type == "bar" || d.type == "panel")
+				d.wBg = DSQRect(d.px, d.py, d.pw, d.ph, d.bg, 985);
+			if (d.type == "bar")
+				d.wFill = DSQRect(d.px, d.py, d.pw, d.ph, d.color, 986);
+			if (d.type == "text" || d.text != "")
+			{
+				int tc = 0xFFFFFFFF;
+				if (d.type == "text")
+					tc = d.color;
+				d.wText = DSQText(d.px + 6, d.py, d.pw - 12, d.ph, d.size, tc, 987);
+			}
+		}
+		s_Built = true;
+	}
+
+	// "{xp} / {xp.max} XP" -> "120 / 1000 XP"
+	static string Format(string t, DSJournal jn)
+	{
+		string r = t;
+		if (!jn)
+			return r;
+		for (int i = 0; i < jn.stats.Count(); i++)
+		{
+			DSJStat st = jn.stats.Get(i);
+			int v = (int)st.v;
+			int mx = (int)st.max;
+			r.Replace("{" + st.id + ".max}", mx.ToString());
+			r.Replace("{" + st.id + ".name}", st.name);
+			r.Replace("{" + st.id + "}", v.ToString());
+		}
+		return r;
+	}
+
+	static void Show(DSHudDef d, bool on)
+	{
+		if (d.wBg)
+			d.wBg.Show(on);
+		if (d.wFill)
+			d.wFill.Show(on);
+		if (d.wText)
+			d.wText.Show(on);
+	}
+
+	static void Update(float dt, bool covered, DSJournal jn)
+	{
+		Defs();
+		if (s_Defs.Count() == 0)
+			return;
+		if (!s_Built)
+			Build();
+		s_T += dt;
+		if (s_T < 0.25)
+			return;
+		s_T = 0;
+		bool show = true;   // (plain ifs: Enforce mis-evaluates && chains assigned to a bool)
+		if (covered)
+			show = false;
+		if (!jn)
+			show = false;
+		Man hudMe = GetGame().GetPlayer();
+		if (!hudMe)
+			show = false;
+		else if (!hudMe.IsAlive())
+			show = false;
+		for (int i = 0; i < s_Defs.Count(); i++)
+		{
+			DSHudDef d = s_Defs.Get(i);
+			Show(d, show);
+			if (!show)
+				continue;
+			if (d.wFill)
+			{
+				float frac = 0;
+				DSJStat st = jn.Stat(d.stat);
+				if (st && st.max > st.min)
+					frac = (st.v - st.min) / (st.max - st.min);
+				if (frac < 0)
+					frac = 0;
+				if (frac > 1)
+					frac = 1;
+				d.wFill.SetSize(d.pw * frac, d.ph);
+			}
+			if (d.wText)
+				d.wText.SetText(Format(d.text, jn));
+		}
+	}
+}
+
+// ---- character sheet (a key made in Studio): the player's stats ------------------------
+class DSSheet
+{
+	static bool s_Open;
+	static bool s_KeyWas;
+	static float s_T;
+	static ref array<Widget> s_All;
+
+	static bool IsOpen()
+	{
+		return s_Open;
+	}
+
+	static void Close()
+	{
+		if (s_All)
+		{
+			for (int i = 0; i < s_All.Count(); i++)
+			{
+				if (s_All.Get(i))
+					s_All.Get(i).Unlink();
+			}
+			s_All.Clear();
+		}
+		s_Open = false;
+	}
+
+	static void Open(DSJournal jn)
+	{
+		Close();
+		if (!s_All)
+			s_All = new array<Widget>;
+		int sw, sh;
+		GetScreenSize(sw, sh);
+		int rows = 0;
+		for (int c = 0; c < jn.stats.Count(); c++)
+		{
+			if (jn.stats.Get(c).sheet)
+				rows++;
+		}
+		float pw = sw * 0.3;
+		float ph = 110 + rows * 62;
+		float px = (sw - pw) * 0.5;
+		float py = (sh - ph) * 0.5;
+		s_All.Insert(DSQRect(px, py, pw, ph, 0xE0101010, 1000));
+		s_All.Insert(DSQRect(px + 24, py + 60, pw - 48, 2, 0xFFC8A864, 1001));
+		TextWidget title = DSQText(px + 24, py + 14, pw - 48, 40, 36, 0xFFE8D29A, 1002);
+		title.SetText("CHARACTER");
+		s_All.Insert(title);
+		float y = py + 78;
+		for (int i = 0; i < jn.stats.Count(); i++)
+		{
+			DSJStat st = jn.stats.Get(i);
+			if (!st.sheet)
+				continue;
+			TextWidget n = DSQText(px + 24, y, pw * 0.6, 30, 26, 0xFFFFFFFF, 1002);
+			n.SetText(st.name);
+			s_All.Insert(n);
+			int v = (int)st.v;
+			string val = v.ToString();
+			if (st.max > st.min)
+			{
+				int mx = (int)st.max;
+				val = val + " / " + mx.ToString();
+			}
+			TextWidget vt = DSQText(px + pw * 0.55, y, pw * 0.45 - 24, 30, 26, 0xFFFFE9A8, 1002);
+			vt.SetText(val);
+			s_All.Insert(vt);
+			if (st.max > st.min)
+			{
+				float frac = (st.v - st.min) / (st.max - st.min);
+				if (frac < 0)
+					frac = 0;
+				if (frac > 1)
+					frac = 1;
+				s_All.Insert(DSQRect(px + 24, y + 34, pw - 48, 10, 0xFF3A3A3A, 1001));
+				int col = st.color;
+				if (col == 0)
+					col = 0xFFC8A864;
+				s_All.Insert(DSQRect(px + 24, y + 34, (pw - 48) * frac, 10, col, 1002));
+			}
+			y += 62;
+		}
+		TextWidget foot = DSQText(px + 24, py + ph - 34, pw - 48, 26, 20, 0xFF9A9A9A, 1002);
+		foot.SetText("[Esc] Close");
+		s_All.Insert(foot);
+		s_Open = true;
+	}
+
+	static void Update(float dt, bool covered, DSJournal jn)
+	{
+		int key = DSHudData.SheetKey();
+		if (key < 0)
+			return;
+		bool down = KeyState(key) != 0;
+		bool pressed = false;
+		if (down)
+		{
+			if (!s_KeyWas)
+				pressed = true;
+		}
+		s_KeyWas = down;
+		bool alive = false;
+		Man sheetMe = GetGame().GetPlayer();
+		if (sheetMe)
+			alive = sheetMe.IsAlive();
+		if (s_Open)
+		{
+			if (pressed || KeyState(KeyCode.KC_ESCAPE) != 0 || !alive)
+			{
+				Close();
+				return;
+			}
+			s_T += dt;
+			if (s_T >= 1 && jn)
+			{
+				s_T = 0;
+				Open(jn);   // refresh the numbers
+			}
+			return;
+		}
+		if (pressed && !covered && jn && alive)
+			Open(jn);
 	}
 }
 
@@ -4218,10 +5054,25 @@ modded class AnimalBase
 
 modded class PlayerBase
 {
+	// item requirements (Studio ▸ Player stats ▸ Item requirements)
+	override bool CanReceiveItemIntoHands(EntityAI item_to_hands)
+	{
+		if (!super.CanReceiveItemIntoHands(item_to_hands))
+			return false;
+		return DSItemGate.Allow(this, item_to_hands);
+	}
+
+	override bool CanReceiveAttachment(EntityAI attachment, int slotId)
+	{
+		if (!super.CanReceiveAttachment(attachment, slotId))
+			return false;
+		return DSItemGate.Allow(this, attachment);
+	}
+
 	override void OnRPC(PlayerIdentity sender, int rpc_type, ParamsReadContext ctx)
 	{
 		super.OnRPC(sender, rpc_type, ctx);
-		if (rpc_type >= DSQ_RPC_NPCS && rpc_type <= DSQ_RPC_FX)
+		if (rpc_type >= DSQ_RPC_NPCS && rpc_type <= DSQ_RPC_MSG)
 			DSQuests.Get().HandleRPC(this, sender, rpc_type, ctx);
 	}
 

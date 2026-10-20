@@ -206,8 +206,8 @@
       row('Range (m)', numInp(f.range, (v) => { f.range = Math.max(10, v); ch(); }, { min: 10, step: 10 }), 'Players closer than this see and hear it.'),
       checkInp(f.startOff, (v) => { f.startOff = v; re(); }, 'Starts off — a “Turn Effect On / Off” quest node switches it on'),
       el('div', { class: 'ins-row' }, el('span', { class: 'ins-label' }, 'Only while'),
-        DS.Cond.widget(f.when || (f.when = { kind: '' }), { kinds: DS.Cond.WORLD, onChange: ch, redraw: () => I.render() })),
-      el('div', { class: 'ins-help' }, 'Played by the quest mod on each player’s PC (Export ▸ Build installable mod). Test it with “Test this exact mod” or the local server.'));
+        DS.Cond.widget(f.when || (f.when = { kind: '' }), { onChange: ch, redraw: () => I.render() })),
+      el('div', { class: 'ins-help' }, 'Checked for each player on their own: “Player stat”, “quest done” or “NOT quest done” conditions phase the effect in or out per player. Played by the quest mod on each player’s PC (Export ▸ Build installable mod). Test it with “Test this exact mod” or the local server.'));
   }
 
   /** NPC outfit presets + a random casual look */
@@ -246,7 +246,11 @@
     switch (f.t) {
       case 'text': return row(f.label, textInp(p[f.k], (v) => { p[f.k] = v; ch(); }));
       case 'area': return row(f.label, areaInp(p[f.k], (v) => { p[f.k] = v; ch(); }, 3));
-      case 'code': return row(f.label, areaInp(p[f.k], (v) => { p[f.k] = v; ch(); }, 8, true), 'Inserted as-is into the generated script. A syntax error will stop the quest scripts from compiling.');
+      case 'code': return el('div', { class: 'ins-row' }, el('span', { class: 'ins-label' }, f.label),
+        DS.Code.field({ value: p[f.k], rows: 9, mode: 'action', title: 'Custom Script - ' + (S.activeQuestObj() ? S.activeQuestObj().name : ''),
+          vars: [['player', 'PlayerBase', 'the player the quest runs for'], ['pos', 'vector', '0 0 0 unless set by code']],
+          onInput: (v) => { p[f.k] = v; ch(); }, onChange: () => S.commit() }),
+        el('span', { class: 'ins-help' }, 'Compiled into the quest mod. A mistake here stops ALL quest scripts loading - test it with ⌨ Console ▸ ▶ Compile on local server.'));
       case 'num': return row(f.label, numInp(p[f.k], (v) => { p[f.k] = v; ch(); }, { min: f.min, max: f.max }));
       case 'bool': return el('div', { class: 'ins-row' }, checkInp(p[f.k], (v) => { p[f.k] = v; ch(); rerender(); }, f.label));
       case 'select': return row(f.label, selectInp(p[f.k], f.opts, (v) => { p[f.k] = v; ch(); rerender(); }));
@@ -258,6 +262,20 @@
         const fxs = S.project.objects.filter((o) => o.kind === 'fx');
         if (!fxs.length) return row(f.label, el('span', { class: 'ins-help' }, 'Place an effect first (asset list ▸ Effects & sounds).'));
         return row(f.label, selectInp(p[f.k], [['', 'Pick an effect…']].concat(fxs.map((o) => [o.id, (o.label || 'Effect') + ' @ ' + Math.round(o.x) + ', ' + Math.round(o.z)])), (v) => { p[f.k] = v; ch(); rerender(); }));
+      }
+      case 'objpick': {
+        const objs = S.project.objects.filter((o) => ['building', 'prop', 'item', 'vehicle'].includes(o.kind));
+        if (!objs.length) return row(f.label, el('span', { class: 'ins-help' }, 'Place an object first (a gate, door, locker, terminal…).'));
+        const cur = S.obj(p[f.k]);
+        return row(f.label, el('div', { class: 'btn-row' },
+          selectInp(p[f.k], [['', 'Pick an object…']].concat(objs.map((o) => [o.id, (o.label || o.c) + ' @ ' + Math.round(o.x) + ', ' + Math.round(o.z)])), (v) => { p[f.k] = v; ch(); rerender(); }),
+          cur ? el('button', { class: 'btn', title: 'Show on the map', onclick: () => { if (DS.MapView && DS.MapView.centerOn) DS.MapView.centerOn(cur.x, cur.z); } }, '⌖') : null),
+          'The player must stand within reach and look at it.');
+      }
+      case 'statpick': {
+        const sts = S.project.stats || [];
+        if (!sts.length) return row(f.label, el('div', {}, el('span', { class: 'ins-help' }, 'No stats yet. '), el('button', { class: 'btn', onclick: () => DS.Stats && DS.Stats.open() }, '📊 Make XP, reputation…')));
+        return row(f.label, selectInp(p[f.k], [['', 'Pick a stat…']].concat(sts.map((st) => [st.id, st.name || st.id])), (v) => { p[f.k] = v; ch(); rerender(); }));
       }
       case 'cond': {
         if (!p[f.k]) p[f.k] = { kind: '' };
@@ -312,7 +330,8 @@
       box.innerHTML = '';
       box.append(
         el('div', { class: 'ins-head cat-' + T.cat }, el('span', { class: 'ne-icon' }, T.icon), el('div', null, el('div', { class: 'ins-title' }, T.title), el('div', { class: 'ins-sub' }, DS.NODE_CATS[T.cat].name))),
-        el('p', { class: 'ins-desc' }, T.desc)
+        el('p', { class: 'ins-desc' }, T.desc),
+        ...(T.custom && !T.missing ? [el('div', { class: 'btn-row pad' }, el('button', { class: 'btn sm', onclick: () => DS.CustomNodes.wizard(n.type) }, '✎ Edit this node type'), el('button', { class: 'btn sm', onclick: () => DS.Console.open() }, '⌨ Console'))] : [])
       );
       const fs = el('div', { class: 'ins-sec' });
       if (n.type === 'trg_npc') fs.append(sameNpcRow(q, n, draw));
@@ -387,7 +406,8 @@
     }
     box.append(
       section('Custom init script (Enforce)',
-        areaInp(o.init, (v) => { o.init = v; ch(); }, 4, true),
+        DS.Code.field({ value: o.init, rows: 5, mode: 'init', title: 'Init script - ' + (o.label || o.c),
+          vars: [['obj', 'Object', 'the object that was just created']], onInput: (v) => { o.init = v; ch(); }, onChange: () => S.commit() }),
         el('div', { class: 'ins-help' }, 'Runs right after the object is created in init.c. Use the variable “obj”. Example: obj.SetLifetime(0);')),
       section('Organise',
         row('Group id', textInp(o.group, (v) => { o.group = v.trim(); ch(); }), 'Objects sharing a group move together and export as one event group.'),

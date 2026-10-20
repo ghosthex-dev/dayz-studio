@@ -16,6 +16,7 @@
     ['quest_active', 'A quest is in progress'],
     ['quest_new', 'A quest was never started'],
     ['player', 'Player condition (bleeding, sick, blood…)'],
+    ['pvar', 'Player stat (XP, reputation, skill…)'],
     ['var', 'Server variable'],
     ['time', 'Time of day'],
     ['weather', 'Weather'],
@@ -42,6 +43,7 @@
   /** short plain-English text, e.g. "if the player is bleeding", "while it storms", "if wolves_seen ≥ 1" */
   C.text = function (c) {
     if (!c || !c.kind) return '';
+    if (c.neg) { const t = C.text(Object.assign({}, c, { neg: false })); return 'NOT (' + t.replace(/^if /, '') + ')'; }
     const op = (C.OPS.find((o) => o[0] === c.op) || C.OPS[0])[1];
     switch (c.kind) {
       case 'has_item': return `if carrying ${c.n || 1}× ${c.cls || '?'}`;
@@ -50,6 +52,7 @@
       case 'quest_active': return `if “${questName(c.quest)}” is running`;
       case 'quest_new': return `if “${questName(c.quest)}” not started`;
       case 'var': return `if ${c.var || '?'} ${op} ${+c.value || 0}`;
+      case 'pvar': { const st = (S.project.stats || []).find((x) => x.id === c.var); return `if ${st ? st.name : c.var || '?'} ${op} ${+c.value || 0}`; }
       case 'time': return `between ${hh(c.value)} and ${hh(c.to)}`;
       case 'uptime': return `${+c.value || 0}–${c.to > 0 ? c.to : '∞'} min after server start`;
       case 'player': {
@@ -70,6 +73,7 @@
     if ((c.kind === 'has_item' || c.kind === 'lacks_item') && !String(c.cls || '').trim()) return 'checks for an item but no item class is set';
     if (c.kind.startsWith('quest_') && !S.project.quests.some((x) => x.id === c.quest)) return 'checks a quest that is not set or was deleted';
     if (c.kind === 'var' && !String(c.var || '').trim()) return 'checks a server variable but no name is set';
+    if (c.kind === 'pvar' && !(S.project.stats || []).some((x) => x.id === c.var)) return 'checks a player stat that is not set or was deleted (Player stats & HUD)';
     if (c.kind === 'time' && (c.value == null || c.to == null || +c.value === +c.to)) return 'the time window is empty (from and to are the same)';
     return '';
   };
@@ -127,7 +131,7 @@
         if (c.kind === 'time' && c.value == null) { c.value = 22; c.to = 4; }
         if (c.kind === 'weather') { c.stat = c.stat && C.WEATHER.some((w) => w[0] === c.stat) ? c.stat : 'storm'; c.op = 'is'; }
         if (c.kind === 'player') { c.stat = c.stat && C.PLAYER.some((w) => w[0] === c.stat) ? c.stat : 'bleeding'; c.op = 'is'; }
-        if (c.kind === 'var') { c.op = c.op && C.OPS.some((o) => o[0] === c.op) ? c.op : '>='; if (c.value == null) c.value = 1; }
+        if (c.kind === 'var' || c.kind === 'pvar') { c.op = c.op && C.OPS.some((o) => o[0] === c.op) ? c.op : '>='; if (c.value == null) c.value = 1; }
         if (c.kind === 'uptime' && c.value == null) { c.value = 0; c.to = 60; }
         commit();
       });
@@ -150,6 +154,13 @@
         v.addEventListener('input', () => { c.var = v.value.replace(/[^A-Za-z0-9_]/g, ''); ch(); });
         v.addEventListener('change', () => { v.value = c.var || ''; S.commit(); });
         row.append(v, sel('op', C.OPS, '>='), num('value', 1));
+      } else if (k === 'pvar') {
+        const stats = S.project.stats || [];
+        if (!stats.length) row.append(el('span', { class: 'ins-help' }, 'Define player stats first (📊 Player stats & HUD).'));
+        else {
+          if (!stats.some((x) => x.id === c.var)) c.var = stats[0].id;
+          row.append(sel('var', stats.map((x) => [x.id, x.name || x.id]), stats[0].id), sel('op', C.OPS, '>='), num('value', 1));
+        }
       } else if (k === 'player') {
         row.append(sel('stat', C.PLAYER.map(([v, l]) => [v, l]), 'bleeding'));
         if (isFlag(C.PLAYER, c.stat)) row.append(sel('op', [['is', 'yes'], ['not', 'no']], 'is'));
@@ -163,8 +174,14 @@
       } else if (k === 'uptime') {
         row.append(el('span', { class: 'ins-help' }, 'from minute'), num('value', 1, 0), el('span', { class: 'ins-help' }, 'to'), num('to', 1, 0, null, '0 = no end'));
       }
+      if (k) {
+        const ng = el('input', { type: 'checkbox', checked: !!c.neg });
+        ng.addEventListener('change', () => { c.neg = ng.checked; commit(); });
+        row.append(el('label', { class: 'chk', title: 'Holds when the check does NOT pass, e.g. NOT “quest done” = until the player finished it' }, ng, el('span', null, 'NOT')));
+      }
       wrap.append(row);
       const help = {
+        pvar: 'A stat of this player (Player stats & HUD) - e.g. Rifle skill ≥ 5, Reputation < 0.',
         time: 'In-game time. A window may run past midnight (e.g. 23 → 1). Exactly midnight: 0 → 0.25.',
         uptime: 'Minutes since the server started (0 as “to” = no end) — e.g. an event only in the first hour after a restart.',
         weather: 'Thunderstorms happen at heavy overcast (lightning starts around 0.9).',
@@ -184,7 +201,7 @@
     if (!c || !c.kind) return undefined;
     return {
       kind: c.kind, cls: String(c.cls || '').trim(), n: Math.max(1, Math.round(c.n || 1)), quest: c.quest || '',
-      var: String(c.var || ''), op: c.op || '==', value: +c.value || 0, to: +c.to || 0, stat: c.stat || '',
+      var: String(c.var || ''), op: c.op || '==', value: +c.value || 0, to: +c.to || 0, stat: c.stat || '', neg: !!c.neg,
     };
   };
 })();

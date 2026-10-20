@@ -1069,6 +1069,22 @@ class Handler(SimpleHTTPRequestHandler):
             q = parse_qs(u.query)
             tok = int(q['token'][0]) if 'token' in q else None
             return self._json(link_objects(tok))
+        if u.path == '/api/servercfg':
+            return self._json(ST.servercfg_get(parse_qs(u.query)))
+        if u.path == '/api/types/source':
+            return self._json(ST.types_source(parse_qs(u.query)))
+        if u.path == '/api/pbo/sources':
+            return self._json(ST.pbo_sources())
+        if u.path == '/api/fs/list':
+            return self._json(ST.fs_list(parse_qs(u.query)))
+        if u.path == '/api/pbo/info':
+            return self._json(ST.pbo_info(parse_qs(u.query)))
+        if u.path == '/api/logs/tail':
+            return self._json(ST.logs_tail(parse_qs(u.query)))
+        if u.path == '/api/nodes':
+            return self._json(ST.nodes_list())
+        if u.path == '/api/mods':
+            return self._json(ST.mods_list())
         if u.path == '/api/rpt':
             p = newest_rpt()
             txt = ''
@@ -1127,11 +1143,46 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(launch_editor(body))
         if u.path == '/api/handoff':
             return self._json(write_handoff(body))
+        if u.path == '/api/servercfg/save':
+            return self._json(ST.servercfg_save(body))
+        if u.path == '/api/types/apply':
+            return self._json(ST.types_apply(body))
+        if u.path == '/api/pbo/unpack':
+            return self._json(ST.pbo_unpack(body))
+        if u.path == '/api/pbo/pack':
+            return self._json(ST.pbo_pack(body))
+        if u.path == '/api/pbo/models':
+            return self._json(ST.pbo_models(body))
+        if u.path == '/api/nodes/save':
+            return self._json(ST.nodes_save(body))
+        if u.path == '/api/nodes/delete':
+            return self._json(ST.nodes_delete(body))
+        if u.path == '/api/mods/clear':
+            return self._json(ST.mods_clear())
+        if u.path == '/api/fs/open':
+            return self._json(open_folder(body))
         if u.path == '/api/capture/stop':
             if game_alive():
                 state['proc'].terminate()
             return self._json({'ok': True})
         return self._json({'ok': False, 'error': 'unknown endpoint'}, 404)
+
+
+def open_folder(body):
+    """show a folder Studio wrote (unpacked / packed files) in Explorer"""
+    d = str(body.get('path', ''))
+    if not os.path.isdir(d):
+        d = os.path.dirname(d)
+    if not os.path.isdir(d):
+        return {'ok': False, 'error': 'Folder not found'}
+    os.startfile(d)
+    return {'ok': True}
+
+
+import server_tools as ST   # noqa: E402  (needs the helpers above)
+ST.setup(dict(find_env=find_env, find_server=find_server, pack_pbo=pack_pbo, sign_pbo=sign_pbo, steam_roots=steam_roots,
+              DATA=DATA, SRV_WORLDS=SRV_WORLDS, SRV_PROFILE=SRV_PROFILE, PROFILE=PROFILE, LOCAL_DAYZ=LOCAL_DAYZ,
+              server_alive=server_alive))
 
 
 def main():

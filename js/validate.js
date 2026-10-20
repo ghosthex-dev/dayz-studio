@@ -135,8 +135,16 @@
       if (n.p.cond && n.p.cond.kind) { const cp = DS.Cond.problem(n.p.cond); if (cp) add(n.id, 'error', 'Condition ' + cp + '.'); }
       if (n.type === 'act_fx' && !S.obj(n.p.fx)) add(n.id, 'error', 'Turn Effect On / Off: pick a placed effect (it may have been deleted).');
       if (n.type === 'act_setvar' && !String(n.p.var || '').trim()) add(n.id, 'error', 'Set Server Variable: no variable name.');
+      if (n.type === 'act_pvar' && !(S.project.stats || []).some((x) => x.id === n.p.stat)) add(n.id, 'error', 'Change Player Stat: pick a stat (Quests ▸ 📊 Player stats).');
+      if (n.type === 'trg_object' || n.type === 'obj_use') {
+        const ob = S.obj(n.p.obj);
+        if (!ob) add(n.id, 'error', 'Use Object: pick a placed object (it may have been deleted).');
+        else if (n.p.removeObj && ob.kind === 'building') add(n.id, 'info', 'Use Object: big buildings can take a moment to disappear for players far away.');
+      }
       if ((n.type === 'trg_cond' || n.type === 'logic_wait' || n.type === 'obj_cond') && !(n.p.cond && n.p.cond.kind)) add(n.id, 'warn', 'The condition is “Always”, so this step passes immediately.');
       if (n.type === 'rew_script' && !String(n.p.code || '').replace(/\/\/.*$/gm, '').trim()) add(n.id, 'info', 'Script is empty or only comments.');
+      if (n.type === 'rew_script' && DS.Code) DS.Code.lint(n.p.code, { mode: 'action', vars: [['player'], ['pos']] }).filter((i) => i.level === 'error').slice(0, 3).forEach((i) => add(n.id, 'error', 'Custom Script: ' + i.msg));
+      if (DS.CustomNodes && DS.CustomNodes.isCustom(n.type) && !DS.CustomNodes.def(n.type)) add(n.id, 'error', 'This custom node’s definition is missing (' + n.type + '). Import its .json in Quests ▸ 🧩 Custom nodes, or delete the node.');
     });
 
     cache.map.set(q.id, out);
@@ -175,6 +183,44 @@
       Object.keys(iss).forEach((k) =>
         iss[k].forEach((i) => list.push({ level: i.level, msg: `[${q.name}] ${i.msg}`, target: k === '_quest' ? { kind: 'quest', id: q.id } : { kind: 'node', id: k, quest: q.id } }))
       );
+    });
+    // Enforce snippets: the checker of the code editor, plus init scripts that clash (they share one init.c function)
+    if (DS.Code) {
+      const owner = new Map();
+      P.objects.filter((o) => String(o.init || '').trim()).forEach((o) => {
+        const t = { kind: 'object', id: o.id };
+        const name = o.label || o.c;
+        DS.Code.lint(o.init, { mode: 'init', vars: [['obj']] }).filter((i) => i.level === 'error').slice(0, 3).forEach((i) => list.push({ level: 'error', msg: `${name} - init script: ${i.msg}`, target: t }));
+        DS.Code.declared(o.init).forEach((d) => {
+          const prev = owner.get(d.name);
+          if (prev && prev !== o) list.push({ level: 'error', msg: `${name} and ${prev.label || prev.c} both declare “${d.name}” in their init script. All init scripts end up in one init.c function, so the name may only be declared once - rename one.`, target: t });
+          else owner.set(d.name, o);
+        });
+      });
+      (P.customNodes || []).forEach((d) => {
+        DS.Code.lint(d.code, { mode: d.kind === 'check' ? 'check' : 'action', params: (d.params || []).map((x) => x.k), vars: [['player'], ['pos']] }).filter((i) => i.level === 'error').slice(0, 3)
+          .forEach((i) => list.push({ level: 'error', msg: `Custom node “${d.title || d.id}”: ${i.msg}`, target: { kind: 'custom', id: d.id } }));
+      });
+    }
+    // player stats, item requirements, HUD
+    const statIds = new Set();
+    (P.stats || []).forEach((st) => {
+      const t = { kind: 'stats' };
+      if (!st.id) list.push({ level: 'error', msg: `Player stat “${st.name || '?'}” has no id.`, target: t });
+      else if (statIds.has(st.id)) list.push({ level: 'error', msg: `Two player stats share the id “${st.id}”.`, target: t });
+      statIds.add(st.id);
+      if (st.max > st.min && (st.start < st.min || st.start > st.max)) list.push({ level: 'warn', msg: `Player stat “${st.name || st.id}” starts outside its min…max.`, target: t });
+    });
+    (P.itemReqs || []).forEach((r) => {
+      const t = { kind: 'stats' };
+      if (!String(r.cls || '').trim()) list.push({ level: 'warn', msg: 'An item requirement has no item class and is ignored.', target: t });
+      else if (DS.Classes && DS.Classes.known && !DS.Classes.known(r.cls)) list.push({ level: 'info', msg: `Item requirement: “${r.cls}” is not a class Studio knows - check the spelling.`, target: t });
+      if (!(r.cond && r.cond.kind)) list.push({ level: 'warn', msg: `Item requirement for ${r.cls || '?'}: the condition is “Always”, so it never blocks anything.`, target: t });
+      const cp = DS.Cond.problem(r.cond);
+      if (cp) list.push({ level: 'error', msg: `Item requirement for ${r.cls || '?'}: its condition ${cp}.`, target: t });
+    });
+    (P.hud || []).forEach((h) => {
+      if (h.type === 'bar' && !statIds.has(h.stat)) list.push({ level: 'error', msg: 'A HUD bar shows a stat that does not exist.', target: { kind: 'stats' } });
     });
     // crowded areas (performance heatmap)
     if (DS.Density) DS.Density.compute().spots.filter((s) => s.score >= DS.Density.HIGH).forEach((s) =>

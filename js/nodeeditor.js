@@ -368,9 +368,11 @@
       m.append(el('div', { class: 'ctx-head', style: { color: DS.NODE_CATS[cat].color } }, DS.NODE_CATS[cat].name));
       Object.keys(DS.NODE_TYPES).filter((t) => DS.NODE_TYPES[t].cat === cat).forEach((t) => {
         const T = DS.NODE_TYPES[t];
+        if (T.missing) return;
         m.append(el('div', { class: 'ctx-item', title: T.desc, onclick: () => { NE.addNode(t, pos.x, pos.y); closeMenu(); } }, el('span', { class: 'ctx-ic' }, T.icon), T.title));
       });
     });
+    m.append(el('div', { class: 'ctx-sep' }), el('div', { class: 'ctx-item', title: 'Write a little Enforce Script and use it as a block', onclick: () => { closeMenu(); DS.CustomNodes.wizard(); } }, el('span', { class: 'ctx-ic' }, '🧩'), 'Make your own node…'));
     placeMenu(m, cx, cy);
   }
   function nodeMenu(cx, cy, n) {
@@ -397,6 +399,7 @@
     const c = DS.MapView.center();
     const n = S.addNode(q, type, x === undefined ? 60 : x, y === undefined ? 60 : y, params);
     const T = DS.NODE_TYPES[type];
+    if (T.custom && DS.CustomNodes) DS.CustomNodes.embed(type);   // the project keeps its own copy of the definition
     T.fields.forEach((f) => {
       if (f.t === 'pos' && !params) n.p[f.k] = { x: Math.round(c.x), y: 0, z: Math.round(c.z), ref: null };
     });

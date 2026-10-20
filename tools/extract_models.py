@@ -85,20 +85,24 @@ def index_files(game, exts=('.p3d', '.paa')):
         a = os.path.join(game, d, 'Addons')
         if os.path.isdir(a):
             roots.append(a)
-    for r in roots:
-        for fn in os.listdir(r):
-            if not fn.lower().endswith('.pbo'):
-                continue
-            p = os.path.join(r, fn)
-            try:
-                prefix, ents = read_pbo(p)
-            except Exception:
-                continue
-            pre = prefix.replace('/', '\\').strip('\\').lower()
-            for name, off, size in ents:
-                if name.lower().endswith(exts):
-                    full = (pre + '\\' + name.replace('/', '\\')).lower().strip('\\')
-                    idx[full] = (p, off, size)
+    paths = [os.path.join(r, fn) for r in roots for fn in os.listdir(r) if fn.lower().endswith('.pbo')]
+    # mod PBOs registered in Studio (PBO tools > Use in Studio): data/mods/pbos.json
+    reg = os.path.join(APP, 'data', 'mods', 'pbos.json')
+    if os.path.isfile(reg):
+        try:
+            paths += [p for p in json.load(open(reg)) if os.path.isfile(p)]
+        except ValueError:
+            pass
+    for p in paths:
+        try:
+            prefix, ents = read_pbo(p)
+        except Exception:
+            continue
+        pre = prefix.replace('/', '\\').strip('\\').lower()
+        for name, off, size in ents:
+            if name.lower().endswith(exts):
+                full = (pre + '\\' + name.replace('/', '\\')).lower().strip('\\')
+                idx[full] = (p, off, size)
     return idx
 
 
@@ -399,7 +403,7 @@ def read_class_models(path, only=None):
         p = ln.rstrip('\n').split(',')
         if len(p) < 4:
             continue
-        name, model = p[0], ','.join(p[3:]) if path.endswith('classes_all.csv') else p[7] if len(p) >= 8 else ''
+        name, model = p[0], ','.join(p[3:]) if path.endswith(('classes_all.csv', 'classes_mods.csv')) else p[7] if len(p) >= 8 else ''
         if only is not None and name not in only:
             continue
         if not model or model.lower().endswith('.bmp'):
@@ -441,6 +445,10 @@ def main():
             print('no class list for', world)
             return 1
         cls_model = read_class_models(src, set(add))
+        mods_csv = os.path.join(APP, 'data', 'mods', 'classes_mods.csv')
+        if os.path.isfile(mods_csv):
+            for k, v in read_class_models(mods_csv, set(add) - set(cls_model)).items():
+                cls_model[k] = v
     else:
         if not os.path.isfile(bounds):
             print('Run the terrain capture first (data/%s/bounds.csv missing)' % world)

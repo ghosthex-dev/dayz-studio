@@ -398,14 +398,87 @@ or in the 3D tab paint it with the Scatter / Line / Ring brushes.
 anomaly, electric anomaly, alarm, generator hum, signal smoke, glow light, your own ambient sound). Each effect can
 combine vanilla **particles** (fires, smoke, steam, toxic gas, sparks, flares; one-shots can replay every N seconds),
 a coloured **light** and a looping **sound** (vanilla sound sets or your own .ogg/.wav), with a range in metres. It is
-on always, **only while** a world condition holds (night, storm, server variable…), or **starts off** and is switched
-by the **Turn Effect On / Off** quest node (the switch survives restarts). Effects are played by the exported mod on
-each player's PC; they are not spawned objects.
+on always, **only while** a condition holds, or **starts off** and is switched by the **Turn Effect On / Off** quest
+node (the switch survives restarts). The condition is checked for each player on their own, so effects can be
+*phased*: a fire that only burns for players who have not finished a quest yet (**NOT** quest done), a glow only
+players with Reputation ≥ 50 see, a storm sound only at night. Effects are played by the exported mod on each
+player's PC; they are not spawned objects.
 
 **Performance heatmap** - Project ▸ World ▸ **🔥 Show performance heatmap**: the 2D map shades every area by the
 weighted objects within 150 m (DayZ's near network range; buildings weigh most, loot points a little) - green, yellow,
 orange, red - and lists the hotspots with a jump button. **Check** warns about orange and red areas. It is a rule of
 thumb to find crowded spots before they cost FPS or cause desync, not a measurement of the server.
+
+## Player stats, item requirements, HUD and usable objects
+
+**📊 Player stats** (Quests panel or File menu) opens one window with three tabs:
+
+* **Stats** - XP, reputation, skill levels, a bounty… each with a start value, an optional min / max, and
+  **resets on death**. Stats belong to each player and are saved with their quest progress
+  (`$profile:DZStudioQuests/players/<steam id>.json`).
+* **Item requirements** - "M4A1 needs XP ≥ 300", "a Ghillie suit needs the Sniper quest done". Taking the item
+  into the hands or wearing / attaching it is refused with your message until the player meets the condition. Any
+  condition works, and without **this class only** it also covers every variant of the class.
+* **HUD & character sheet** - bars and text drawn on every player's screen (drag them in the 16:9 preview; text can
+  show `{xp}`, `{xp.max}`, `{xp.name}`), and a key (K) that opens a **character sheet** with the player's stats.
+  The HUD hides itself while a menu, the map, a conversation or the death screen is open.
+
+New nodes:
+* **Change Player Stat** (reward) - add / subtract / set a stat, with an automatic "+100 XP" message.
+* **Use Object** (trigger and objective) - pick a placed object (a gate, a locker, a terminal); the player looks at
+  it and presses **F**. It can require a key item (optionally used up), a stat or another quest, show a "locked"
+  message, show a message when it works, and **remove the object** once used (a gate that opens, a crate broken
+  open). As an objective it is marked on the map like other objectives.
+
+The condition picker gained **Player stat** (wherever a player is involved) and a **NOT** box (the condition
+holds when the check fails).
+Stats, item rules and the HUD are compiled into the quest mod, so **Build installable mod** after changing them.
+
+## Server utilities
+
+File ▸ **Server**:
+
+* **⚙ Server settings (serverDZ.cfg)** - opens the cfg of your DayZ Server install (or any path) as a form: name,
+  passwords, player cap, map, messages of the day, BattlEye, signature checks, first person / crosshair / night
+  brightness and the other gameplay switches, network ranges and view distances with presets (DayZ defaults, busy
+  server / weaker PC, small server / long view). **Time of day** shows one real-time day as a day / night strip:
+  set how long the day and the night should last in real time and Studio works out `serverTimeAcceleration` and
+  `serverNightTimeAcceleration`, plus the start time (or the PC clock). Only the lines you change are rewritten -
+  comments and settings Studio doesn't know stay as they are - and the old file is kept as `serverDZ.cfg.bak-<date>`.
+* **⚖ Loot economy multipliers (types.xml)** - rules such as "Military ×1.5", "food −50%", "Tier 4 ×0.5" or a name
+  filter ("Ammo_*"), with an optional category / usage area / tier and a slider each. Rules multiply, the preview
+  shows the total per category before and after plus every changed item, and **Write to server** rewrites
+  `nominal` / `min` in the mission's `db/types.xml`. The untouched file is kept as `types.xml.studio-original` and
+  rules are always applied to it, so writing again never stacks; **Restore original** puts it back. Or download the
+  scaled file instead.
+* **📦 PBO tools** - browse the game, Workshop / launcher mods, the server and your own folders. Look inside a PBO,
+  **unpack** it (into `Documents/DayZStudio/Unpacked`, `config.bin` turned into a readable `config.cpp` with DayZ
+  Tools' CfgConvert), **pack** a folder into a PBO (prefix from `$PBOPREFIX$`, config binarized and checked by
+  CfgConvert, optional signing with a Studio key), and **🧩 Use this mod in Studio**: the mod's classes appear in the
+  asset list and their 3D models load from the mod's PBOs like vanilla ones. Unpack other people's mods to learn
+  from them - don't re-upload their files without permission. Protected (obfuscated) PBOs can't be read.
+
+## Enforce Script tools
+
+* **Code editor** - Custom Script nodes, object init scripts and custom nodes get an editor with Enforce syntax
+  highlighting, line numbers, auto-indent and a checker that explains, as you type, the mistakes that stop DayZ from
+  loading scripts: brackets or quotes that aren't closed, a missing `;`, reserved words used as names (`out`,
+  `local`…), the same variable declared twice in one function, `=` instead of `==` in an if, and `a && b` stored
+  straight into a bool. ⤢ opens the code in a big window. **Check** runs the same checks over the whole project -
+  including init scripts of different objects that declare the same name (they all end up in one init.c function).
+* **⌨ Script console** (Quests panel or File ▸ Scripting) - a floating window that follows the local test server's
+  `script.log` live (or its RPT, or the game's own log). Errors and warnings are coloured and explained in plain
+  English, and errors in your code point back to the node they came from ("Custom Script in “Rescue”, line 3 of
+  your code" - click to open it). **▶ Compile on local server** builds the quest mod from the project and (re)starts
+  the server; if the scripts don't compile, the console stops the server for you (DayZ would otherwise sit on a
+  "Compile error" box).
+* **🧩 Custom nodes** - turn a small Enforce snippet into your own node block: an **action** (runs once, like a
+  reward) or a **check** (an objective that is done when your code returns true). Give it settings (number, whole
+  number, text, class name, yes / no, map position); they become fields in the inspector and typed variables in
+  your code, next to `player` and `pos`. Start from an example (Set Player Health, Spawn Custom Vehicle, Teleport
+  Player, Hold an Item, Climb Above). Custom nodes are kept in a library shared by every project
+  (`Documents/DayZStudio/Nodes`, share the .json files) and a project keeps a copy of each one it uses, so it builds
+  anywhere. They show up in the node menu like the built-in ones; **Make your own node…** is at the bottom of it.
 
 ## A Personal Note on the AI usage in creating this project
 While I utilized Claude to streamline aspects of development, DayZ Studio is by no means an automated AI creation. Countless hours of my own intense effort, problem-solving, and personal dedication went into building and refining this project. Far from being generic "AI slop," this is the result of genuine work and creative passion. I ask that you please respect the time and effort that went into bringing this project to life.

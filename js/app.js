@@ -276,6 +276,14 @@
         '-', { head: 'Quest mod' },
         { label: 'Build installable mod (PBO)…', run: () => A.buildMod() },
         { label: 'Test on a local server (multiplayer)…', run: () => A.serverDialog() },
+        { label: '📊 Player stats, item requirements & HUD…', run: () => DS.Stats.open() },
+        '-', { head: 'Server' },
+        { label: '⚙ Server settings (serverDZ.cfg)…', run: () => DS.ServerTools.cfgEditor() },
+        { label: '⚖ Loot economy multipliers (types.xml)…', run: () => DS.ServerTools.economy() },
+        { label: '📦 PBO tools (unpack, pack, use mods)…', run: () => DS.ServerTools.pbo() },
+        '-', { head: 'Scripting' },
+        { label: '⌨ Script console (live script.log)…', run: () => DS.Console.open() },
+        { label: '🧩 Custom nodes…', run: () => DS.CustomNodes.manager() },
         '-', { head: 'Import game files' },
         { label: 'types.xml → item classes + loot preview…', run: () => importXml('types') },
         { label: 'mapgroupproto.xml → loot definitions…', run: () => importXml('proto') },
@@ -301,6 +309,8 @@
         if (i.target.kind === 'object') { S.setView('map'); S.select('object', [i.target.id]); const o = S.obj(i.target.id); if (o) DS.MapView.centerOn(o.x, o.z, 0.5); }
         else if (i.target.kind === 'node') { S.activeQuest = i.target.quest; S.setView('quests'); S.structure(); S.select('node', [i.target.id]); }
         else if (i.target.kind === 'quest') { S.activeQuest = i.target.id; S.setView('quests'); S.select(null, []); S.structure(); }
+        else if (i.target.kind === 'stats') DS.Stats.open();
+        else if (i.target.kind === 'custom') DS.CustomNodes.wizard(i.target.id);
       } }, el('span', { class: 'p-ic' }, { error: '✖', warn: '⚠', info: 'ℹ' }[i.level]), i.msg))
     );
     modal({ title: `Project check — ${list.filter((i) => i.level === 'error').length} errors, ${list.filter((i) => i.level === 'warn').length} warnings`, body, buttons: (close) => el('button', { class: 'btn primary', onclick: close }, 'Close') });
@@ -441,7 +451,7 @@
         el('button', { class: 'btn', onclick: () => { const f = files[curIdx]; if (f) U.download(f.path.split('/').pop(), typeof f.data === 'function' ? f.data() : f.data); } }, 'Download this file'),
         el('button', { class: 'btn', onclick: () => { const f = files[curIdx]; if (f && typeof f.data === 'string') navigator.clipboard.writeText(f.data).then(() => DS.toast('Copied to clipboard', 'ok', 1200)); } }, 'Copy'),
         el('span', { class: 'tb-spacer' }),
-        el('button', { class: 'btn', title: 'Packs quests and removed map objects into a ready-to-install mod (PBO) + profile files, no DayZ Tools needed', disabled: !S.project.quests.length && !(S.project.removed || []).length && !S.project.objects.some((o) => o.kind === 'fx'), onclick: () => A.buildMod() }, '🧰 Build installable mod (PBO)…'),
+        el('button', { class: 'btn', title: 'Packs quests and removed map objects into a ready-to-install mod (PBO) + profile files, no DayZ Tools needed', disabled: !S.project.quests.length && !(S.project.removed || []).length && !(S.project.itemReqs || []).length && !(S.project.hud || []).length && !S.project.objects.some((o) => o.kind === 'fx'), onclick: () => A.buildMod() }, '🧰 Build installable mod (PBO)…'),
         (S.project.removed || []).length ? el('div', { class: 'ins-help' }, `${S.project.removed.length} removed map object(s) are hidden by this mod — on the server and for every player (players need the mod).`) : null,
         el('button', { class: 'btn primary', onclick: () => { if (!files.length) return DS.toast('Nothing to export yet.', 'warn'); U.download(DS.exporters.zipName(), U.zip(files.map((f) => ({ path: f.path, data: typeof f.data === 'function' ? f.data() : f.data })))); DS.toast(`Exported ${files.length} files as ZIP`, 'ok'); } }, '⇩ Download ZIP'),
         el('button', { class: 'btn', onclick: close }, 'Close'),

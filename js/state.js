@@ -183,6 +183,7 @@
     const b = S.blank();
     S.project = Object.assign(b, p);
     S.project.meta = Object.assign(b.meta, p.meta || {});
+    if (DS.CustomNodes) DS.CustomNodes.registerProject(S.project);   // custom node types before anything draws them
     S.project.objects.forEach((o) => {
       if (!o.id) o.id = U.uid('o');
     });

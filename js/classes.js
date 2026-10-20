@@ -54,7 +54,13 @@
     try {
       const r = await fetch(`data/${world}/classes_all.csv?t=${Date.now()}`);
       if (!r.ok) throw new Error();
-      C.list = parse(await r.text());
+      let text = await r.text();
+      // classes of mods added with PBO tools ▸ Use in Studio (data/mods/classes_mods.csv)
+      try {
+        const m = await fetch(`data/mods/classes_mods.csv?t=${Date.now()}`);
+        if (m.ok) text += '\n' + (await m.text());
+      } catch (e) { /* no mods */ }
+      C.list = parse(text);
       C.by = new Map(C.list.map((e) => [e.c, e]));
       const gm = new Map();
       C.list.forEach((e) => {
@@ -69,6 +75,12 @@
       C.state = 'none';
     }
     S.emit('classes');
+  };
+
+  /** re-read the class list (after mods were added) */
+  C.reload = function () {
+    C.world = null;
+    return C.load();
   };
 
   /* ---- on-demand 3D models for classes that are not in the pack yet ---- */
