@@ -1,0 +1,60 @@
+name: Release
+
+# Builds the Windows installer (tools/make_installer.py).
+#  - push a tag like v0.1.0-alpha.1 -> builds DayZStudio-Setup-0.1.0-alpha.1.exe and attaches it to a DRAFT GitHub
+#                               release (check it, then press Publish on GitHub). The .blockmap and latest.yml go with
+#                               it: installed copies read them to find and download the update once it's published.
+#                               Tags with "-" (alpha, beta) become pre-releases; alpha installs update to those too.
+#    Version scheme: 0.1.0-alpha.1, 0.1.0-alpha.2 ... then -beta.N, then 1.0.0 for the first full release.
+#  - Run workflow (manually) -> just builds it; download it from the run's Artifacts
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Version from the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        working-directory: desktop
+        run: npm version --no-git-tag-version --allow-same-version "${GITHUB_REF_NAME#v}"
+      - name: Install the desktop shell
+        working-directory: desktop
+        run: npm ci --no-audit --no-fund
+      - name: Build the installer
+        run: python tools/make_installer.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DayZStudio-Setup
+          path: |
+            dist/installer/DayZStudio-Setup-*.exe
+            dist/installer/DayZStudio-Setup-*.exe.blockmap
+            dist/installer/latest.yml
+      - name: Attach to a draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          files=(dist/installer/DayZStudio-Setup-*.exe dist/installer/DayZStudio-Setup-*.exe.blockmap dist/installer/latest.yml)
+          pre=(); [[ "$GITHUB_REF_NAME" == *-* ]] && pre=(--prerelease)
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${files[@]}" --draft "${pre[@]}" --title "DayZ Studio $GITHUB_REF_NAME" --generate-notes
+          fi

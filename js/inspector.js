@@ -520,7 +520,8 @@
         row('Grid snap (m)', selectInp(m.snap, [[0, 'Off'], [1, '1 m'], [5, '5 m'], [10, '10 m'], [25, '25 m'], [50, '50 m']], (v) => { m.snap = +v; ch(); })),
         checkInp(m.showTerrain !== false, (v) => { m.showTerrain = v; ch(); DS.MapView.invalidate(); }, 'Show game terrain imagery'),
         checkInp(m.brighten !== false, (v) => { m.brighten = v; ch(); DS.MapView.invalidate(); }, 'Brighten terrain (the raw satellite is dark)'),
-        el('div', { class: 'ins-help' }, { ok: '✔ Terrain imagery loaded for this map.', loading: 'Loading terrain…', none: 'No terrain imagery for this map yet. Run tools/extract_maps.py (reads your DayZ install), or load your own image below.' }[DS.MapView.terrainState()]),
+        el('div', { class: 'ins-help' }, { ok: '✔ Terrain imagery loaded for this map.', loading: 'Loading terrain…', none: 'No terrain imagery for this map yet. Extract it from your DayZ install (a few minutes, once), or load your own image below.' }[DS.MapView.terrainState()]),
+        DS.MapView.terrainState() === 'none' ? extractMapsButton() : null,
         checkInp(m.showTowns !== false, (v) => { m.showTowns = v; ch(); DS.MapView.invalidate(); }, 'Show town labels'),
         checkInp(m.showRef !== false, (v) => { m.showRef = v; ch(); DS.MapView.invalidate(); }, 'Show vanilla building layer (if imported)'),
         checkInp(!!m.showDensity, (v) => { m.showDensity = v; ch(); DS.MapView.invalidate(); I.render(); }, '🔥 Show performance heatmap (object density)'),
@@ -539,6 +540,33 @@
   }
 
   /** hotspots of the performance heatmap */
+  /** "Extract map imagery": runs tools/extract_maps.py on the studio server against the user's own DayZ install */
+  let mapsBusy = false;
+  function extractMapsButton() {
+    const line = el('div', { class: 'ins-help' }, mapsBusy ? 'Extracting… (keep Studio open)' : '');
+    const btn = el('button', { class: 'btn sm primary', disabled: mapsBusy, onclick: async () => {
+      const r = await fetch('/api/maps/extract', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then((x) => x.json()).catch(() => ({ ok: false, error: 'studio server not running' }));
+      if (!r.ok) return DS.toast(r.error || 'Could not start', 'error', 5000);
+      mapsBusy = true;
+      btn.disabled = true;
+      for (;;) {
+        await new Promise((res) => setTimeout(res, 1000));
+        const s = await fetch('/api/maps/status', { cache: 'no-store' }).then((x) => x.json()).catch(() => null);
+        if (!s) continue;
+        line.textContent = (s.log || []).slice(-1)[0] || 'Extracting…';
+        if (s.running) continue;
+        mapsBusy = false;
+        if (s.done) {
+          DS.toast('Map imagery extracted. Loot and zone layers show up after Studio is restarted.', 'ok', 6000);
+          DS.MapView.reloadTerrain();
+        } else DS.toast('Extraction failed: ' + ((s.log || []).slice(-1)[0] || 'unknown error'), 'error', 8000);
+        I.render();
+        return;
+      }
+    } }, '⬇ Extract map imagery from DayZ');
+    return el('div', { class: 'ins-row' }, btn, line);
+  }
+
   function densityPanel() {
     const D = DS.Density, c = D.compute();
     const kids = [el('div', { class: 'ins-help' }, `Weighted objects within ${D.RADIUS} m (DayZ's near network range): buildings count most, loot points a little. Green < ${D.WARN} · yellow < ${D.HIGH} · orange < ${D.DANGER} · red above. A rule of thumb to spot crowded areas before they cost FPS or cause desync.`)];

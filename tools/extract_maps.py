@@ -18,7 +18,8 @@ from multiprocessing import Pool
 from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, '..', 'maps')
+sys.path.insert(0, HERE)
+from paths import MAPS as OUT  # noqa: E402  (maps/ next to the program, or the user's folder once installed)
 
 
 # ---- PBO directory ---------------------------------------------------------

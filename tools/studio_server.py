@@ -13,15 +13,14 @@ Everything is plain standard library; nothing leaves your machine.
 """
 import hashlib, json, mimetypes, os, re, shutil, struct, subprocess, sys, threading, time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, unquote
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-APP = os.path.abspath(os.path.join(HERE, '..'))
-GAME_DATA = os.path.join(APP, '_game')           # profile, missions, built bridge mod
+sys.path.insert(0, HERE)
+from paths import APP, HOME, GAME_DATA, DATA, MAPS   # noqa: E402  (program vs. user data folders)
 PROFILE = os.path.join(GAME_DATA, 'profile')
 MISSIONS = os.path.join(GAME_DATA, 'missions')
 MOD_DIR = os.path.join(GAME_DATA, '@DZStudioBridge')
-DATA = os.path.join(APP, 'data')                 # captured heights / bounds per world
 BRIDGE_SRC = os.path.join(APP, 'bridge', 'DZStudioBridge')
 LINK_SRC = os.path.join(APP, 'bridge', 'DZStudioLink')
 LINK_DIR_MOD = os.path.join(GAME_DATA, '@DZStudioLink')
@@ -1084,6 +1083,17 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=APP, **kw)
 
+    def translate_path(self, path):
+        # data/ and maps/ are the user's own extracted game data: served from HOME (differs from APP once installed)
+        p = urlparse(path).path
+        for pre, root in (('/data/', DATA), ('/maps/', MAPS)):
+            if p.startswith(pre) and HOME != APP:
+                rel = os.path.normpath(unquote(p[len(pre):])).lstrip('\\/')
+                if rel.startswith('..'):
+                    return os.path.join(root, '_')
+                return os.path.join(root, rel)
+        return super().translate_path(path)
+
     def log_message(self, fmt, *args):
         pass
 
@@ -1105,13 +1115,15 @@ class Handler(SimpleHTTPRequestHandler):
                 for w in os.listdir(DATA):
                     have[w] = {fn: os.path.isfile(os.path.join(DATA, w, fn)) for fn in ('heights.bin', 'bounds.csv')}
             return self._json({'ok': True, 'game': env['game'], 'tools': env['tools'], 'mods': env['mods'], 'cfgConvert': bool(env['cfgConvert']),
-                               'running': game_alive(), 'data': have, 'profile': PROFILE})
+                               'running': game_alive(), 'data': have, 'profile': PROFILE, 'app': APP, 'home': HOME})
         if u.path == '/api/capture/status':
             return self._json(capture_status())
         if u.path == '/api/link/state':
             return self._json(link_state())
         if u.path == '/api/server/status':
             return self._json(local_server_status())
+        if u.path == '/api/maps/status':
+            return self._json({'ok': True, 'running': maps_job['running'], 'done': maps_job['done'], 'log': maps_job['log'][-30:]})
         if u.path == '/api/workshop/status':
             return self._json(WS.workshop_status())
         if u.path == '/api/workshop/progress':
@@ -1174,6 +1186,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(link_send(body))
         if u.path == '/api/mod/build':
             return self._json(build_export(body))
+        if u.path == '/api/maps/extract':
+            return self._json(maps_extract())
         if u.path == '/api/workshop/publish':
             return self._json(WS.workshop_publish(body))
         if u.path == '/api/prefabs/save':
@@ -1227,6 +1241,34 @@ class Handler(SimpleHTTPRequestHandler):
                 state['proc'].terminate()
             return self._json({'ok': True})
         return self._json({'ok': False, 'error': 'unknown endpoint'}, 404)
+
+
+# ---- map imagery, loot and zones from the user's own DayZ install (tools/extract_maps.py), started from the editor
+maps_job = {'running': False, 'log': [], 'done': False}
+
+
+def maps_extract():
+    if maps_job['running']:
+        return {'ok': False, 'error': 'Already extracting'}
+    game = find_env()['game']
+    if not game:
+        return {'ok': False, 'error': 'DayZ was not found - install it from Steam first'}
+    maps_job.update(running=True, log=['Starting…'], done=False)
+
+    def run():
+        try:
+            p = subprocess.Popen([sys.executable, '-u', os.path.join(HERE, 'extract_maps.py'), game], cwd=APP,
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors='replace',
+                                 creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+            for line in p.stdout:
+                if line.strip():
+                    maps_job['log'] = (maps_job['log'] + [line.strip()])[-200:]
+            maps_job['done'] = p.wait() == 0
+        except Exception as e:
+            maps_job['log'].append(str(e))
+        maps_job['running'] = False
+    threading.Thread(target=run, daemon=True).start()
+    return {'ok': True}
 
 
 def open_folder(body):

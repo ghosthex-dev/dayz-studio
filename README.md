@@ -12,60 +12,68 @@ server straight from the editor.
 
 ## Getting started
 
-### 1. Install what it needs (all free)
+### 1. What you need (all free, from Steam)
 
 | What | Why | Where |
 |---|---|---|
 | **DayZ** | the editor reads the terrain, models and objects from your game | Steam |
 | **DayZ Tools** | builds (binarizes) and **signs** the mods you export | Steam ▸ Library ▸ Tools ▸ DayZ Tools |
-| **Python 3.10+** | runs the small local server behind the editor | [python.org](https://www.python.org/downloads/) - tick **"Add python.exe to PATH"** |
-| Python packages | needed to read the game's maps, models and textures | in a terminal: `pip install pillow numpy` |
-| **Node.js LTS** *(optional)* | the desktop app (game docked inside the editor) | [nodejs.org](https://nodejs.org/) - without it, use the browser version |
 | **DayZ Server** *(optional)* | test your mod in multiplayer from the editor | Steam ▸ Library ▸ Tools ▸ DayZ Server |
 
-Check it in a terminal (Command Prompt or PowerShell):
+### 2. Install DayZ Studio
 
-```bash
-python --version
-```
+Download **`DayZStudio-Setup-<version>.exe`** from the
+[latest release](https://github.com/ghosthex-dev/dayz-studio/releases/latest) and run it. That's all: Python and
+everything else it needs are included.
 
-It should print `Python 3.10` or newer. If Windows opens the Microsoft Store instead, reinstall Python from
-python.org with "Add python.exe to PATH" ticked.
+- DayZ Studio is in **alpha** (versions `0.1.0-alpha.1`, `-alpha.2` …): expect rough edges, and please report what
+  you find.
+- You must read and accept the End User License Agreement (LICENSE) to install it.
+- It installs for your Windows user only (no admin rights) and adds DayZ Studio to the Start menu and the desktop.
+- **Updates:** DayZ Studio checks for a new version when it starts (**File ▸ ⟳ Check for updates…**; it can be turned
+  off there). It shows what's new and only downloads and installs when you say so - then it restarts by itself
+  with your project open.
+- The installer isn't code-signed, so Windows may show **"Windows protected your PC"**. Click **More info ▸ Run
+  anyway**.
+- Data extracted from your DayZ install goes to `%LOCALAPPDATA%\DayZStudio`; your projects and mod keys are in
+  `Documents\DayZStudio`. Updating or uninstalling DayZ Studio keeps both.
 
-### 2. Download DayZ Studio
+<details>
+<summary>Running from the source instead (ZIP or git, for developers)</summary>
 
-Click **Code ▸ Download ZIP** on this page and extract it to a normal folder such as `C:\DayZStudio`
-(avoid `Program Files`), or clone it:
+You also need **Python 3.10+** ([python.org](https://www.python.org/downloads/), tick **"Add python.exe to PATH"**)
+with `pip install pillow numpy`, and optionally **Node.js LTS** ([nodejs.org](https://nodejs.org/)) for the
+desktop app. Click **Code ▸ Download ZIP** and extract it to a normal folder such as `C:\DayZStudio`, or:
 
 ```bash
 git clone https://github.com/ghosthex-dev/dayz-studio.git
 ```
 
-### 3. Start it
+- **`run_desktop.bat`** - the desktop app. The first start installs its shell with npm (takes a minute).
+- **`run_studio.bat`** - the same editor in your web browser, no Node.js needed. Keep the black server window open
+  while you work.
 
-- **`run_desktop.bat`** - the desktop app. The first start installs its shell with npm (needs Node.js, takes a
-  minute). The game window can be docked inside the editor.
-- **`run_studio.bat`** - the same editor in your web browser (Chrome / Edge / Firefox), no Node.js needed. Keep the
-  black server window open while you work.
+From the source, extracted data is kept in the `data` and `maps` folders next to the program.
+`python tools\make_installer.py` builds the installer (needs Node.js). Releases: set the version in
+`desktop/package.json` and push a matching tag (`v0.1.0-alpha.1`, `v0.1.0-alpha.2` … `v0.x.0-beta.N` … `v1.0.0`);
+GitHub builds the installer and attaches it, with the `latest.yml` and `.blockmap` the in-app updater needs, to a
+**draft** release (alpha / beta tags become pre-releases). Installed copies only see it once you press Publish.
 
-### 4. First-time setup per map (about 10 minutes, once)
+</details>
 
-The download contains no game data, so build it from your own install once per map:
+### 3. First-time setup per map (about 10 minutes, once)
 
-1. **2D map imagery** - in a terminal in the DayZ Studio folder:
+DayZ Studio contains no game data, so it builds it from your own install once per map:
 
-   ```bash
-   python tools\extract_maps.py
-   ```
-
-   (finds DayZ through Steam automatically; give the DayZ folder as an argument if it doesn't)
+1. **2D map imagery** - in the **🗺 Map** view, with nothing selected, press **⬇ Extract map imagery from DayZ**
+   in the right panel (all maps at once, a few minutes).
 2. **Terrain, buildings and classes** - open the **🎮 Game** tab and press **⬇ Capture from the game**. DayZ
    starts, records the terrain and closes again (a few minutes). Then press **☰ Capture class list**.
 3. **Everything else on the map** *(for the 3D tab)* - press **🌲 Capture world objects** (about 3 minutes).
 
 Pick the map in the project settings (right panel, nothing selected) before capturing another map.
 
-### 5. Make something
+### 4. Make something
 
 - **🗺 Map** - place objects from the asset list, edit loot and zones.
 - **🧊 3D** - real models on the real terrain; **✂ Remove map objects** takes vanilla trees, walls or buildings
@@ -87,9 +95,9 @@ with the same key, or servers have to install a new `.bikey`.
 
 ### Troubleshooting
 
-- **"Could not start the studio server"** - Python is missing or not on PATH (see step 1). `run_studio.bat` shows
-  the actual error in its window.
-- **Black 2D map / "No terrain data yet"** - run step 4 for this map.
+- **"Could not start the studio server"** - another program uses port 8765, or (from the source) Python is missing
+  or not on PATH. `run_studio.bat` shows the actual error in its window.
+- **Black 2D map / "No terrain data yet"** - run step 3 for this map.
 - **Capture buttons are greyed out** - DayZ was not found. Install it through Steam (the editor looks in every
   Steam library folder).
 - **Mod built but "not signed"** - install DayZ Tools from Steam and build again.

@@ -159,6 +159,7 @@
     return t;
   }
   M.terrainState = () => getTerrain().state;
+  M.reloadTerrain = () => { Object.keys(terrain).forEach((k) => delete terrain[k]); getTerrain(); dirty = true; };
   const pad3 = (n) => String(n).padStart(3, '0');
   function tileImg(t, xi, yi) {
     const k = xi + '_' + yi;

@@ -4,9 +4,18 @@ const path = require('path');
 const http = require('http');
 const { spawn } = require('child_process');
 const wh = require('./winhost');
+const updater = require('./updater');
 
 const PORT = 8765;
-const ROOT = path.join(__dirname, '..');
+// installed (setup.exe): Studio's files and a private Python ship in resources/, and everything Studio writes goes to
+// %LOCALAPPDATA%\DayZStudio so updates never touch it. From a download / git clone: the folder next to desktop/.
+const PACKED = app.isPackaged;
+const ROOT = PACKED ? path.join(process.resourcesPath, 'studio') : path.join(__dirname, '..');
+const PYTHON = PACKED ? path.join(process.resourcesPath, 'python', 'python.exe') : 'python';
+const HOME = PACKED ? path.join(process.env.LOCALAPPDATA || app.getPath('userData'), 'DayZStudio') : null;
+const ICON = path.join(__dirname, 'icon.ico');
+// one settings folder (window state, the editor's local storage) whether started from setup.exe or a download
+app.setPath('userData', path.join(app.getPath('appData'), 'dayz-studio-desktop'));
 let win = null;
 let serverProc = null;
 
@@ -32,7 +41,8 @@ async function serverUp() {
 
 async function ensureServer() {
   if (await serverUp()) return true;
-  serverProc = spawn('python', [path.join(ROOT, 'tools', 'studio_server.py'), String(PORT)], { cwd: ROOT, windowsHide: true, stdio: 'ignore' });
+  const env = Object.assign({}, process.env, HOME ? { DZSTUDIO_HOME: HOME } : {});
+  serverProc = spawn(PYTHON, [path.join(ROOT, 'tools', 'studio_server.py'), String(PORT)], { cwd: ROOT, env, windowsHide: true, stdio: 'ignore' });
   serverProc.on('error', () => {});
   for (let i = 0; i < 40; i++) {
     await new Promise((r) => setTimeout(r, 250));
@@ -104,13 +114,13 @@ function stopGame() {
 async function createWindow() {
   Menu.setApplicationMenu(null);
   win = new BrowserWindow({
-    width: 1600, height: 960, minWidth: 1100, minHeight: 700, backgroundColor: '#0b0d11', title: 'DayZ Studio',
+    width: 1600, height: 960, minWidth: 1100, minHeight: 700, backgroundColor: '#0b0d11', title: 'DayZ Studio', icon: ICON,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },
   });
   win.once('ready-to-show', () => win.show());
   const ok = await ensureServer();
   if (!ok) {
-    win.loadURL('data:text/html,' + encodeURIComponent('<body style="background:#0b0d11;color:#e4e7ec;font:15px system-ui;padding:40px"><h2>DayZ Studio</h2><p>Could not start the studio server (tools/studio_server.py). Make sure Python is installed and on PATH.</p>'));
+    win.loadURL('data:text/html,' + encodeURIComponent('<body style="background:#0b0d11;color:#e4e7ec;font:15px system-ui;padding:40px"><h2>DayZ Studio</h2><p>Could not start the studio server (tools/studio_server.py). ' + (PACKED ? 'Reinstall DayZ Studio, or check that nothing else uses port ' + PORT + '.' : 'Make sure Python is installed and on PATH.') + '</p>'));
     return;
   }
   // never run stale scripts: the studio's own files change often
@@ -144,10 +154,23 @@ ipcMain.on('host:focus-game', () => { if (game.hwnd) { try { wh.focusWindow(game
 ipcMain.on('host:close-game', () => stopGame());
 ipcMain.handle('host:status', () => ({ docked: game.docked, pid: game.pid }));
 
-// developer hook: with DZS_DEBUG=1, run JS from desktop/_eval.js inside the page and write _eval.out
+// stop the studio server we started (before an update replaces its files)
+function stopServer() {
+  return new Promise((resolve) => {
+    if (!serverProc || serverProc.exitCode !== null) return resolve();
+    const t = setTimeout(resolve, 5000);
+    serverProc.once('exit', () => { clearTimeout(t); resolve(); });
+    try { serverProc.kill(); } catch (e) { clearTimeout(t); resolve(); }
+  });
+}
+updater.setup(() => win, stopServer);
+
+// developer hook: with DZS_DEBUG=1, run JS from _eval.js inside the page and write _eval.out
+// (in desktop/, or in DZS_DEBUG_DIR - the installed app's own folder is read-only)
 if (process.env.DZS_DEBUG) {
   const fs = require('fs');
-  const f = path.join(__dirname, '_eval.js'), o = path.join(__dirname, '_eval.out');
+  const dir = process.env.DZS_DEBUG_DIR || __dirname;
+  const f = path.join(dir, '_eval.js'), o = path.join(dir, '_eval.out');
   setInterval(async () => {
     if (!win || !fs.existsSync(f)) return;
     const code = fs.readFileSync(f, 'utf8');

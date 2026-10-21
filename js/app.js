@@ -293,6 +293,7 @@
         { label: 'Map background image…', run: A.loadBackground },
         '-', { label: 'Templates & examples…', run: A.templates },
         { label: 'Welcome guide', run: A.welcome },
+        { label: '⟳ Check for updates…', run: () => DS.Updates.open() },
       ]),
     };
     document.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => act[b.dataset.act](b)));
@@ -640,8 +641,15 @@
         A.welcome();
       }
     };
-    // a blank browser copy but a project on disk: offer that first
-    if (!had && DS.Disk) DS.Disk.offerRestore().then((shown) => { if (!shown) welcome(); });
+    // a blank (or emptied) browser copy but a project on disk: offer that first. The browser copy can come back
+    // empty when the app's storage could not be opened, e.g. right after an update restarted it
+    const blank = !had || (!S.project.objects.length && !S.project.quests.length && !S.project.meta.id);
+    const host = window.studioHost && window.studioHost.update;
+    if (blank && DS.Disk) {
+      (host ? host.state().catch(() => ({})) : Promise.resolve({}))
+        .then((st) => DS.Disk.offerRestore(!!st.updated))
+        .then((shown) => { if (!shown) welcome(); });
+    }
     else {
       if (DS.Disk) DS.Disk.preferNewer();
       welcome();

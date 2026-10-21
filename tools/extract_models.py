@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import odol_reader  # noqa: E402
 import paa  # noqa: E402
 
-APP = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+from paths import APP, DATA  # noqa: E402,F401  (DATA: captured data lives in the user's folder once installed)
 GAME_CANDIDATES = [
     r'C:\Program Files (x86)\Steam\steamapps\common\DayZ',
     r'C:\Program Files\Steam\steamapps\common\DayZ',
@@ -87,7 +87,7 @@ def index_files(game, exts=('.p3d', '.paa')):
             roots.append(a)
     paths = [os.path.join(r, fn) for r in roots for fn in os.listdir(r) if fn.lower().endswith('.pbo')]
     # mod PBOs registered in Studio (PBO tools > Use in Studio): data/mods/pbos.json
-    reg = os.path.join(APP, 'data', 'mods', 'pbos.json')
+    reg = os.path.join(DATA, 'mods', 'pbos.json')
     if os.path.isfile(reg):
         try:
             paths += [p for p in json.load(open(reg)) if os.path.isfile(p)]
@@ -436,7 +436,7 @@ def main():
     if not game:
         print('DayZ install not found')
         return 1
-    out_dir = os.path.join(APP, 'data', world)
+    out_dir = os.path.join(DATA, world)
     bounds = os.path.join(out_dir, 'bounds.csv')
     allc = os.path.join(out_dir, 'classes_all.csv')
     if add is not None:
@@ -445,7 +445,7 @@ def main():
             print('no class list for', world)
             return 1
         cls_model = read_class_models(src, set(add))
-        mods_csv = os.path.join(APP, 'data', 'mods', 'classes_mods.csv')
+        mods_csv = os.path.join(DATA, 'mods', 'classes_mods.csv')
         if os.path.isfile(mods_csv):
             for k, v in read_class_models(mods_csv, set(add) - set(cls_model)).items():
                 cls_model[k] = v

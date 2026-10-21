@@ -1,16 +1,86 @@
 {
   "name": "dayz-studio-desktop",
-  "version": "1.0.0",
+  "version": "0.1.0-alpha.1",
   "description": "DayZ Studio desktop shell - hosts the editor and embeds the real game window",
+  "author": "ghosthex-dev",
   "main": "main.js",
   "private": true,
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder --win --x64 --publish never"
   },
   "dependencies": {
+    "electron-updater": "^6.3.9",
     "koffi": "^2.16.3"
   },
   "devDependencies": {
-    "electron": "^33.4.11"
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "dev.ghosthex.dayzstudio",
+    "productName": "DayZ Studio",
+    "copyright": "ghosthex-dev",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ghosthex-dev",
+        "repo": "dayz-studio",
+        "releaseType": "release"
+      }
+    ],
+    "directories": {
+      "output": "../dist/installer"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "winhost.js",
+      "updater.js",
+      "icon.ico",
+      "package.json",
+      "!node_modules/koffi/build/koffi/{darwin,freebsd,linux,musl,openbsd}_*/**",
+      "!node_modules/koffi/build/koffi/win32_{arm64,ia32}/**",
+      "!node_modules/koffi/src/**",
+      "!node_modules/koffi/vendor/**"
+    ],
+    "asarUnpack": [
+      "node_modules/koffi/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../dist/stage/studio",
+        "to": "studio"
+      },
+      {
+        "from": "../dist/stage/python",
+        "to": "python"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DayZ Studio",
+      "license": "../dist/stage/studio/LICENSE.txt",
+      "include": "installer.nsh",
+      "installerIcon": "icon.ico",
+      "uninstallerIcon": "icon.ico",
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "DayZStudio-Setup-${version}.exe"
+    }
   }
 }

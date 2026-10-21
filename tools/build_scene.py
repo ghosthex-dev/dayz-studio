@@ -26,7 +26,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import extract_models as EM  # noqa: E402
 
-APP = EM.APP
+APP, DATA = EM.APP, EM.DATA
 
 
 def main():
@@ -44,7 +44,7 @@ def main():
             pos.append(argv[i])
         i += 1
     world = pos[0] if pos else 'chernarusplus'
-    d = os.path.join(APP, 'data', world)
+    d = os.path.join(DATA, world)
     scan = os.path.join(d, 'scan.csv')
     if not os.path.isfile(scan):
         print('no scan.csv - capture the world objects first')

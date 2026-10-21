@@ -119,7 +119,8 @@
   };
 
   /** first start with an empty browser copy but projects on disk: offer the last one */
-  D.offerRestore = async function () {
+  /** auto: open it straight away (right after an update the app's storage can come back empty) */
+  D.offerRestore = async function (auto) {
     try {
       const list = await api('/api/project/list');
       if (!list.ok) return false;
@@ -128,6 +129,10 @@
       if (empty && list.last && list.projects.some((p) => p.id === list.last.id)) {
         const p = list.projects.find((x) => x.id === list.last.id);
         if (p.objects || p.quests) {
+          if (auto) {
+            const r = await api('/api/project/load?id=' + encodeURIComponent(p.id));
+            if (r.ok) { S.setProject(JSON.parse(r.data)); if (DS.MapView) DS.MapView.fit(); DS.toast('Reopened your last project "' + (p.name || 'Untitled') + '"', 'ok', 5000); return true; }
+          }
           const body = el('div', null, el('p', null, `Your last project "${p.name || 'Untitled'}" (${p.objects} objects, ${p.quests} quests, saved ${when(p.saved)}) was found on disk.`));
           DS.app.modal({
             title: 'Open your last project?', body,
