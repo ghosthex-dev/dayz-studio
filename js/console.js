@@ -12,7 +12,7 @@
     .then((r) => r.json()).catch(() => ({ ok: false, error: 'The studio server is not running.' }));
   const MAX_LINES = 3000;
   let panel = null, body, statusEl, srcSel, timer = null;
-  let file = '', offset = 0, paused = false, onlyErr = false, lines = 0, errs = 0, warns = 0, state = '', stopOnFail = false;
+  let file = '', offset = 0, paused = false, onlyErr = false, lines = 0, errs = 0, warns = 0, state = '', stopOnFail = false, sticky = false;
 
   /** where a line of a generated file came from (exporters fill DS.exporters.lineMap when they build the mod) */
   function origin(info) {
@@ -56,7 +56,9 @@
     }
     lines++;
   }
-  function setState(cls, t) {
+  function setState(cls, t, idle) {
+    if (idle && sticky) return;
+    sticky = !idle;
     state = t;
     statusEl.className = 'dsconsole-status ' + cls;
     statusEl.textContent = t;
@@ -83,7 +85,7 @@
         trim();
         if (atEnd || r.reset) body.scrollTop = body.scrollHeight;
         const run = srcSel.value.startsWith('server') ? (r.serverRunning ? 'server running' : 'server stopped') : '';
-        if (!state || !/compil/i.test(state)) setState('', [run, errs ? errs + ' error(s)' : '', warns ? warns + ' warning(s)' : ''].filter(Boolean).join(' · ') || 'waiting');
+        setState('', [run, errs ? errs + ' error(s)' : '', warns ? warns + ' warning(s)' : ''].filter(Boolean).join(' · ') || 'waiting', true);
         K.counts = { errs, warns };
       }
     }
@@ -94,26 +96,27 @@
   K.compile = async function () {
     if (!DS.exporters || !DS.exporters.modPayload) return;
     srcSel.value = 'server';
-    setState('', 'Building the mod…');
     let payload;
     try { payload = DS.exporters.modPayload(); } catch (e) { setState('bad', 'Export failed: ' + e.message); return; }
-    const b = await api('/api/mod/build', payload);
-    if (!b.ok) { setState('bad', 'Build failed: ' + (b.error || '')); return; }
-    if (DS.app) DS.app.lastBuild = b.name;
-    // stop a running server first and wait until it is really gone
+    // stop a running server first and wait until it is really gone: it keeps the mod's PBO open
     let st = await api('/api/server/status');
     if (st.running) {
-      setState('', 'Stopping the running local server (compile)…');
+      setState('', 'Stopping the running local server…');
       for (let i = 0; i < 20 && st.running; i++) {
         if (i % 5 === 0) await api('/api/server/stop', {});
         await new Promise((r) => setTimeout(r, 1000));
         st = await api('/api/server/status');
       }
-      if (st.running) { setState('bad', 'The old server did not stop - close DayZServer_x64 in Task Manager (compile)'); return; }
+      if (st.running) { setState('bad', 'The old server did not stop - close DayZServer_x64 in Task Manager and compile again.'); return; }
+      await new Promise((r) => setTimeout(r, 1500));   // Windows lets go of the file a moment later
     }
+    setState('', 'Building the mod…');
+    const b = await api('/api/mod/build', payload);
+    if (!b.ok) { setState('bad', 'Build failed: ' + (b.error || '')); return; }
+    if (DS.app) DS.app.lastBuild = b.name;
     setState('', 'Starting the local server - compiling scripts…');
     const s = await api('/api/server/start', { exportName: b.name, resetProgress: false, debug: true });
-    if (!s.ok) { setState('bad', (s.error || 'Could not start the server') + ' (compile)'); return; }
+    if (!s.ok) { setState('bad', s.error || 'Could not start the server'); return; }
     stopOnFail = true;
     file = ''; offset = 0; state = 'compiling';
     setState('', 'Compiling… (the server needs about 30 s)');
@@ -125,7 +128,7 @@
       el('option', { value: 'server' }, 'Local server · script log'),
       el('option', { value: 'server-rpt' }, 'Local server · RPT'),
       el('option', { value: 'game' }, 'Game · script log'));
-    srcSel.addEventListener('change', () => { file = ''; offset = 0; state = ''; });
+    srcSel.addEventListener('change', () => { file = ''; offset = 0; state = ''; sticky = false; });
     statusEl = el('span', { class: 'dsconsole-status' }, 'waiting');
     body = el('div', { class: 'dsconsole-body' });
     const pauseBtn = el('button', { class: 'btn sm', onclick: () => { paused = !paused; pauseBtn.textContent = paused ? '▶ Resume' : '⏸ Pause'; } }, '⏸ Pause');
@@ -135,7 +138,7 @@
       el('span', { style: { flex: 1 } }),
       el('button', { class: 'btn sm primary', title: 'Build the quest mod from this project and start the local test server with it', onclick: K.compile }, '▶ Compile on local server'),
       errBtn, pauseBtn,
-      el('button', { class: 'btn sm', onclick: () => { body.replaceChildren(); errs = warns = 0; } }, 'Clear'),
+      el('button', { class: 'btn sm', onclick: () => { body.replaceChildren(); errs = warns = 0; sticky = false; } }, 'Clear'),
       el('button', { class: 'btn sm icon', title: 'Close', onclick: K.close }, '✕'));
     panel = el('div', { class: 'dsconsole' }, head, body);
     // drag by the header

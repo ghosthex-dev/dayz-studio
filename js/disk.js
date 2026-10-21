@@ -28,7 +28,11 @@
     if (D.lastSaved) { s.textContent = 'Saved ✓ (also on disk ' + new Date(D.lastSaved).toLocaleTimeString() + ')'; s.className = 'muted'; }
   }
 
+  // ?nodisk in the address: a scratch / test tab that never writes project files (Documents/DayZStudio/Projects)
+  const NO_DISK = /[?&]nodisk(&|=|$)/.test(location.search);
+
   async function write(force) {
+    if (NO_DISK) return;
     if (inflight) { dirty = true; return; }
     const empty = !S.project.objects.length && !S.project.quests.length && !(S.project.zones || []).length;
     if (empty && !force) return;
@@ -56,7 +60,7 @@
   S.on('saved', () => schedule());
   window.addEventListener('beforeunload', () => {
     try {
-      if (!D.ok || (!S.project.objects.length && !S.project.quests.length)) return;
+      if (NO_DISK || !D.ok || (!S.project.objects.length && !S.project.quests.length)) return;
       navigator.sendBeacon('/api/project/save', new Blob([JSON.stringify({ id: ensureId(), name: S.project.meta.name || 'Untitled', data: JSON.stringify(S.project) })], { type: 'application/json' }));
     } catch (e) { /* ignore */ }
   });

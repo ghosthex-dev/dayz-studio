@@ -666,6 +666,27 @@
       ctx.setLineDash([]);
     });
 
+    // faction territories (Player stats ▸ Factions)
+    const facs = (S.project.factions && S.project.factions.list) || [];
+    facs.forEach((f) => (f.territories || []).forEach((t) => {
+      const [x, y] = w2s(+t.x, +t.z);
+      const r = (+t.radius || 0) * view.s;
+      ctx.strokeStyle = f.color || '#9ca3af';
+      ctx.globalAlpha = 0.85;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([10, 6]);
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 1;
+      if (r > 18) {
+        const lt = (t.name ? t.name + ' · ' : '') + (f.name || f.id);
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.8)'; ctx.strokeText(lt, x - ctx.measureText(lt).width / 2, y - r - 6);
+        ctx.lineWidth = 1; ctx.fillStyle = f.color || '#e5e7eb'; ctx.fillText(lt, x - ctx.measureText(lt).width / 2, y - r - 6);
+      }
+    }));
+
     // loot spawns (Central Economy)
     if (DS.Loot) DS.Loot.render(ctx, { w2s, s: view.s, W, Hh: H });
     if (DS.Zones) DS.Zones.drawShapes(ctx, { w2s, s: view.s });

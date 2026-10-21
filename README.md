@@ -434,6 +434,35 @@ The condition picker gained **Player stat** (wherever a player is involved) and 
 holds when the check fails).
 Stats, item rules and the HUD are compiled into the quest mod, so **Build installable mod** after changing them.
 
+## Factions & reputation
+
+**📊 Player stats ▸ 🏳 Factions** sets up factions (Survivors, Bandits…) and how players stand with them:
+
+* **Scale & tiers** - one scale for every faction (default −1000 to 1000) split into named tiers: Hostile (−1000 to
+  −500), Neutral (−499 to 499), Friendly (500 to 1000), or the 5-tier set. Each tier has a colour, a **stance**
+  (hostile / neutral / friendly) and a **trade discount**. Studio checks that the tiers cover the scale without gaps.
+* **Factions** - name, colour, starting standing, **territories** (circles, picked on the map and drawn on it) and
+  **kill rules**: e.g. +2 for every infected killed in their territory, −150 for killing a player there, +50 for
+  killing a player they see as Hostile.
+* **Relations** - a grid of factors: with −0.5, +100 with the Survivors means −50 with the Bandits. Applied one step,
+  so it can't loop.
+* **Their NPCs** - give a quest NPC a faction (Talk to NPC ▸ Faction). Players in a **Hostile** tier are warned, the
+  NPC refuses to talk, turns to them and - if it holds a gun Studio knows (AKM, AK74, AKS74U, M4A1, SKS, Mosin, FAL,
+  MP5, Izh18) - shoulders it, aims and fires when it has a clear line of fire (bushes don't block it, walls, rocks
+  and trunks do): players see the muzzle flash and hear the gun's own shot sound.
+  Players in a tier with a discount pay less on the NPC's **trade replies** ("Trade 5 apples (-20%)").
+
+Quests use it with the **Change Faction Standing** node and two new conditions, **Faction standing** (points, e.g.
+Survivors ≥ 500) and **Faction standing (tier)**, which work everywhere conditions do - conversation replies, opening
+lines, quest availability, item requirements, effects. Players see their standing on the character sheet and in HUD
+text (`{rep.survivors}`, `{rep.survivors.tier}`), the talk prompt shows how an NPC's faction sees them, and every
+change and new tier is announced.
+
+Standings are saved per player next to their quest progress, and the settings go into
+`profile/DZStudioQuests/factions.json`, which the studio server checks before every build. Scripts can use
+`DSQuests.Get().AddPlayerReputation(playerId, factionId, amount)`, `GetPlayerReputation` and `SetPlayerReputation`.
+Vanilla DayZ has no combat AI for people, so faction NPCs stay where they stand and can't be hurt.
+
 ## Server utilities
 
 File ▸ **Server**:

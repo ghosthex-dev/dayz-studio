@@ -181,6 +181,8 @@
       case 'trg_npc':
         setPos(p.pos); o.cls = p.npc; o.title = p.name || ''; o.text = p.text || ''; o.yaw = p.yaw || 0; o.radius = p.radius; o.items = items(p.gear);
         o.hands = String(p.hands || '').trim();
+        o.faction = String(p.faction || '');
+        { const g = guardGun(o.hands); if (o.faction && g) { o.ammo = g[1]; o.shot = shotSet(g); } }
         if (p.dialog) ['offer', 'active', 'done', 'locked'].forEach((k) => { const d = dlgOut(p.dialog[k]); if (d) o[k] = d; });
         break;
       case 'trg_item': o.cls = p.item; o.count = p.count; break;
@@ -196,6 +198,9 @@
       case 'rew_modifier': o.stat = p.stat; o.amount = p.amount || 0; break;
       case 'rew_spawn': o.cls = p.cls; o.count = p.count; setPos(p.pos); o.radius = p.radius; o.text = p.text || ''; break;
       case 'logic_delay': o.seconds = p.seconds; break;
+      case 'act_rep':
+        o.var = String(p.faction || ''); o.varOp = p.op || 'add'; o.varValue = Math.round(+p.amount || 0); o.flag = p.spread !== false; o.text = p.text || '';
+        break;
       case 'act_pvar': {
         const st = (S.project.stats || []).find((x) => x.id === p.stat);
         o.var = String(p.stat || ''); o.varOp = p.op || 'add'; o.varValue = +p.value || 0;
@@ -229,6 +234,53 @@
     return o;
   }
 
+  // what a hostile faction NPC shoots, from the weapon in its hands (bullet class + the game's own shot sound)
+  // [class pattern, bullet, key, close-shot samples in the game (DZ\sounds\weapons\...<n>), how many]. The game's own
+  // weapon sound sets only play when a weapon really fires, so the mod gets plain sound sets of the same samples.
+  const GUARD_GUNS = [
+    [/^AKM/i, 'Bullet_762x39', 'AKM', 'firearms\\AKM\\Wpn_AKM_Shot_Close_0', 6],
+    [/^AKS74U/i, 'Bullet_545x39', 'AKSU', 'firearms\\AKSU\\Wpn_AKSU_Shot_Close_0', 6],
+    [/^AK74/i, 'Bullet_545x39', 'AK74', 'firearms\\AK74\\Wpn_AK74_Shot_Close_0', 6],
+    [/^(M4A1|M16A2)/i, 'Bullet_556x45', 'M4A1', 'firearms\\M4A1\\Wpn_M4A1_Shot_Close_0', 6],
+    [/^SKS/i, 'Bullet_762x39', 'SKS', 'firearms\\SKS\\Wpn_SKS_Shot_Close_0', 4],
+    [/^Mosin/i, 'Bullet_762x54', 'Mosin', 'firearms\\Mosin9130\\Wpn_Mosin9130_Shot_Close_0', 4],
+    [/^FAL/i, 'Bullet_308Win', 'FAL', 'firearms\\FN_FAL\\Wpn_FAL_Shot_Close_0', 6],
+    [/^MP5/i, 'Bullet_9x19', 'MP5K', 'firearms\\MP5K\\Wpn_MP5K_Shot_Close_0', 6],
+    [/^Izh18/i, 'Bullet_762x39', 'IZH18', 'shotguns\\IZH18\\Wpn_IZH18_Shot_Close_0', 4],
+  ];
+  const shotSet = (g) => 'DSQ_Shot_' + g[2] + '_SoundSet';
+  /** guns held by faction NPCs in the project (their shot sound sets go into the mod config) */
+  const guardGunsUsed = () => {
+    const used = new Map();
+    S.project.quests.forEach((q) => q.nodes.forEach((n) => {
+      if (n.type !== 'trg_npc' || !n.p.faction) return;
+      const g = guardGun(String(n.p.hands || '').trim());
+      if (g) used.set(g[2], g);
+    }));
+    return [...used.values()];
+  };
+  const guardGun = (cls) => (cls ? GUARD_GUNS.find((g) => g[0].test(cls)) || null : null);
+  X.guardGun = guardGun;
+
+  /** factions.json (validated again by the studio server before it goes into the mod); '' without factions */
+  function factionsJson(P) {
+    const F = P.factions;
+    if (!F || !(F.list || []).length) return '';
+    const col = (h) => parseInt(argb(h)) | 0;
+    return JSON.stringify({
+      version: 1, min: Math.round(+F.min), max: Math.round(+F.max),
+      tiers: (F.tiers || []).map((t) => ({ id: t.id, name: t.name || t.id, min: Math.round(+t.min), max: Math.round(+t.max), color: col(t.color), stance: t.stance || 'neutral', discount: Math.round(+t.discount || 0) })),
+      factions: F.list.map((f) => ({
+        id: f.id, name: f.name || f.id, color: col(f.color), start: Math.round(+f.start || 0),
+        territories: (f.territories || []).map((t) => ({ name: t.name || '', x: U.round(+t.x, 2), z: U.round(+t.z, 2), radius: U.round(+t.radius, 1) })),
+        kills: (f.kills || []).map((k) => ({ victim: String(k.victim || '').trim(), where: k.where || 'anywhere', victimTier: k.victim === '@player' ? k.victimTier || '' : '', amount: Math.round(+k.amount || 0), text: k.text || '' })),
+        guard: Object.assign({ warn: 0, attack: 0, damage: 0.35, interval: 2, warnText: '', refuseText: '' }, f.guard || {}),
+      })),
+      relations: (F.relations || []).filter((r) => +r.factor).map((r) => ({ from: r.from, to: r.to, factor: U.round(+r.factor, 3) })),
+    });
+  }
+  X.factionsJson = factionsJson;
+
   function dlgOut(d) {
     if (!d || !d.lines || !d.lines.length) return null;
     return {
@@ -252,7 +304,8 @@
   /** CfgSoundShaders / CfgSoundSets for every voice file (prefix = the PBO prefix of the mod) */
   X.soundConfig = function (prefix) {
     const all = DS.Sounds ? DS.Sounds.all() : [];
-    if (!all.length) return '';
+    const guns = guardGunsUsed();
+    if (!all.length && !guns.length) return '';
     const BS = String.fromCharCode(92);
     const NL = String.fromCharCode(10);
     const T = String.fromCharCode(9);
@@ -276,6 +329,17 @@
       sets.push(T + 'class DSQFX_' + id + '_SoundSet', T + '{',
         T + T + 'soundShaders[] = {"DSQFX_' + id + '_SoundShader"};',
         T + T + 'volumeFactor = 1;', T + T + 'frequencyFactor = 1;', T + T + 'spatial = 1;', T + T + 'doppler = 0;', T + T + 'loop = 1;', T + '};');
+    });
+    // gunshots of faction NPCs: the game's own close-shot samples, heard up to 800 m
+    guns.forEach((g) => {
+      const smp = [];
+      for (let i = 1; i <= g[4]; i++) smp.push('{"DZ' + BS + 'sounds' + BS + 'weapons' + BS + g[3].split(BS + BS).join(BS) + i + '", 1}');
+      shaders.push(T + 'class DSQ_Shot_' + g[2] + '_SoundShader', T + '{',
+        T + T + 'samples[] = {' + smp.join(', ') + '};',
+        T + T + 'volume = 1;', T + T + 'range = 800;', T + T + 'limitation = 0;', T + '};');
+      sets.push(T + 'class ' + shotSet(g), T + '{',
+        T + T + 'soundShaders[] = {"DSQ_Shot_' + g[2] + '_SoundShader"};',
+        T + T + 'volumeFactor = 1;', T + T + 'frequencyFactor = 1;', T + T + 'spatial = 1;', T + T + 'doppler = 0;', T + T + 'loop = 0;', T + '};');
     });
     out.push('', 'class CfgSoundShaders', '{', ...shaders, '};', '', 'class CfgSoundSets', '{', ...sets, '};', '');
     return out.join(NL);
@@ -749,6 +813,7 @@ Format used: 24-byte header [cells, cells, mapWidth, mapHeight, 32, 0], uint32 u
       custom: customScripts(P),
       hook: DS.RUNTIME.hookMod,
       quests: questsJson(P),
+      factions: factionsJson(P),
       sounds: DS.Sounds ? DS.Sounds.all().map((s) => ({ id: s.id, ext: s.ext })) : [],
     };
   };

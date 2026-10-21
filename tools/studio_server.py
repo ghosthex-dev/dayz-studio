@@ -429,6 +429,11 @@ def local_server_start(body):
     qj = os.path.join(BUILD_DIR, 'profile', 'DZStudioQuests', 'quests.json')
     if os.path.isfile(qj):
         shutil.copy2(qj, os.path.join(qdir, 'quests.json'))
+    fj = os.path.join(BUILD_DIR, 'profile', 'DZStudioQuests', 'factions.json')
+    if os.path.isfile(fj):
+        shutil.copy2(fj, os.path.join(qdir, 'factions.json'))
+    elif os.path.isfile(os.path.join(qdir, 'factions.json')):
+        os.remove(os.path.join(qdir, 'factions.json'))
     if body.get('resetProgress'):
         for fn in os.listdir(os.path.join(qdir, 'players')):
             try:
@@ -707,6 +712,14 @@ def sign_pbo(env, pbo, mod_dir, key_name):
         return {'signed': False, 'why': str(e)}
 
 
+def factions_file(body):
+    """the editor's faction settings -> (validated factions.json text or '', errors or None)"""
+    raw = body.get('factions') or ''
+    if not raw:
+        return '', None
+    return factions.validate_text(raw)
+
+
 def build_export(body):
     """pack the quest framework the browser exported into a ready-to-install mod (PBO) + profile files, zipped"""
     import zipfile
@@ -715,6 +728,9 @@ def build_export(body):
     for key in ('config', 'core', 'custom', 'hook', 'quests'):
         if key not in body:
             return {'ok': False, 'error': 'missing ' + key}
+    fac_text, fac_err = factions_file(body)
+    if fac_err:
+        return {'ok': False, 'error': 'Faction settings: ' + '; '.join(fac_err[:8])}
     src = os.path.join(GAME_DATA, '_src_export_' + nm)
     shutil.rmtree(src, ignore_errors=True)
     os.makedirs(os.path.join(src, 'scripts', '4_World'), exist_ok=True)
@@ -738,7 +754,11 @@ def build_export(body):
             n_snd += 1
     mod_dir = os.path.join(BUILD_DIR, '@' + nm)
     shutil.rmtree(mod_dir, ignore_errors=True)
-    pbo = build_mod(env, src, mod_dir, nm.lower(), nm)
+    try:
+        pbo = build_mod(env, src, mod_dir, nm.lower(), nm)
+    except PermissionError:
+        return {'ok': False, 'error': 'The mod file is in use - DayZ or the local DayZ server has @%s open. Close them (or stop the '
+                                      'local server) and build again.' % nm}
     sig = sign_pbo(env, pbo, mod_dir, nm) if body.get('sign', True) else {'signed': False, 'why': 'signing turned off'}
     if sig.get('signed'):
         step4 = ('4. The mod is signed. Copy  @%s/keys/%s.bikey  into your server\'s  keys  folder and keep\n'
@@ -750,6 +770,12 @@ def build_export(body):
     os.makedirs(prof, exist_ok=True)
     with open(os.path.join(prof, 'quests.json'), 'w', encoding='utf-8') as f:
         f.write(body['quests'])
+    fac_path = os.path.join(prof, 'factions.json')
+    if fac_text:
+        with open(fac_path, 'w', encoding='utf-8') as f:
+            f.write(fac_text)
+    elif os.path.isfile(fac_path):
+        os.remove(fac_path)
     install = (
         'DayZ Studio - quest mod "%s"\n\n'
         '1. Copy the folder  @%s  into your DayZ server folder (next to DayZServer_x64.exe).\n'
@@ -768,6 +794,8 @@ def build_export(body):
                 full = os.path.join(root, fn)
                 z.write(full, os.path.join('@' + nm, os.path.relpath(full, mod_dir)))
         z.write(os.path.join(prof, 'quests.json'), 'profile/DZStudioQuests/quests.json')
+        if fac_text:
+            z.write(fac_path, 'profile/DZStudioQuests/factions.json')
         z.writestr('INSTALL.txt', install)
     return {'ok': True, 'zip': 'data/_build/%s_ready.zip' % nm, 'name': nm, 'pboBytes': os.path.getsize(pbo),
             'binarized': bool(env.get('cfgConvert')), 'sounds': n_snd, 'folder': mod_dir,
@@ -948,6 +976,14 @@ def playtest_prepare(body):
             pass
     with open(os.path.join(PLAY_DIR, 'quests.json'), 'w', encoding='utf-8') as f:
         f.write(body['quests'])
+    fac_text, fac_err = factions_file(body)
+    if fac_err:
+        return {'ok': False, 'error': 'Faction settings: ' + '; '.join(fac_err[:8])}
+    if fac_text:
+        with open(os.path.join(PLAY_DIR, 'factions.json'), 'w', encoding='utf-8') as f:
+            f.write(fac_text)
+    elif os.path.isfile(os.path.join(PLAY_DIR, 'factions.json')):
+        os.remove(os.path.join(PLAY_DIR, 'factions.json'))
     with open(os.path.join(PLAY_DIR, 'playtest.flag'), 'w') as f:
         f.write('1')
     return {'ok': True}
@@ -1180,6 +1216,7 @@ def open_folder(body):
 
 
 import server_tools as ST   # noqa: E402  (needs the helpers above)
+import factions             # noqa: E402  (factions.json schema + validation)
 ST.setup(dict(find_env=find_env, find_server=find_server, pack_pbo=pack_pbo, sign_pbo=sign_pbo, steam_roots=steam_roots,
               DATA=DATA, SRV_WORLDS=SRV_WORLDS, SRV_PROFILE=SRV_PROFILE, PROFILE=PROFILE, LOCAL_DAYZ=LOCAL_DAYZ,
               server_alive=server_alive))

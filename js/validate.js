@@ -202,6 +202,40 @@
           .forEach((i) => list.push({ level: 'error', msg: `Custom node “${d.title || d.id}”: ${i.msg}`, target: { kind: 'custom', id: d.id } }));
       });
     }
+    // factions: the same checks the studio server makes before building (tools/factions.py)
+    const F = P.factions;
+    if (F && (F.list || []).length) {
+      const t = { kind: 'stats', tab: 'factions' };
+      if (DS.Stats && DS.Stats.tierProblems) DS.Stats.tierProblems(F).forEach((m) => list.push({ level: 'error', msg: 'Faction tiers: ' + m, target: t }));
+      const ids = new Set();
+      F.list.forEach((f) => {
+        const nm = f.name || f.id || '?';
+        if (!/^[a-z][a-z0-9_]{0,39}$/.test(f.id || '')) list.push({ level: 'error', msg: `Faction “${nm}” needs an id of a-z, 0-9 and _ that starts with a letter.`, target: t });
+        if (ids.has(f.id)) list.push({ level: 'error', msg: `Two factions share the id “${f.id}”.`, target: t });
+        ids.add(f.id);
+        if (+f.start < +F.min || +f.start > +F.max) list.push({ level: 'error', msg: `Faction “${nm}” starts outside the scale (${F.min} to ${F.max}).`, target: t });
+        const g = f.guard || {};
+        if (+g.attack > +g.warn) list.push({ level: 'error', msg: `Faction “${nm}”: its NPCs shoot from further away than they warn.`, target: t });
+        (f.kills || []).forEach((k) => {
+          if (!k.victim) list.push({ level: 'error', msg: `Faction “${nm}”: a kill rule has no victim.`, target: t });
+          if (k.where && k.where !== 'anywhere' && !(f.territories || []).length) list.push({ level: 'error', msg: `Faction “${nm}”: a kill rule counts kills ${k.where === 'territory' ? 'inside' : 'outside'} the territory, but there is no territory.`, target: t });
+          if (!Math.round(+k.amount)) list.push({ level: 'warn', msg: `Faction “${nm}”: a kill rule changes the standing by 0.`, target: t });
+        });
+        [f.name, g.warnText, g.refuseText].concat((f.kills || []).map((k) => k.text)).forEach((x) => { if (String(x || '').includes('|')) list.push({ level: 'error', msg: `Faction “${nm}”: texts may not contain “|”.`, target: t }); });
+      });
+      // NPCs of a faction: shooting needs a gun Studio knows
+      P.quests.forEach((q) => q.nodes.forEach((n) => {
+        if (n.type !== 'trg_npc' || !n.p.faction) return;
+        const nt = { kind: 'node', id: n.id, quest: q.id };
+        const f = F.list.find((x) => x.id === n.p.faction);
+        if (!f) return list.push({ level: 'error', msg: `[${q.name}] NPC “${n.p.name || '?'}” belongs to a faction that was deleted.`, target: nt });
+        const shoots = (f.guard || {}).attack > 0 && (F.tiers || []).some((x) => x.stance === 'hostile');
+        if (shoots && n.p.hands && DS.exporters.guardGun && !DS.exporters.guardGun(n.p.hands)) list.push({ level: 'info', msg: `[${q.name}] NPC “${n.p.name || '?'}” holds ${n.p.hands}, a weapon Studio has no bullet for - it will warn Hostile players but not shoot.`, target: nt });
+      }));
+    }
+    P.quests.forEach((q) => q.nodes.forEach((n) => {
+      if (n.type === 'act_rep' && !((F && F.list) || []).some((x) => x.id === n.p.faction)) list.push({ level: 'error', msg: `[${q.name}] Change Faction Standing: pick a faction.`, target: { kind: 'node', id: n.id, quest: q.id } });
+    }));
     // player stats, item requirements, HUD
     const statIds = new Set();
     (P.stats || []).forEach((st) => {

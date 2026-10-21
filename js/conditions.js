@@ -17,6 +17,8 @@
     ['quest_new', 'A quest was never started'],
     ['player', 'Player condition (bleeding, sick, blood…)'],
     ['pvar', 'Player stat (XP, reputation, skill…)'],
+    ['rep', 'Faction standing (points)'],
+    ['reptier', 'Faction standing (tier: Hostile / Friendly…)'],
     ['var', 'Server variable'],
     ['time', 'Time of day'],
     ['weather', 'Weather'],
@@ -40,6 +42,11 @@
   const isFlag = (list, stat) => { const e = list.find((x) => x[0] === stat); return e ? e[2] : false; };
   const hh = (v) => { v = +v || 0; const h = Math.floor(v) % 24, m = Math.round((v - Math.floor(v)) * 60); return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'); };
 
+  const facs = () => (S.project.factions && S.project.factions.list) || [];
+  const tiers = () => (S.project.factions && S.project.factions.tiers) || [];
+  const facName = (id) => { const f = facs().find((x) => x.id === id); return f ? f.name : id || '?'; };
+  const tierName = (id) => { const t = tiers().find((x) => x.id === id); return t ? t.name : id || '?'; };
+
   /** short plain-English text, e.g. "if the player is bleeding", "while it storms", "if wolves_seen ≥ 1" */
   C.text = function (c) {
     if (!c || !c.kind) return '';
@@ -53,6 +60,8 @@
       case 'quest_new': return `if “${questName(c.quest)}” not started`;
       case 'var': return `if ${c.var || '?'} ${op} ${+c.value || 0}`;
       case 'pvar': { const st = (S.project.stats || []).find((x) => x.id === c.var); return `if ${st ? st.name : c.var || '?'} ${op} ${+c.value || 0}`; }
+      case 'rep': return `if standing with ${facName(c.var)} ${op} ${+c.value || 0}`;
+      case 'reptier': return `if ${facName(c.var)} see the player as ${tierName(c.stat)}`;
       case 'time': return `between ${hh(c.value)} and ${hh(c.to)}`;
       case 'uptime': return `${+c.value || 0}–${c.to > 0 ? c.to : '∞'} min after server start`;
       case 'player': {
@@ -74,6 +83,8 @@
     if (c.kind.startsWith('quest_') && !S.project.quests.some((x) => x.id === c.quest)) return 'checks a quest that is not set or was deleted';
     if (c.kind === 'var' && !String(c.var || '').trim()) return 'checks a server variable but no name is set';
     if (c.kind === 'pvar' && !(S.project.stats || []).some((x) => x.id === c.var)) return 'checks a player stat that is not set or was deleted (Player stats & HUD)';
+    if ((c.kind === 'rep' || c.kind === 'reptier') && !facs().some((x) => x.id === c.var)) return 'checks a faction that is not set or was deleted (Player stats ▸ Factions)';
+    if (c.kind === 'reptier' && !tiers().some((x) => x.id === c.stat)) return 'checks a standing tier that does not exist';
     if (c.kind === 'time' && (c.value == null || c.to == null || +c.value === +c.to)) return 'the time window is empty (from and to are the same)';
     return '';
   };
@@ -161,6 +172,19 @@
           if (!stats.some((x) => x.id === c.var)) c.var = stats[0].id;
           row.append(sel('var', stats.map((x) => [x.id, x.name || x.id]), stats[0].id), sel('op', C.OPS, '>='), num('value', 1));
         }
+      } else if (k === 'rep' || k === 'reptier') {
+        const fl = facs();
+        if (!fl.length) row.append(el('span', { class: 'ins-help' }, 'Make factions first (📊 Player stats ▸ Factions).'));
+        else {
+          if (!fl.some((x) => x.id === c.var)) c.var = fl[0].id;
+          row.append(sel('var', fl.map((x) => [x.id, x.name || x.id]), fl[0].id));
+          if (k === 'rep') { if (!C.OPS.some((o) => o[0] === c.op)) c.op = '>='; row.append(sel('op', C.OPS, '>='), num('value', 50)); }
+          else {
+            const tl = tiers();
+            if (!tl.some((t) => t.id === c.stat) && tl[0]) c.stat = tl[tl.length - 1].id;
+            row.append(el('span', { class: 'ins-help' }, 'is'), sel('stat', tl.map((t) => [t.id, t.name]), tl.length ? tl[tl.length - 1].id : ''));
+          }
+        }
       } else if (k === 'player') {
         row.append(sel('stat', C.PLAYER.map(([v, l]) => [v, l]), 'bleeding'));
         if (isFlag(C.PLAYER, c.stat)) row.append(sel('op', [['is', 'yes'], ['not', 'no']], 'is'));
@@ -182,6 +206,8 @@
       wrap.append(row);
       const help = {
         pvar: 'A stat of this player (Player stats & HUD) - e.g. Rifle skill ≥ 5, Reputation < 0.',
+        rep: 'This player’s standing with a faction, e.g. Survivors ≥ 500. Change it with “Change Faction Standing” or kill rules.',
+        reptier: 'The named tier the standing falls into (Player stats ▸ Factions ▸ Tiers). Combine with NOT for “unless Hostile”.',
         time: 'In-game time. A window may run past midnight (e.g. 23 → 1). Exactly midnight: 0 → 0.25.',
         uptime: 'Minutes since the server started (0 as “to” = no end) — e.g. an event only in the first hour after a restart.',
         weather: 'Thunderstorms happen at heavy overcast (lightning starts around 0.9).',

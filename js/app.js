@@ -309,7 +309,7 @@
         if (i.target.kind === 'object') { S.setView('map'); S.select('object', [i.target.id]); const o = S.obj(i.target.id); if (o) DS.MapView.centerOn(o.x, o.z, 0.5); }
         else if (i.target.kind === 'node') { S.activeQuest = i.target.quest; S.setView('quests'); S.structure(); S.select('node', [i.target.id]); }
         else if (i.target.kind === 'quest') { S.activeQuest = i.target.id; S.setView('quests'); S.select(null, []); S.structure(); }
-        else if (i.target.kind === 'stats') DS.Stats.open();
+        else if (i.target.kind === 'stats') DS.Stats.open(i.target.tab);
         else if (i.target.kind === 'custom') DS.CustomNodes.wizard(i.target.id);
       } }, el('span', { class: 'p-ic' }, { error: '✖', warn: '⚠', info: 'ℹ' }[i.level]), i.msg))
     );

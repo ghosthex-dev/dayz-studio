@@ -184,19 +184,191 @@
     return wrap;
   }
 
+  /* ---------- factions & reputation ---------- */
+  // the scale from the design doc; the 5-tier set adds Unfriendly / Allied bands
+  const TIERS3 = [
+    { id: 'hostile', name: 'Hostile', min: -1000, max: -500, color: '#e5484d', stance: 'hostile', discount: 0 },
+    { id: 'neutral', name: 'Neutral', min: -499, max: 499, color: '#aaaaaa', stance: 'neutral', discount: 0 },
+    { id: 'friendly', name: 'Friendly', min: 500, max: 1000, color: '#46a758', stance: 'friendly', discount: 20 },
+  ];
+  const TIERS5 = [
+    { id: 'hated', name: 'Hated', min: -1000, max: -600, color: '#e5484d', stance: 'hostile', discount: 0 },
+    { id: 'unfriendly', name: 'Unfriendly', min: -599, max: -200, color: '#f08c3a', stance: 'neutral', discount: 0 },
+    { id: 'neutral', name: 'Neutral', min: -199, max: 199, color: '#aaaaaa', stance: 'neutral', discount: 0 },
+    { id: 'friendly', name: 'Friendly', min: 200, max: 599, color: '#7cc46a', stance: 'friendly', discount: 10 },
+    { id: 'allied', name: 'Allied', min: 600, max: 1000, color: '#46a758', stance: 'friendly', discount: 25 },
+  ];
+  const STANCES = [['hostile', 'Hostile - warn, refuse, shoot'], ['neutral', 'Neutral'], ['friendly', 'Friendly']];
+  const VICTIMS = [['@infected', 'Infected'], ['@animal', 'Animals'], ['@player', 'Players'], ['@class', 'A class…']];
+  const WHERE = [['anywhere', 'anywhere'], ['territory', 'inside their territory'], ['outside', 'outside their territory']];
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const newGuard = () => ({ warn: 40, attack: 25, damage: 0.35, interval: 2, warnText: '', refuseText: '' });
+  const fac = () => {
+    const P = S.project;
+    if (!P.factions) P.factions = { min: -1000, max: 1000, tiers: clone(TIERS3), list: [], relations: [] };
+    const F = P.factions;
+    ['tiers', 'list', 'relations'].forEach((k) => { if (!F[k]) F[k] = []; });
+    return F;
+  };
+  T.factions = fac;
+
+  /** the same tier checks the studio server makes before it builds (tools/factions.py) */
+  T.tierProblems = function (F) {
+    const out = [];
+    const ts = (F.tiers || []).slice().sort((a, b) => a.min - b.min);
+    if (!ts.length) return ['Add at least one tier.'];
+    if (+F.max <= +F.min) out.push('The scale maximum must be larger than the minimum.');
+    if (ts[0].min > F.min) out.push(`No tier covers ${F.min} to ${ts[0].min - 1}.`);
+    if (ts[ts.length - 1].max < F.max) out.push(`No tier covers ${ts[ts.length - 1].max + 1} to ${F.max}.`);
+    ts.forEach((t, i) => {
+      if (t.max < t.min) out.push(`Tier “${t.name}” ends before it starts.`);
+      const nx = ts[i + 1];
+      if (nx && nx.min <= t.max) out.push(`Tiers “${t.name}” and “${nx.name}” overlap.`);
+      else if (nx && nx.min > t.max + 1) out.push(`No tier covers ${t.max + 1} to ${nx.min - 1}.`);
+    });
+    const ids = new Set();
+    ts.forEach((t) => { if (ids.has(t.id)) out.push(`Two tiers share the id “${t.id}”.`); ids.add(t.id); });
+    return out;
+  };
+  const slugId = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/^(\d)/, 'f$1').slice(0, 40);
+
+  function factionsTab(redraw) {
+    const F = fac();
+    const wrap = el('div', {});
+    const box = (title, ...kids) => el('div', { class: 'ins-sec' }, el('div', { class: 'ins-sec-title' }, title), kids.flat(2));
+    const later = (fn) => () => { fn(); ch(); S.commit(); redraw(); };
+    wrap.append(el('div', { class: 'hint-box' }, 'Each player has a standing with every faction: a number on one scale, split into named tiers. Quests change it (“Change Faction Standing”), kills can too, conditions check it (“Faction standing”), and NPCs with a faction act on it - Hostile players are warned, refused and, if the NPC holds a gun, shot at; Friendly players get the tier’s discount on trade replies. Standings are saved per player on the server.'));
+
+    // ---- scale + tiers
+    const tp = T.tierProblems(F);
+    wrap.append(box('Scale & tiers',
+      el('div', { class: 'btn-row st-row' },
+        el('span', { class: 'ins-help' }, 'scale from'), num(F.min, (v) => { F.min = Math.round(v); ch(); }, 1, 90),
+        el('span', { class: 'ins-help' }, 'to'), num(F.max, (v) => { F.max = Math.round(v); ch(); }, 1, 90),
+        el('span', { style: { flex: 1 } }),
+        el('button', { class: 'btn sm', onclick: later(() => { F.tiers = clone(TIERS3); F.min = -1000; F.max = 1000; }) }, '3 tiers'),
+        el('button', { class: 'btn sm', onclick: later(() => { F.tiers = clone(TIERS5); F.min = -1000; F.max = 1000; }) }, '5 tiers')),
+      F.tiers.map((t, i) => el('div', { class: 'btn-row st-row' },
+        color(t.color, (v) => { t.color = v; ch(); }),
+        txt(t.name, (v) => { const auto = !t.id || t.id === slugId(t.name); t.name = v; if (auto) t.id = slugId(v); ch(); }, 'Tier name'),
+        el('span', { class: 'ins-help' }, 'from'), num(t.min, (v) => { t.min = Math.round(v); ch(); }, 1, 80),
+        el('span', { class: 'ins-help' }, 'to'), num(t.max, (v) => { t.max = Math.round(v); ch(); }, 1, 80),
+        sel(t.stance, STANCES, (v) => { t.stance = v; ch(); }),
+        el('span', { class: 'ins-help', title: 'Discount on the items that trade replies of this faction’s NPCs ask for' }, 'discount %'),
+        num(t.discount || 0, (v) => { t.discount = Math.max(0, Math.min(90, Math.round(v))); ch(); }, 1, 60),
+        el('button', { class: 'btn icon', title: 'Delete this tier', onclick: later(() => F.tiers.splice(i, 1)) }, '🗑'))),
+      el('div', { class: 'btn-row' }, el('button', { class: 'btn sm', onclick: later(() => {
+        const last = F.tiers[F.tiers.length - 1];
+        F.tiers.push({ id: 'tier' + (F.tiers.length + 1), name: 'Tier ' + (F.tiers.length + 1), min: last ? last.max + 1 : F.min, max: F.max, color: '#888888', stance: 'neutral', discount: 0 });
+      }) }, '+ Tier')),
+      tp.length ? el('div', { class: 'issue warn' }, tp.join(' ')) : el('div', { class: 'ins-help' }, '✔ The tiers cover the whole scale without gaps.')));
+
+    // ---- factions
+    F.list.forEach((f, i) => {
+      if (!f.guard) f.guard = newGuard();
+      if (!f.territories) f.territories = [];
+      if (!f.kills) f.kills = [];
+      const terr = el('div', {}, f.territories.map((t, j) => el('div', { class: 'btn-row st-row' },
+        txt(t.name, (v) => { t.name = v; ch(); }, 'Territory name'),
+        el('span', { class: 'ins-help' }, 'X'), num(t.x, (v) => { t.x = v; ch(); }, 1, 80),
+        el('span', { class: 'ins-help' }, 'Z'), num(t.z, (v) => { t.z = v; ch(); }, 1, 80),
+        el('span', { class: 'ins-help' }, 'radius m'), num(t.radius, (v) => { t.radius = Math.max(1, v); ch(); }, 10, 70),
+        el('button', { class: 'btn sm', title: 'Pick the centre on the map', onclick: () => {
+          if (T._close) T._close();
+          DS.pickPosition({ prompt: 'Click the centre of “' + (t.name || f.name) + '”  (Esc to cancel)' }, (pos) => { t.x = pos.x; t.z = pos.z; ch(); S.commit(); T.open('factions'); });
+        } }, '📍'),
+        el('button', { class: 'btn icon', title: 'Delete this territory', onclick: later(() => f.territories.splice(j, 1)) }, '🗑'))),
+      el('button', { class: 'btn sm', onclick: later(() => {
+        const c = DS.MapView && DS.MapView.center ? DS.MapView.center() : { x: 7500, z: 7500 };
+        f.territories.push({ name: '', x: Math.round(c.x), z: Math.round(c.z), radius: 300 });
+      }) }, '+ Territory (at the map centre)'));
+      const tierOpts = [['', 'any standing']].concat(F.tiers.map((t) => [t.id, 'they see as ' + t.name]));
+      const where = () => (f.territories.length ? 'territory' : 'anywhere');
+      const kills = el('div', {}, f.kills.map((k, j) => {
+        const isClass = k.victim && !k.victim.startsWith('@');
+        return el('div', { class: 'btn-row st-row' },
+          el('span', { class: 'ins-help' }, 'killing'),
+          sel(isClass ? '@class' : k.victim, VICTIMS, (v) => { k.victim = v === '@class' ? 'ZmbM_SoldierNormal' : v; ch(); redraw(); }),
+          isClass ? txt(k.victim, (v) => { k.victim = v.trim(); ch(); }, 'class', 'dz-classes') : null,
+          k.victim === '@player' ? sel(k.victimTier || '', tierOpts, (v) => { k.victimTier = v; ch(); }) : null,
+          sel(k.where || 'anywhere', WHERE, (v) => { k.where = v; ch(); }),
+          el('span', { class: 'ins-help' }, 'points'), num(k.amount, (v) => { k.amount = Math.round(v); ch(); }, 1, 70),
+          txt(k.text, (v) => { k.text = v; ch(); }, 'message (optional)'),
+          el('button', { class: 'btn icon', title: 'Delete this rule', onclick: later(() => f.kills.splice(j, 1)) }, '🗑'));
+      }),
+      el('div', { class: 'btn-row' },
+        el('button', { class: 'btn sm', onclick: later(() => f.kills.push({ victim: '@infected', where: where(), victimTier: '', amount: 2, text: '' })) }, '+ Infected kill'),
+        el('button', { class: 'btn sm', onclick: later(() => f.kills.push({ victim: '@player', where: where(), victimTier: '', amount: -150, text: 'You killed someone on ' + f.name + ' ground' })) }, '+ Player kill penalty'),
+        el('button', { class: 'btn sm', onclick: later(() => {
+          const h = F.tiers.find((t) => t.stance === 'hostile');
+          f.kills.push({ victim: '@player', where: 'anywhere', victimTier: h ? h.id : '', amount: 50, text: 'You took out an enemy of ' + f.name });
+        }) }, '+ Reward for killing their enemies')));
+      const g = f.guard;
+      wrap.append(el('div', { class: 'ins-sec', style: { borderLeft: '3px solid ' + (f.color || '#888888') } },
+        el('div', { class: 'btn-row st-row' },
+          color(f.color, (v) => { f.color = v; ch(); }),
+          txt(f.name, (v) => { const auto = !f.id || f.id === slugId(f.name); f.name = v; if (auto) f.id = slugId(v); ch(); }, 'Faction name (Survivors, Bandits…)'),
+          el('span', { class: 'ins-help' }, 'id'), txt(f.id, (v) => { f.id = slugId(v); ch(); }, 'id'),
+          el('span', { class: 'ins-help' }, 'starts at'), num(f.start || 0, (v) => { f.start = Math.round(v); ch(); }, 10, 80),
+          el('button', { class: 'btn icon', title: 'Delete this faction', onclick: later(() => { F.list.splice(i, 1); F.relations = F.relations.filter((r) => r.from !== f.id && r.to !== f.id); }) }, '🗑')),
+        el('div', { class: 'ins-label' }, 'Territories'), terr,
+        el('div', { class: 'ins-label' }, 'Kills change the standing'), kills,
+        el('div', { class: 'ins-label' }, 'Their NPCs, towards players they see as Hostile'),
+        el('div', { class: 'btn-row st-row' },
+          el('span', { class: 'ins-help' }, 'warn within m'), num(g.warn, (v) => { g.warn = Math.max(0, v); ch(); }, 5, 64),
+          el('span', { class: 'ins-help' }, 'shoot within m'), num(g.attack, (v) => { g.attack = Math.max(0, v); ch(); }, 5, 64),
+          el('span', { class: 'ins-help', title: '1 = a full hit of the bullet the NPC’s gun fires' }, 'damage'), num(g.damage, (v) => { g.damage = Math.max(0, Math.min(1, v)); ch(); }, 0.05, 64),
+          el('span', { class: 'ins-help' }, 'every s'), num(g.interval, (v) => { g.interval = Math.max(1, v); ch(); }, 0.5, 60)),
+        el('div', { class: 'btn-row st-row' },
+          txt(g.warnText, (v) => { g.warnText = v; ch(); }, 'Warning (Stay back! You’re not welcome here.)'),
+          txt(g.refuseText, (v) => { g.refuseText = v; ch(); }, 'Instead of talking (Get lost.)')),
+        el('div', { class: 'ins-help' }, 'Only NPCs with a gun in their hands shoot (AKM, AK74, AKS74U, M4A1, SKS, Mosin, FAL, MP5, Izh18 - Studio knows their bullets and sounds): players see the muzzle flash and hear the shot. The others warn and refuse. Quest NPCs can’t be hurt.')));
+    });
+    wrap.append(el('div', { class: 'btn-row st-row pad' },
+      el('button', { class: 'btn primary', onclick: later(() => {
+        const n = F.list.length + 1;
+        F.list.push({ id: 'faction' + n, name: 'Faction ' + n, color: '#5aa0e6', start: 0, territories: [], kills: [], guard: newGuard() });
+      }) }, '+ Faction'),
+      F.list.length ? null : el('button', { class: 'btn', onclick: later(() => {
+        F.list.push({ id: 'survivors', name: 'Survivors', color: '#46a758', start: 0, territories: [], kills: [{ victim: '@infected', where: 'anywhere', victimTier: '', amount: 1, text: '' }],
+          guard: { warn: 40, attack: 0, damage: 0.35, interval: 2, warnText: 'Easy there. We’re watching you.', refuseText: 'We don’t deal with your kind.' } });
+        F.list.push({ id: 'bandits', name: 'Bandits', color: '#e5484d', start: -100, territories: [], kills: [],
+          guard: { warn: 50, attack: 30, damage: 0.3, interval: 2, warnText: 'You’re on our turf. Walk away.', refuseText: 'Get lost before we shoot.' } });
+        F.relations = [{ from: 'survivors', to: 'bandits', factor: -0.5 }, { from: 'bandits', to: 'survivors', factor: -0.5 }];
+      }) }, '+ Survivors & Bandits example')));
+
+    // ---- relations
+    if (F.list.length > 1) {
+      const get = (a, b) => { const r = F.relations.find((x) => x.from === a && x.to === b); return r ? r.factor : 0; };
+      const set = (a, b, v) => {
+        F.relations = F.relations.filter((x) => !(x.from === a && x.to === b));
+        if (+v) F.relations.push({ from: a, to: b, factor: Math.max(-1, Math.min(1, +v)) });
+        ch();
+      };
+      const cell = { padding: '2px 6px' };
+      const table = el('table', { style: { borderCollapse: 'collapse', fontSize: '12px' } },
+        el('tr', {}, el('th', { style: Object.assign({ textAlign: 'left' }, cell) }, 'gain with ↓ changes →'), F.list.map((f) => el('th', { style: Object.assign({ color: f.color }, cell) }, f.name))),
+        F.list.map((a) => el('tr', {}, el('td', { style: Object.assign({ color: a.color }, cell) }, a.name),
+          F.list.map((b) => el('td', { style: cell }, a.id === b.id ? el('span', { class: 'ins-help' }, '—') : num(get(a.id, b.id), (v) => set(a.id, b.id, v), 0.1, 64))))));
+      wrap.append(box('Relations', el('div', { style: { overflowX: 'auto' } }, table),
+        el('div', { class: 'ins-help' }, 'A factor of −0.5 means +100 with the row’s faction gives −50 with the column’s faction (0 = not related). Only one step is applied, so relations never loop.')));
+    }
+    return wrap;
+  }
+
   let tab = 'stats';
   T.open = function (which) {
     if (which) tab = which;
     const body = el('div', {});
     const redraw = () => {
       U.clear ? U.clear(body) : (body.innerHTML = '');
-      const tabs = el('div', { class: 'btn-row st-row' }, [['stats', '📊 Stats'], ['reqs', '🔒 Item requirements'], ['hud', '🖥 HUD & character sheet']].map(([k, l]) =>
+      const tabs = el('div', { class: 'btn-row st-row' }, [['stats', '📊 Stats'], ['factions', '🏳 Factions'], ['reqs', '🔒 Item requirements'], ['hud', '🖥 HUD & character sheet']].map(([k, l]) =>
         el('button', { class: 'btn' + (tab === k ? ' primary' : ''), onclick: () => { tab = k; redraw(); } }, l)));
-      body.append(tabs, tab === 'stats' ? statsTab(redraw) : tab === 'reqs' ? reqsTab(redraw) : hudTab(redraw));
+      body.append(tabs, tab === 'stats' ? statsTab(redraw) : tab === 'factions' ? factionsTab(redraw) : tab === 'reqs' ? reqsTab(redraw) : hudTab(redraw));
     };
     redraw();
-    DS.app.modal({
-      title: 'Player stats, item requirements & HUD', wide: true, body,
+    T._close = DS.app.modal({
+      title: 'Player stats, factions, item requirements & HUD', wide: true, body,
       buttons: (close) => [el('span', { class: 'ins-help' }, 'Compiled into the quest mod: File ▸ Build installable mod.'), el('button', { class: 'btn primary', onclick: close }, 'Done')],
       onClose: () => { S.commit(); if (DS.Inspector && DS.Inspector.render) DS.Inspector.render(); },
     });
