@@ -58,7 +58,7 @@
     const gift = { text: 'Friends of the camp eat for free.', next: '', accept: false, if: { kind: 'reptier', var: 'survivors', stat: 'friendly' }, give: [{ c: 'Canteen', n: 1 }] };
     const dlg = (text, opts) => ({ start: 'l1', lines: [{ id: 'l1', text, sound: null, next: '', openIf: null, options: opts }] });
     const mirek = node(q1, 'trg_npc', {
-      npc: 'SurvivorM_Mirek', name: 'Mirek', faction: 'survivors', pos: at(4, 4), yaw: 200, radius: 4,
+      npc: 'SurvivorM_Mirek', name: 'Mirek', faction: 'survivors', trader: 'camp_store', pos: at(4, 4), yaw: 200, radius: 4,
       gear: [{ c: 'Hoodie_Green', n: 1, chance: 1 }, { c: 'CargoPants_Green', n: 1, chance: 1 }, { c: 'HikingBootsLow_Black', n: 1, chance: 1 }], hands: '',
       text: 'Infected keep wandering into camp.',
       dialog: {
@@ -69,10 +69,11 @@
     });
     const kill = node(q1, 'obj_kill', { classes: ['@infected'], count: 5, area: true, pos: at(0, 0), radius: 250, text: 'Clear infected around the camp' });
     const xp1 = node(q1, 'act_pvar', { stat: 'xp', op: 'add', value: 150, notify: true });
+    const pay1 = node(q1, 'rew_item', { items: [{ c: 'DSQ_Dollar20', n: 5, chance: 1 }] });   // $100 to spend at Mirek's store
     const rep1 = node(q1, 'act_rep', { faction: 'survivors', op: 'add', amount: 600, spread: true, text: 'The camp trusts you' });
     const heal = node(q1, PATCH_UP.id, { amount: 100 });
     const end1 = node(q1, 'end', { text: 'Mirek patches you up. “Welcome to the camp.”' });
-    chain(q1, [mirek, kill, xp1, rep1, heal, end1]);
+    chain(q1, [mirek, kill, xp1, pay1, rep1, heal, end1]);
 
     // ---- 2. The Supply Container (Use Object, needs XP)
     const q2 = quest('The Supply Container', 'Something is locked away in the camp container.');
@@ -142,6 +143,19 @@
         relations: [{ from: 'survivors', to: 'bandits', factor: -0.5 }, { from: 'bandits', to: 'survivors', factor: -0.5 }],
       },
       customNodes: [PATCH_UP].concat(vehicleNode() ? [vehicleNode()] : []),
+      // Mirek's store: dollars, a Friendly-only item, limited stock, things the camp buys from players
+      trade: { currencies: [], traders: [{ id: 'camp_store', name: 'Mirek’s camp store', currency: 'dollars', items: [
+        { cat: 'Food & drink', c: 'TunaCan', name: '', buy: 25, sell: 8, n: 1, stock: '' },
+        { cat: 'Food & drink', c: 'BakedBeansCan', name: '', buy: 20, sell: 6, n: 1, stock: '' },
+        { cat: 'Food & drink', c: 'WaterBottle', name: '', buy: 30, sell: 10, n: 1, stock: '' },
+        { cat: 'Food & drink', c: 'Apple', name: '', buy: 0, sell: 3, n: 1, stock: '' },
+        { cat: 'Medical', c: 'BandageDressing', name: '', buy: 30, sell: 10, n: 1, stock: '' },
+        { cat: 'Medical', c: 'Morphine', name: '', buy: 120, sell: 40, n: 1, stock: 2, need: { kind: 'reptier', var: 'survivors', stat: 'friendly' }, needText: 'Morphine is for friends of the camp.' },
+        { cat: 'Ammunition', c: 'Ammo_556x45', name: '5.56 rounds', buy: 90, sell: 30, n: 20, stock: '' },
+        { cat: 'Ammunition', c: 'Mag_STANAG_30Rnd', name: '', buy: 160, sell: 50, n: 1, stock: 3 },
+        { cat: 'Tools', c: 'Matchbox', name: '', buy: 25, sell: 8, n: 1, stock: '' },
+        { cat: 'Tools', c: 'Rag', name: '', buy: 4, sell: 1, n: 1, stock: '' },
+      ] }] },
     };
   }
 
@@ -165,7 +179,7 @@
     p.meta.name = 'DayZ Studio showcase';
     p.meta.modName = 'DZStudioShowcase';
     const b = build(c);
-    Object.assign(p, { objects: b.objects, quests: b.quests, stats: b.stats, itemReqs: b.itemReqs, hud: b.hud, factions: b.factions, customNodes: b.customNodes });
+    Object.assign(p, { objects: b.objects, quests: b.quests, stats: b.stats, itemReqs: b.itemReqs, hud: b.hud, factions: b.factions, customNodes: b.customNodes, trade: b.trade });
     p.meta.sheetKey = b.sheetKey;
     return p;
   };
@@ -183,6 +197,9 @@
     merge('stats', b.stats, 'id');
     merge('itemReqs', b.itemReqs, 'cls');
     merge('customNodes', b.customNodes, 'id');
+    if (!P.trade) P.trade = { traders: [], currencies: [] };
+    if (!P.trade.traders) P.trade.traders = [];
+    b.trade.traders.forEach((t) => { if (!P.trade.traders.some((x) => x.id === t.id)) P.trade.traders.push(t); });
     if (!(P.hud || []).length) P.hud = b.hud;
     if (!P.meta.sheetKey) P.meta.sheetKey = b.sheetKey;
     if (!P.factions || !(P.factions.list || []).length) P.factions = b.factions;

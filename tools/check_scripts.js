@@ -16,7 +16,7 @@ const path = require('path');
 const vm = require('vm');
 
 const APP = path.join(__dirname, '..');
-const MODULES = ['util', 'data', 'state', 'validate', 'code', 'customnodes', 'conditions', 'runtime', 'exporters', 'showcase'];
+const MODULES = ['util', 'data', 'state', 'validate', 'code', 'customnodes', 'conditions', 'runtime', 'exporters', 'traders', 'showcase'];
 
 function loadStudio() {
   const noop = () => {};
@@ -63,6 +63,7 @@ function checkPayload(DS, label) {
   // the JSON files the server reads must parse
   try { JSON.parse(p.quests); } catch (e) { console.log(`  ✖ [${label}] quests.json does not parse: ${e.message}`); errors++; }
   if (p.factions) { try { JSON.parse(p.factions); } catch (e) { console.log(`  ✖ [${label}] factions.json does not parse: ${e.message}`); errors++; } }
+  if (p.trade) { try { const t = JSON.parse(p.trade); if (!t.traders.length) throw new Error('no traders'); } catch (e) { console.log(`  ✖ [${label}] trade.json is broken: ${e.message}`); errors++; } }
   return errors;
 }
 

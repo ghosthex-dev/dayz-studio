@@ -272,6 +272,12 @@
           cur ? el('button', { class: 'btn', title: 'Show on the map', onclick: () => { if (DS.MapView && DS.MapView.centerOn) DS.MapView.centerOn(cur.x, cur.z); } }, '⌖') : null),
           'The player must stand within reach and look at it.');
       }
+      case 'traderpick': {
+        const tl = DS.Traders ? DS.Traders.list() : [];
+        const btn = el('button', { class: 'btn sm', onclick: () => DS.Stats && DS.Stats.open('traders') }, '🛒 Traders…');
+        if (!tl.length) return row(f.label, el('div', {}, el('span', { class: 'ins-help' }, 'No traders yet. '), btn), f.help);
+        return row(f.label, el('div', { class: 'btn-row' }, selectInp(p[f.k] || '', [['', 'None']].concat(tl.map((t) => [t.id, t.name || t.id])), (v) => { p[f.k] = v; ch(); rerender(); }), btn), f.help);
+      }
       case 'factionpick': {
         const fl = (S.project.factions && S.project.factions.list) || [];
         const btn = el('button', { class: 'btn sm', onclick: () => DS.Stats && DS.Stats.open('factions') }, '🏳 Factions…');

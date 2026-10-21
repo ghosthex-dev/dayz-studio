@@ -428,11 +428,12 @@ def local_server_start(body):
     qj = os.path.join(BUILD_DIR, 'profile', 'DZStudioQuests', 'quests.json')
     if os.path.isfile(qj):
         shutil.copy2(qj, os.path.join(qdir, 'quests.json'))
-    fj = os.path.join(BUILD_DIR, 'profile', 'DZStudioQuests', 'factions.json')
-    if os.path.isfile(fj):
-        shutil.copy2(fj, os.path.join(qdir, 'factions.json'))
-    elif os.path.isfile(os.path.join(qdir, 'factions.json')):
-        os.remove(os.path.join(qdir, 'factions.json'))
+    for extra in ('factions.json', 'trade.json'):   # optional profile files: copy, or remove a stale one
+        fj = os.path.join(BUILD_DIR, 'profile', 'DZStudioQuests', extra)
+        if os.path.isfile(fj):
+            shutil.copy2(fj, os.path.join(qdir, extra))
+        elif os.path.isfile(os.path.join(qdir, extra)):
+            os.remove(os.path.join(qdir, extra))
     if body.get('resetProgress'):
         for fn in os.listdir(os.path.join(qdir, 'players')):
             try:
@@ -724,6 +725,20 @@ def mod_cpp(nm, body):
     return '\n'.join(lines) + '\n'
 
 
+def trade_file(body):
+    """the editor's traders & currencies -> (trade.json text or '', error or None)"""
+    raw = body.get('trade') or ''
+    if not raw:
+        return '', None
+    try:
+        j = json.loads(raw)
+    except ValueError as e:
+        return '', 'Trader settings are damaged: %s' % e
+    if not isinstance(j, dict) or not isinstance(j.get('traders'), list) or not isinstance(j.get('currencies'), list):
+        return '', 'Trader settings are damaged'
+    return json.dumps(j, indent=1), None
+
+
 def factions_file(body):
     """the editor's faction settings -> (validated factions.json text or '', errors or None)"""
     raw = body.get('factions') or ''
@@ -743,6 +758,9 @@ def build_export(body):
     fac_text, fac_err = factions_file(body)
     if fac_err:
         return {'ok': False, 'error': 'Faction settings: ' + '; '.join(fac_err[:8])}
+    trade_text, trade_err = trade_file(body)
+    if trade_err:
+        return {'ok': False, 'error': trade_err}
     src = os.path.join(GAME_DATA, '_src_export_' + nm)
     shutil.rmtree(src, ignore_errors=True)
     os.makedirs(os.path.join(src, 'scripts', '4_World'), exist_ok=True)
@@ -764,6 +782,12 @@ def build_export(body):
             os.makedirs(os.path.join(src, 'sounds'), exist_ok=True)
             shutil.copy2(f_, os.path.join(src, 'sounds', '%s.%s' % (sid, ext)))
             n_snd += 1
+    money = None
+    if body.get('money'):   # dollar bills: their model + textures (the config classes come from the editor)
+        try:
+            money = MONEY.add_to(src, nm, env, os.path.join(BUILD_DIR, '_money_cache', nm))
+        except Exception as e:
+            money = {'textures': 0, 'own': [], 'model': '', 'notes': ['dollar bills not built: %s' % e]}
     mod_dir = os.path.join(BUILD_DIR, '@' + nm)
     shutil.rmtree(mod_dir, ignore_errors=True)
     try:
@@ -790,6 +814,12 @@ def build_export(body):
             f.write(fac_text)
     elif os.path.isfile(fac_path):
         os.remove(fac_path)
+    trade_path = os.path.join(prof, 'trade.json')
+    if trade_text:
+        with open(trade_path, 'w', encoding='utf-8') as f:
+            f.write(trade_text)
+    elif os.path.isfile(trade_path):
+        os.remove(trade_path)
     wid = re.sub(r'\D', '', str(body.get('workshopId') or ''))
     players = ('   they subscribe to it on the Steam Workshop:\n'
                '   https://steamcommunity.com/sharedfiles/filedetails/?id=%s\n' % wid) if wid else \
@@ -814,9 +844,11 @@ def build_export(body):
         z.write(os.path.join(prof, 'quests.json'), 'profile/DZStudioQuests/quests.json')
         if fac_text:
             z.write(fac_path, 'profile/DZStudioQuests/factions.json')
+        if trade_text:
+            z.write(trade_path, 'profile/DZStudioQuests/trade.json')
         z.writestr('INSTALL.txt', install)
     return {'ok': True, 'zip': 'data/_build/%s_ready.zip' % nm, 'name': nm, 'pboBytes': os.path.getsize(pbo),
-            'binarized': bool(env.get('cfgConvert')), 'sounds': n_snd, 'folder': mod_dir,
+            'binarized': bool(env.get('cfgConvert')), 'sounds': n_snd, 'folder': mod_dir, 'money': money,
             'signed': bool(sig.get('signed')), 'signNote': sig.get('why', ''), 'keysDir': KEYS_DIR}
 
 
@@ -1002,6 +1034,14 @@ def playtest_prepare(body):
             f.write(fac_text)
     elif os.path.isfile(os.path.join(PLAY_DIR, 'factions.json')):
         os.remove(os.path.join(PLAY_DIR, 'factions.json'))
+    trade_text, trade_err = trade_file(body)
+    if trade_err:
+        return {'ok': False, 'error': trade_err}
+    if trade_text:
+        with open(os.path.join(PLAY_DIR, 'trade.json'), 'w', encoding='utf-8') as f:
+            f.write(trade_text)
+    elif os.path.isfile(os.path.join(PLAY_DIR, 'trade.json')):
+        os.remove(os.path.join(PLAY_DIR, 'trade.json'))
     with open(os.path.join(PLAY_DIR, 'playtest.flag'), 'w') as f:
         f.write('1')
     return {'ok': True}
@@ -1291,6 +1331,7 @@ def open_folder(body):
 import server_tools as ST   # noqa: E402  (needs the helpers above)
 import factions             # noqa: E402  (factions.json schema + validation)
 import workshop as WS       # noqa: E402  (Steam Workshop publishing)
+import money as MONEY       # noqa: E402  (dollar bills: model + textures)
 WS.setup(dict(find_env=find_env, BUILD_DIR=BUILD_DIR))
 ST.setup(dict(find_env=find_env, find_server=find_server, pack_pbo=pack_pbo, sign_pbo=sign_pbo, steam_roots=steam_roots,
               DATA=DATA, SRV_WORLDS=SRV_WORLDS, SRV_PROFILE=SRV_PROFILE, PROFILE=PROFILE, LOCAL_DAYZ=LOCAL_DAYZ,

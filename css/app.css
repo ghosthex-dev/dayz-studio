@@ -72,6 +72,12 @@ body.dk-float-body > .dk-panel { position: absolute; inset: 0; }
 .dsconsole.docked { position: absolute; inset: 0; width: auto; height: auto; border: 0; border-radius: 0; box-shadow: none; resize: none; min-width: 0; min-height: 0; z-index: auto; }
 .dsconsole.docked .dsconsole-head { cursor: default; }
 /* workspace dialogs */
+/* trader price list (traders.js) */
+.tr-row { display: grid; grid-template-columns: minmax(130px, 1.4fr) minmax(110px, 1fr) 80px 80px 60px 64px minmax(90px, .9fr) auto; gap: 4px; align-items: center; margin-bottom: 3px; }
+.tr-head span { font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+.tr-need-wrap { border-left: 2px solid var(--accent); padding-left: 6px; margin-bottom: 6px; }
+.tr-need { display: grid; grid-template-columns: auto 1fr 1fr; gap: 6px; align-items: start; padding: 2px 0 6px; }
+.tr-cur { margin: 4px 0; padding: 8px; border: 1px solid var(--line); border-radius: 6px; }
 .ws-list { display: grid; gap: 6px; } .ws-row { display: flex; align-items: center; gap: 6px; padding: 4px 0; } .ws-name { flex: 1; }
 .keys-ed { display: grid; gap: 2px; max-height: 62vh; overflow-y: auto; }
 .key-row { display: flex; align-items: center; gap: 10px; padding: 3px 4px; border-radius: 4px; }

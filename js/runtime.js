@@ -32,7 +32,10 @@ const int DSQ_RPC_USE = 77430010;      // client -> server: pressed F on a usabl
 const int DSQ_RPC_MSG = 77430011;      // server -> client: a short message for the tracker banner ("title|text")
 const int DSQ_RPC_REP = 77430012;      // server -> client: a faction standing changed ("faction|value|tierId|tierName|tierColor|changed")
 const float GUARD_AIM_X = -40;        // side-to-side aim (AimX) of a shouldered gun that points it along the body's heading (measured in game)
+const int DSQ_RPC_TRADE = 77430014;    // client -> server: trader screen ("open|node", "buy|node|row|qty", "sell|node|row|qty")
+const int DSQ_RPC_TRADEUI = 77430015;  // server -> client: the trader screen (DSTradePacket)
 const int DSQ_RPC_SHOT = 77430013;     // server -> client: a hostile faction NPC fired ("netLow|netHigh|soundset|ammo")
+const int DSQ_RPC_LAST = 77430015;     // the highest id above: PlayerBase.OnRPC hands everything up to it to DSQuests
 
 class DSJObjective
 {
@@ -294,6 +297,7 @@ class DSDialogPacket
 	string node;
 	string name;
 	string state;    // offer | active | done | locked
+	string trader;   // the NPC trades: the conversation offers a "Let's trade." reply
 	float x;
 	float y;
 	float z;
@@ -339,6 +343,7 @@ class DSNode
 	string prompt;          // trg_object / obj_use: the interaction prompt ("Open the gate")
 	string okText;          // trg_object / obj_use: message when it worked
 	bool removeObj;         // trg_object / obj_use: remove the placed object once used
+	string trader;          // trg_npc: id of the trader it runs (trade.json)
 
 	void DSNode()
 	{
@@ -406,6 +411,102 @@ class DSGlobalFile
 	void DSGlobalFile()
 	{
 		vars = new array<ref DSGVar>;
+	}
+}
+
+// ---- traders & money ($profile:DZStudioQuests/trade.json, written by Studio) ----------------
+// A currency is paid in items (the quest mod's dollar bills, or a modded money item: denominations with a value,
+// largest first) or is a player stat (a balance saved on the server).
+class DSCurrencyItem
+{
+	string c;
+	int value;
+}
+
+class DSCurrency
+{
+	string id;
+	string name;
+	string symbol;   // "$" -> "$1,250"; empty -> "1,250 Rubles"
+	string kind;     // items | stat
+	string stat;     // kind stat: the stat id
+	ref array<ref DSCurrencyItem> items;
+
+	void DSCurrency()
+	{
+		items = new array<ref DSCurrencyItem>;
+	}
+}
+
+class DSTradeItem
+{
+	string c;
+	string name;     // shown instead of the game's name (optional)
+	int buy;         // what the player pays per purchase (0: not for sale)
+	int sell;        // what the player gets per sale (0: the trader doesn't buy it)
+	int n;           // pieces per purchase / sale (ammo: 20 rounds)
+	int stock;       // purchases in stock after a restart (-1: endless)
+	string cat;      // category shown as a heading
+	ref DSCond need; // only sold to players who meet this
+	string needText;
+}
+
+class DSTrader
+{
+	string id;
+	string name;
+	string currency;
+	ref array<ref DSTradeItem> items;
+
+	void DSTrader()
+	{
+		items = new array<ref DSTradeItem>;
+	}
+}
+
+class DSTradeFile
+{
+	ref array<ref DSCurrency> currencies;
+	ref array<ref DSTrader> traders;
+
+	void DSTradeFile()
+	{
+		currencies = new array<ref DSCurrency>;
+		traders = new array<ref DSTrader>;
+	}
+}
+
+// what the trader screen shows (server -> client)
+class DSTradeRow
+{
+	int i;
+	string name;
+	string cat;
+	int n;
+	string buy;      // price text, "" = not for sale
+	string sell;     // price text, "" = not bought
+	int stock;       // -1 endless
+	int have;        // sales the player can make (n pieces each)
+	bool canBuy;
+	bool canSell;
+	string why;      // why it can't be bought
+}
+
+class DSTradePacket
+{
+	string quest;
+	string node;
+	string title;
+	string money;
+	int disc;
+	string tier;
+	string msg;
+	bool good;
+	ref array<ref DSTradeRow> rows;
+
+	void DSTradePacket()
+	{
+		rows = new array<ref DSTradeRow>;
 	}
 }
 
@@ -665,7 +766,9 @@ class DSQuests
 	ref array<string> m_LogLines;
 	ref array<ref DSNpcInfo> m_NpcInfo;    // quest NPCs (server: spawned ones, client: received list)
 	ref array<ref DSUseInfo> m_UseInfo;    // usable objects ("Use Object" nodes)
-	ref DSFactionFile m_Fac;               // factions, tiers, relations (server)
+	ref DSFactionFile m_Fac;
+	ref DSTradeFile m_Trade;                        // traders & currencies (server)
+	ref map<string, ref array<int>> m_Stock;       // trader id -> purchases left per item (since the restart)               // factions, tiers, relations (server)
 	ref map<string, float> m_GuardWarn;    // "player|npc" -> when a hostile NPC last warned
 	ref map<string, float> m_GuardShot;    // "player|npc" -> when it last fired
 	ref array<Object> m_Raised;             // faction NPCs with their gun up, and when they last aimed
@@ -679,6 +782,7 @@ class DSQuests
 	ref map<string, string> m_JournalLast;   // server: last snapshot sent per player
 	ref DSJournal m_Journal;                 // client: the player's quest log
 	ref DSJournalUI m_JUI;
+	ref DSTradeUI m_TUI;
 	bool m_GotNpcs;                          // client: NPC list received
 	float m_HelloT;
 	int m_HelloTries;
@@ -743,6 +847,7 @@ class DSQuests
 		m_File = new DSQuestFile();
 		JsonFileLoader<DSQuestFile>.JsonLoadFile(path, m_File);
 		LoadFactions();
+		LoadTrade();
 		SpawnNpcs();
 		CollectUses();
 		m_Ready = true;
@@ -856,7 +961,7 @@ class DSQuests
 		}
 		if (FileExist(ROOT + "/give.flag") && p)
 		{
-			// play-test helper: "ClassName amount" per line ("ClassName 1 hands": put it in the hands like a player would, "@die": die)
+			// play-test helper: "ClassName amount" per line ("ClassName 1 hands": put it in the hands like a player would, "ClassName 5 ground": on the ground in front, "@die": die)
 			FileHandle gh = OpenFile(ROOT + "/give.flag", FileMode.READ);
 			string gl;
 			array<string> gives = new array<string>;
@@ -879,6 +984,26 @@ class DSQuests
 				{
 					p.SetPosition(GroundPos(gp.Get(1).ToFloat(), 0, gp.Get(2).ToFloat()));   // play-test: "@tp x z"
 					Say("teleported to " + gp.Get(1) + " " + gp.Get(2));
+					continue;
+				}
+				if (gp.Get(0) == "@talk" && gp.Count() >= 2)
+				{
+					// play-test: "@talk Name" - talk to that NPC as if the player looked at it and pressed F
+					bool talked = false;
+					for (int tqi = 0; tqi < m_File.quests.Count() && !talked; tqi++)
+					{
+						DSQuest tq = m_File.quests.Get(tqi);
+						for (int tni = 0; tni < tq.nodes.Count() && !talked; tni++)
+						{
+							DSNode tn = tq.nodes.Get(tni);
+							if (tn.type == "trg_npc" && tn.title == gp.Get(1))
+							{
+								ServerTalk(p, tq.id, tn.id);
+								talked = true;
+							}
+						}
+					}
+					Say("talk to " + gp.Get(1) + ": " + talked);
 					continue;
 				}
 				if (gp.Get(0) == "@die")
@@ -906,6 +1031,17 @@ class DSQuests
 						if (he)
 							he.Delete();
 					}
+					continue;
+				}
+				if (gp.Count() > 2 && gp.Get(2) == "ground")
+				{
+					// play-test: "ClassName amount ground" - on the ground in front of the player
+					vector gpos = p.GetPosition() + p.GetDirection() * 1.2;
+					EntityAI ge = EntityAI.Cast(GetGame().CreateObjectEx(gp.Get(0), gpos, ECE_PLACE_ON_SURFACE));
+					ItemBase gib = ItemBase.Cast(ge);
+					if (gib && gib.ConfigGetBool("canBeSplit"))
+						gib.SetQuantity(gn);
+					Say("dropped " + gp.Get(0) + " on the ground");
 					continue;
 				}
 				GiveItem(p, gp.Get(0), gn);
@@ -2740,6 +2876,29 @@ class DSQuests
 	{
 		if (cls == "")
 			return;
+		// splittable items (dollar bills, rags, nails ...): the amount is the quantity, in stacks of up to their maximum
+		int maxQ = GetGame().ConfigGetInt("CfgVehicles " + cls + " varQuantityMax");
+		if (GetGame().ConfigGetInt("CfgVehicles " + cls + " canBeSplit") == 1 && maxQ > 1)
+		{
+			int left = amount;
+			int guard = 0;
+			while (left > 0 && guard < 50)
+			{
+				guard++;
+				EntityAI se = p.GetInventory().CreateInInventory(cls);
+				if (!se)
+					se = EntityAI.Cast(GetGame().CreateObject(cls, p.GetPosition()));
+				ItemBase sib = ItemBase.Cast(se);
+				if (!sib)
+					return;
+				int q = left;
+				if (q > maxQ)
+					q = maxQ;
+				sib.SetQuantity(q);
+				left = left - q;
+			}
+			return;
+		}
 		if (amount > 30)
 			amount = 30;
 		for (int i = 0; i < amount; i++)
@@ -2757,7 +2916,8 @@ class DSQuests
 	}
 
 	// ---------------- inventory ----------------
-	int CountItems(PlayerBase p, string cls)
+	// onlySellable: skip what a trader shouldn't take (ruined, worn, or holding other items) - see Sellable
+	int CountItems(PlayerBase p, string cls, bool onlySellable = false)
 	{
 		if (cls == "")
 			return 0;
@@ -2768,6 +2928,8 @@ class DSQuests
 		{
 			EntityAI e = all.Get(i);
 			if (!e || e == p || !e.IsKindOf(cls))
+				continue;
+			if (onlySellable && !Sellable(p, e))
 				continue;
 			Magazine m = Magazine.Cast(e);
 			ItemBase ib = ItemBase.Cast(e);
@@ -2789,7 +2951,7 @@ class DSQuests
 		return (int)Math.Round(ib.GetQuantity());
 	}
 
-	void RemoveItems(PlayerBase p, string cls, int amount)
+	void RemoveItems(PlayerBase p, string cls, int amount, bool onlySellable = false)
 	{
 		array<EntityAI> all = new array<EntityAI>;
 		p.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER, all);
@@ -2798,6 +2960,8 @@ class DSQuests
 		{
 			EntityAI e = all.Get(i);
 			if (!e || e == p || !e.IsKindOf(cls))
+				continue;
+			if (onlySellable && !Sellable(p, e))
 				continue;
 			Magazine m = Magazine.Cast(e);
 			if (m && m.IsAmmoPile())
@@ -3194,6 +3358,369 @@ class DSQuests
 		return null;
 	}
 
+	// ======================= traders & money =======================
+	void LoadTrade()
+	{
+		m_Trade = new DSTradeFile();
+		m_Stock = new map<string, ref array<int>>;
+		string path = ROOT + "/trade.json";
+		if (FileExist(path))
+			JsonFileLoader<DSTradeFile>.JsonLoadFile(path, m_Trade);
+		for (int i = 0; i < m_Trade.traders.Count(); i++)
+		{
+			DSTrader tr = m_Trade.traders.Get(i);
+			array<int> stockLeft = new array<int>;
+			for (int j = 0; j < tr.items.Count(); j++)
+				stockLeft.Insert(tr.items.Get(j).stock);
+			m_Stock.Set(tr.id, stockLeft);
+		}
+		if (m_Trade.traders.Count() > 0)
+			Print("[DZStudio] Traders: " + m_Trade.traders.Count() + ", currencies: " + m_Trade.currencies.Count());
+	}
+
+	DSTrader FindTrader(string id)
+	{
+		if (!m_Trade)
+			return null;
+		for (int i = 0; i < m_Trade.traders.Count(); i++)
+		{
+			if (m_Trade.traders.Get(i).id == id)
+				return m_Trade.traders.Get(i);
+		}
+		return null;
+	}
+
+	DSCurrency FindCurrency(string id)
+	{
+		if (!m_Trade)
+			return null;
+		for (int i = 0; i < m_Trade.currencies.Count(); i++)
+		{
+			if (m_Trade.currencies.Get(i).id == id)
+				return m_Trade.currencies.Get(i);
+		}
+		if (m_Trade.currencies.Count() > 0)
+			return m_Trade.currencies.Get(0);
+		return null;
+	}
+
+	// 1250 -> "1,250"
+	static string Thousands(int v)
+	{
+		string sign = "";
+		int a = v;
+		if (a < 0)
+		{
+			sign = "-";
+			a = -a;
+		}
+		string digits = a.ToString();
+		string res = "";
+		int cnt = 0;
+		for (int i = digits.Length() - 1; i >= 0; i--)
+		{
+			res = digits.Get(i) + res;
+			cnt++;
+			if (cnt % 3 == 0 && i > 0)
+				res = "," + res;
+		}
+		return sign + res;
+	}
+
+	static string MoneyText(DSCurrency cur, int v)
+	{
+		if (!cur)
+			return Thousands(v);
+		if (cur.symbol != "")
+			return cur.symbol + Thousands(v);
+		return Thousands(v) + " " + cur.name;
+	}
+
+	int Money(PlayerBase p, DSPlayerData data, DSCurrency cur)
+	{
+		if (!cur)
+			return 0;
+		if (cur.kind == "stat")
+			return (int)StatVal(data, cur.stat);
+		int total = 0;
+		for (int i = 0; i < cur.items.Count(); i++)
+			total += CountItems(p, cur.items.Get(i).c) * cur.items.Get(i).value;
+		return total;
+	}
+
+	// pay out an amount: a stat goes up, or bills are handed over - the largest that fit first
+	void Earn(PlayerBase p, DSPlayerData data, DSCurrency cur, int amount)
+	{
+		if (!cur || amount <= 0)
+			return;
+		if (cur.kind == "stat")
+		{
+			SetStat(p, data, cur.stat, "add", amount, "");
+			return;
+		}
+		int rest = amount;
+		for (int i = 0; i < cur.items.Count(); i++)
+		{
+			DSCurrencyItem ci = cur.items.Get(i);
+			if (ci.value <= 0)
+				continue;
+			int k = rest / ci.value;
+			if (k > 0)
+			{
+				GiveItem(p, ci.c, k);
+				rest = rest - k * ci.value;
+			}
+		}
+	}
+
+	// take an amount: the largest bills that fit first; what is still missing is paid with one bigger bill and the
+	// change comes back. False (nothing taken) when the player doesn't have enough.
+	bool Pay(PlayerBase p, DSPlayerData data, DSCurrency cur, int amount)
+	{
+		if (amount <= 0)
+			return true;
+		if (!cur || Money(p, data, cur) < amount)
+			return false;
+		if (cur.kind == "stat")
+		{
+			SetStat(p, data, cur.stat, "sub", amount, "");
+			return true;
+		}
+		int cnt = cur.items.Count();
+		array<int> have = new array<int>;
+		array<int> take = new array<int>;
+		int rest = amount;
+		for (int i = 0; i < cnt; i++)
+		{
+			DSCurrencyItem ci = cur.items.Get(i);
+			int h = CountItems(p, ci.c);
+			have.Insert(h);
+			int k = 0;
+			if (ci.value > 0)
+				k = rest / ci.value;
+			if (k > h)
+				k = h;
+			take.Insert(k);
+			rest = rest - k * ci.value;
+		}
+		int change = 0;
+		if (rest > 0)
+		{
+			for (int j = cnt - 1; j >= 0; j--)
+			{
+				DSCurrencyItem cj = cur.items.Get(j);
+				if (cj.value >= rest && have.Get(j) - take.Get(j) > 0)
+				{
+					take.Set(j, take.Get(j) + 1);
+					change = cj.value - rest;
+					rest = 0;
+					break;
+				}
+			}
+		}
+		if (rest > 0)
+			return false;
+		for (int m = 0; m < cnt; m++)
+		{
+			if (take.Get(m) > 0)
+				RemoveItems(p, cur.items.Get(m).c, take.Get(m));
+		}
+		if (change > 0)
+			Earn(p, data, cur, change);
+		return true;
+	}
+
+	// what a trader may take: not ruined, not worn (the item in the hands is fine), not holding other items
+	// (a full backpack or a rifle with a magazine is not sold together with its contents)
+	bool Sellable(PlayerBase p, EntityAI e)
+	{
+		if (!e || e == p || e.IsRuined())
+			return false;
+		if (e.GetHierarchyParent() == p && p.GetHumanInventory().GetEntityInHands() != e)
+			return false;
+		array<EntityAI> inner = new array<EntityAI>;
+		e.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER, inner);
+		if (inner.Count() > 1)
+			return false;
+		return true;
+	}
+
+	static string TradeName(DSTradeItem it)
+	{
+		if (it.name != "")
+			return it.name;
+		return ItemName(it.c);
+	}
+
+	// server: the trader screen. questId + "open|node", "buy|node|row|qty" or "sell|node|row|qty"
+	void ServerTrade(PlayerBase p, string questId, string cmd)
+	{
+		if (!m_Ready || !p || !m_Trade)
+			return;
+		DSPlayerData data = GetData(p);
+		if (!data)
+			return;
+		TStringArray parts = new TStringArray;
+		cmd.Split("|", parts);
+		if (parts.Count() < 2)
+			return;
+		DSQuest q = FindQuestById(questId);
+		if (!q)
+			return;
+		DSNode n = FindNode(q, parts.Get(1));
+		if (!n || n.trader == "" || Dist2D(p.GetPosition(), n.x, n.z) > n.radius + 6)
+			return;
+		DSTier tier = NpcTier(data, n);
+		if (tier && tier.stance == "hostile")
+			return;
+		DSTrader tr = FindTrader(n.trader);
+		if (!tr)
+			return;
+		DSCurrency cur = FindCurrency(tr.currency);
+		int disc = TierDiscount(data, n);
+		string act = parts.Get(0);
+		string msg = "";
+		bool good = true;
+		if (parts.Count() >= 4)
+		{
+			int row = parts.Get(2).ToInt();
+			int qty = parts.Get(3).ToInt();
+			if (qty < 1)
+				qty = 1;
+			if (qty > 10)
+				qty = 10;
+			if (row < 0 || row >= tr.items.Count())
+				return;
+			DSTradeItem it = tr.items.Get(row);
+			array<int> stock = m_Stock.Get(tr.id);
+			string label = TradeName(it);
+			int per = it.n;
+			if (per < 1)
+				per = 1;
+			if (act == "buy")
+			{
+				int price = Discounted(it.buy, disc);
+				if (stock && stock.Get(row) >= 0 && stock.Get(row) < qty)
+					qty = stock.Get(row);
+				if (it.buy <= 0)
+				{
+					msg = "That is not for sale.";
+					good = false;
+				}
+				else if (it.need && it.need.kind != "" && !CondOk(p, data, it.need))
+				{
+					msg = it.needText;
+					if (msg == "")
+						msg = "You can't buy that yet.";
+					good = false;
+				}
+				else if (qty <= 0)
+				{
+					msg = label + " is sold out.";
+					good = false;
+				}
+				else if (!Pay(p, data, cur, price * qty))
+				{
+					msg = "Not enough money - that costs " + MoneyText(cur, price * qty) + ".";
+					good = false;
+				}
+				else
+				{
+					GiveItem(p, it.c, per * qty);
+					if (stock && stock.Get(row) >= 0)
+						stock.Set(row, stock.Get(row) - qty);
+					msg = "Bought " + (per * qty) + "x " + label + " for " + MoneyText(cur, price * qty) + ".";
+				}
+			}
+			else if (act == "sell")
+			{
+				int can = CountItems(p, it.c, true) / per;
+				if (can < qty)
+					qty = can;
+				if (it.sell <= 0)
+				{
+					msg = "The trader doesn't buy that.";
+					good = false;
+				}
+				else if (qty <= 0)
+				{
+					msg = "You have no " + label + " to sell (ruined, worn or full items don't count).";
+					good = false;
+				}
+				else
+				{
+					RemoveItems(p, it.c, per * qty, true);
+					Earn(p, data, cur, it.sell * qty);
+					if (stock && stock.Get(row) >= 0)
+						stock.Set(row, stock.Get(row) + qty);
+					msg = "Sold " + (per * qty) + "x " + label + " for " + MoneyText(cur, it.sell * qty) + ".";
+				}
+			}
+			SaveData(data);
+			Say(msg);
+		}
+		SendTrade(p, data, q, n, tr, cur, disc, msg, good);
+	}
+
+	void SendTrade(PlayerBase p, DSPlayerData data, DSQuest q, DSNode n, DSTrader tr, DSCurrency cur, int disc, string msg, bool good)
+	{
+		DSTradePacket pk = new DSTradePacket();
+		pk.quest = q.id;
+		pk.node = n.id;
+		pk.title = tr.name;
+		if (pk.title == "")
+			pk.title = n.title;
+		int cash = Money(p, data, cur);
+		pk.money = MoneyText(cur, cash);
+		pk.disc = disc;
+		DSTier t = NpcTier(data, n);
+		if (t)
+			pk.tier = t.name;
+		pk.msg = msg;
+		pk.good = good;
+		array<int> stock = m_Stock.Get(tr.id);
+		for (int i = 0; i < tr.items.Count(); i++)
+		{
+			DSTradeItem it = tr.items.Get(i);
+			DSTradeRow r = new DSTradeRow();
+			r.i = i;
+			r.name = TradeName(it);
+			r.cat = it.cat;
+			r.n = it.n;
+			if (r.n < 1)
+				r.n = 1;
+			r.stock = -1;
+			if (stock)
+				r.stock = stock.Get(i);
+			int price = Discounted(it.buy, disc);
+			if (it.buy > 0)
+			{
+				r.buy = MoneyText(cur, price);
+				r.canBuy = cash >= price;
+				if (r.stock == 0)
+					r.canBuy = false;
+				if (it.need && it.need.kind != "" && !CondOk(p, data, it.need))
+				{
+					r.canBuy = false;
+					r.why = it.needText;
+					if (r.why == "")
+						r.why = "locked";
+				}
+			}
+			if (it.sell > 0)
+			{
+				r.sell = MoneyText(cur, it.sell);
+				r.have = CountItems(p, it.c, true) / r.n;
+				r.canSell = r.have > 0;
+			}
+			pk.rows.Insert(r);
+		}
+		string json;
+		JsonSerializer js = new JsonSerializer();
+		js.WriteToString(pk, false, json);
+		SendToClient(p, DSQ_RPC_TRADEUI, json);
+	}
+
 	void SendToClient(PlayerBase p, int rpc, string json)
 	{
 		if (!GetGame().IsMultiplayer())
@@ -3237,6 +3764,8 @@ class DSQuests
 				ServerOption(me, a, b);
 			else if (rpc == DSQ_RPC_USE)
 				ServerUse(me, a, b);
+			else if (rpc == DSQ_RPC_TRADE)
+				ServerTrade(me, a, b);
 			return;
 		}
 		GetGame().RPCSingleParam(me, rpc, new Param2<string, string>(a, b), true);
@@ -3471,6 +4000,8 @@ class DSQuests
 			pk.name = "Survivor";
 		pk.state = state;
 		pk.dialog = dlg;
+		if (n.trader != "" && FindTrader(n.trader))
+			pk.trader = n.trader;
 		pk.x = n.x;
 		pk.y = GroundPos(n.x, n.y, n.z)[1];
 		pk.z = n.z;
@@ -3685,6 +4216,20 @@ class DSQuests
 				m_JUI.Refresh();
 			}
 		}
+		else if (rpc == DSQ_RPC_TRADEUI)
+		{
+			DSTradePacket tp = new DSTradePacket();
+			if (!js.ReadFromString(tp, json, err))
+			{
+				Print("[DZStudio] client: could not read the trader screen (" + json.Length() + " chars): " + err);
+				return;
+			}
+			if (m_UI && m_UI.IsOpen())
+				m_UI.Close();
+			if (!m_TUI)
+				m_TUI = new DSTradeUI();
+			m_TUI.Show(tp);
+		}
 		else if (rpc == DSQ_RPC_OPEN)
 		{
 			DSDialogPacket pk = new DSDialogPacket();
@@ -3701,7 +4246,7 @@ class DSQuests
 
 	void HandleRPC(PlayerBase p, PlayerIdentity sender, int rpc, ParamsReadContext ctx)
 	{
-		if (rpc == DSQ_RPC_NPCS || rpc == DSQ_RPC_OPEN || rpc == DSQ_RPC_JOURNAL || rpc == DSQ_RPC_FX || rpc == DSQ_RPC_MSG || rpc == DSQ_RPC_REP || rpc == DSQ_RPC_SHOT)
+		if (rpc == DSQ_RPC_NPCS || rpc == DSQ_RPC_OPEN || rpc == DSQ_RPC_JOURNAL || rpc == DSQ_RPC_FX || rpc == DSQ_RPC_MSG || rpc == DSQ_RPC_REP || rpc == DSQ_RPC_SHOT || rpc == DSQ_RPC_TRADEUI)
 		{
 			// long messages arrive in pieces (see SendToClient): put them back together
 			Param3<int, int, string> a = new Param3<int, int, string>(0, 1, "");
@@ -3719,7 +4264,7 @@ class DSQuests
 			m_Chunks.Remove(rpc);
 			ClientReceive(rpc, sofar);
 		}
-		else if (rpc == DSQ_RPC_TALK || rpc == DSQ_RPC_ACCEPT || rpc == DSQ_RPC_ABANDON || rpc == DSQ_RPC_HELLO || rpc == DSQ_RPC_OPTION || rpc == DSQ_RPC_USE)
+		else if (rpc == DSQ_RPC_TALK || rpc == DSQ_RPC_ACCEPT || rpc == DSQ_RPC_ABANDON || rpc == DSQ_RPC_HELLO || rpc == DSQ_RPC_OPTION || rpc == DSQ_RPC_USE || rpc == DSQ_RPC_TRADE)
 		{
 			if (!GetGame().IsServer())
 				return;
@@ -3734,6 +4279,8 @@ class DSQuests
 				ServerOption(p, b.param1, b.param2);
 			else if (rpc == DSQ_RPC_USE)
 				ServerUse(p, b.param1, b.param2);
+			else if (rpc == DSQ_RPC_TRADE)
+				ServerTrade(p, b.param1, b.param2);
 			else if (rpc == DSQ_RPC_HELLO)
 			{
 				// the client was not ready when we first sent these: send them again on the next tick
@@ -3759,9 +4306,15 @@ class DSQuests
 			m_UI = new DSDialogUI();
 		if (!m_JUI)
 			m_JUI = new DSJournalUI();
+		if (!m_TUI)
+			m_TUI = new DSTradeUI();
 		m_UI.Update(dt);
-		m_JUI.Update(dt, m_UI.IsOpen());
-		if (m_JUI.IsOpen())
+		m_TUI.Update(dt);
+		bool talking = m_UI.IsOpen();
+		if (m_TUI.IsOpen())
+			talking = true;
+		m_JUI.Update(dt, talking);
+		if (m_JUI.IsOpen() || m_TUI.IsOpen())
 			m_UI.HidePrompt();
 		if (GetGame().IsMultiplayer() && (!m_GotNpcs || !m_Journal) && m_HelloTries < 12 && GetGame().GetPlayer())
 		{
@@ -3773,10 +4326,10 @@ class DSQuests
 				SendToServer(DSQ_RPC_HELLO, "", "");
 			}
 		}
-		bool covered = m_UI.IsOpen() || m_JUI.IsOpen() || GetGame().GetUIManager().GetMenu() != null;
+		bool covered = m_UI.IsOpen() || m_JUI.IsOpen() || m_TUI.IsOpen() || GetGame().GetUIManager().GetMenu() != null;
 		DSHud.Update(dt, covered, m_Journal);
 		DSSheet.Update(dt, covered, m_Journal);
-		if (m_UI.IsOpen() || m_JUI.IsOpen())
+		if (m_UI.IsOpen() || m_JUI.IsOpen() || m_TUI.IsOpen())
 			return;
 
 		bool key = KeyState(KeyCode.KC_F) != 0;
@@ -3928,6 +4481,8 @@ class DSQuests
 	{
 		if (DSSheet.IsOpen())
 			return true;
+		if (m_TUI && m_TUI.IsOpen())
+			return true;
 		return (m_UI && m_UI.IsOpen()) || (m_JUI && m_JUI.IsOpen());
 	}
 
@@ -3966,7 +4521,8 @@ class DSDialogUI
 	float m_CamT;
 	EffectSound m_Voice;
 	bool m_MouseDown;
-	ref array<int> m_Vis;     // indexes of the replies this player may pick
+	ref array<int> m_Vis;     // indexes of the replies this player may pick (-1: "Let's trade.", -2: "Continue")
+	string m_StartId;         // the line the conversation opened with (it gets the trade reply)
 
 	void DSDialogUI()
 	{
@@ -4062,7 +4618,7 @@ class DSDialogUI
 		GetScreenSize(sw, sh);
 		m_PanelW = sw * 0.56;
 		m_PanelX = (sw - m_PanelW) * 0.5;
-		float ph = sh * 0.30;
+		float ph = sh * 0.33;
 		m_PanelY = sh - ph - sh * 0.05;
 
 		WorkspaceWidget ws = GetGame().GetWorkspace();
@@ -4091,7 +4647,7 @@ class DSDialogUI
 		}
 		m_OptY = m_PanelY + 62 + 4 * 30 + 12;
 		m_OptRows.Clear();
-		for (int o = 0; o < 4; o++)
+		for (int o = 0; o < 5; o++)
 		{
 			TextWidget orow = MakeText(m_PanelX + 40, m_OptY + o * 30, m_PanelW - 80, 30, 23, 0xFFCCCCCC);
 			if (orow)
@@ -4125,6 +4681,7 @@ class DSDialogUI
 			Close();
 			return;
 		}
+		m_StartId = first.id;
 		ShowLine(first);
 	}
 
@@ -4170,11 +4727,18 @@ class DSDialogUI
 			if (!line.options.Get(v).hide)
 				m_Vis.Insert(v);
 		}
+		// a trader NPC: its first line also offers to trade (and keeps "Continue" when it had no replies)
+		if (m_Pkt.trader != "" && line.id == m_StartId)
+		{
+			if (m_Vis.Count() == 0)
+				m_Vis.Insert(-2);
+			m_Vis.Insert(-1);
+		}
 		m_OptCount = m_Vis.Count();
 		if (m_OptCount == 0)
 			m_OptCount = 1;
-		if (m_OptCount > 4)
-			m_OptCount = 4;
+		if (m_OptCount > 5)
+			m_OptCount = 5;
 		if (m_Voice)
 		{
 			m_Voice.SoundStop();
@@ -4228,7 +4792,13 @@ class DSDialogUI
 			}
 			string label = "Continue";
 			if (m_Vis.Count() > 0)
-				label = m_Line.options.Get(m_Vis.Get(j)).text;
+			{
+				int pv = m_Vis.Get(j);
+				if (pv == -1)
+					label = "Let's trade.";
+				else if (pv >= 0)
+					label = m_Line.options.Get(pv).text;
+			}
 			string mark = "   ";
 			int col = 0xFFB8B8B8;
 			if (j == m_Sel)
@@ -4251,16 +4821,28 @@ class DSDialogUI
 			if (idx < 0 || idx >= m_Vis.Count())
 				return;
 			int pick = m_Vis.Get(idx);
-			DSDlgOption opt = m_Line.options.Get(pick);
-			next = opt.next;
-			if ((opt.give && opt.give.Count() > 0) || (opt.take && opt.take.Count() > 0))
+			if (pick == -1)
 			{
-				DSQuests.Get().ClientOption(m_Pkt.quest, m_Pkt.node, m_Pkt.state, m_Line.id, pick);
-				if (opt.give.Count() > 0 && opt.take.Count() == 0)
-					opt.hide = true;   // a one-time gift: gone if the conversation comes back to this line
+				// "Let's trade.": the server answers with the trader screen
+				string tq = m_Pkt.quest;
+				string tn = m_Pkt.node;
+				Close();
+				DSQuests.Get().SendToServer(DSQ_RPC_TRADE, tq, "open|" + tn);
+				return;
 			}
-			if (opt.accept)
-				DSQuests.Get().ClientAccept(m_Pkt.quest, m_Pkt.node);
+			if (pick >= 0)
+			{
+				DSDlgOption opt = m_Line.options.Get(pick);
+				next = opt.next;
+				if ((opt.give && opt.give.Count() > 0) || (opt.take && opt.take.Count() > 0))
+				{
+					DSQuests.Get().ClientOption(m_Pkt.quest, m_Pkt.node, m_Pkt.state, m_Line.id, pick);
+					if (opt.give.Count() > 0 && opt.take.Count() == 0)
+						opt.hide = true;   // a one-time gift: gone if the conversation comes back to this line
+				}
+				if (opt.accept)
+					DSQuests.Get().ClientAccept(m_Pkt.quest, m_Pkt.node);
+			}
 		}
 		if (next == "")
 		{
@@ -4423,6 +5005,489 @@ class DSDialogUI
 			}
 		}
 		m_MouseDown = down2;
+	}
+}
+
+// ---- trader screen: buy and sell (client only) -------------------------------
+// Two columns - what the trader sells (left) and what the player can sell to it (right) - with category headings.
+// Click or Enter trades one, Shift trades ten; the server answers every trade with a fresh screen (DSTradePacket).
+class DSTradeUI
+{
+	bool m_Open;
+	ref DSTradePacket m_Pkt;
+	ref array<Widget> m_All;
+	ref array<TextWidget> m_Name0;
+	ref array<TextWidget> m_Price0;
+	ref array<TextWidget> m_Name1;
+	ref array<TextWidget> m_Price1;
+	ref array<int> m_Lines0;    // left column: packet row per line (-1: a category heading)
+	ref array<int> m_Lines1;    // right column
+	ref array<string> m_Head0;  // heading text per line ("" for item lines)
+	ref array<string> m_Head1;
+	Widget m_Hi0;
+	Widget m_Hi1;
+	TextWidget m_Title;
+	TextWidget m_Sub;
+	TextWidget m_Msg;
+	TextWidget m_Hint;
+	int m_Side;
+	int m_Sel0;
+	int m_Sel1;
+	int m_Top0;
+	int m_Top1;
+	int m_Rows;
+	float m_X;
+	float m_Y;
+	float m_W;
+	float m_H;
+	float m_RowY;
+	float m_ColW;
+	float m_Age;
+	bool m_MouseDown;
+	int m_MX;
+	int m_MY;
+	ref map<int, bool> m_Prev;
+
+	void DSTradeUI()
+	{
+		m_All = new array<Widget>;
+		m_Name0 = new array<TextWidget>;
+		m_Price0 = new array<TextWidget>;
+		m_Name1 = new array<TextWidget>;
+		m_Price1 = new array<TextWidget>;
+		m_Lines0 = new array<int>;
+		m_Lines1 = new array<int>;
+		m_Head0 = new array<string>;
+		m_Head1 = new array<string>;
+		m_Prev = new map<int, bool>;
+	}
+
+	bool IsOpen()
+	{
+		return m_Open;
+	}
+
+	bool Pressed(int key)
+	{
+		bool now = KeyState(key) != 0;
+		bool was = false;
+		m_Prev.Find(key, was);
+		m_Prev.Set(key, now);
+		return now && !was;
+	}
+
+	TextWidget Keep(TextWidget t)
+	{
+		if (t)
+			m_All.Insert(t);
+		return t;
+	}
+
+	void Show(DSTradePacket pk)
+	{
+		bool fresh = !m_Open;
+		m_Pkt = pk;
+		if (fresh)
+			Build();
+		Fill();
+		Render();
+	}
+
+	void Build()
+	{
+		Close();
+		m_Open = true;
+		m_Age = 0;
+		m_Side = 0;
+		m_Sel0 = 0;
+		m_Sel1 = 0;
+		m_Top0 = 0;
+		m_Top1 = 0;
+		int sw, sh;
+		GetScreenSize(sw, sh);
+		m_W = sw * 0.66;
+		m_H = sh * 0.76;
+		m_X = (sw - m_W) * 0.5;
+		m_Y = (sh - m_H) * 0.5;
+		m_ColW = m_W * 0.5 - 40;
+		m_RowY = m_Y + 150;
+		m_Rows = (int)((m_H - 150 - 96) / 30);
+		if (m_Rows < 4)
+			m_Rows = 4;
+		Widget bg = DSQRect(m_X, m_Y, m_W, m_H, 0xE40E1012, 1000);
+		if (bg)
+			m_All.Insert(bg);
+		Widget rule = DSQRect(m_X + 24, m_Y + 96, m_W - 48, 2, 0xFFC8A864, 1001);
+		if (rule)
+			m_All.Insert(rule);
+		Widget mid = DSQRect(m_X + m_W * 0.5, m_RowY - 36, 2, m_Rows * 30 + 36, 0x80C8A864, 1001);
+		if (mid)
+			m_All.Insert(mid);
+		m_Hi0 = DSQRect(m_X + 20, m_RowY, m_ColW + 8, 30, 0x50C8A864, 1001);
+		m_Hi1 = DSQRect(m_X + m_W * 0.5 + 12, m_RowY, m_ColW + 8, 30, 0x50C8A864, 1001);
+		if (m_Hi0)
+			m_All.Insert(m_Hi0);
+		if (m_Hi1)
+			m_All.Insert(m_Hi1);
+		m_Title = Keep(DSQText(m_X + 28, m_Y + 14, m_W - 56, 44, 36, 0xFFE8D29A, 1002));
+		m_Sub = Keep(DSQText(m_X + 28, m_Y + 58, m_W - 56, 32, 24, 0xFFCCCCCC, 1002));
+		TextWidget h0 = Keep(DSQText(m_X + 28, m_RowY - 36, m_ColW, 32, 26, 0xFFE8D29A, 1002));
+		TextWidget h1 = Keep(DSQText(m_X + m_W * 0.5 + 20, m_RowY - 36, m_ColW, 32, 26, 0xFFE8D29A, 1002));
+		if (h0)
+			h0.SetText("BUY");
+		if (h1)
+			h1.SetText("SELL");
+		m_Name0.Clear();
+		m_Price0.Clear();
+		m_Name1.Clear();
+		m_Price1.Clear();
+		for (int r = 0; r < m_Rows; r++)
+		{
+			float ry = m_RowY + r * 30;
+			m_Name0.Insert(Keep(DSQText(m_X + 28, ry, m_ColW * 0.64, 30, 23, 0xFFFFFFFF, 1002)));
+			m_Price0.Insert(Keep(DSQText(m_X + 28 + m_ColW * 0.66, ry, m_ColW * 0.34, 30, 23, 0xFFFFFFFF, 1002)));
+			m_Name1.Insert(Keep(DSQText(m_X + m_W * 0.5 + 20, ry, m_ColW * 0.64, 30, 23, 0xFFFFFFFF, 1002)));
+			m_Price1.Insert(Keep(DSQText(m_X + m_W * 0.5 + 20 + m_ColW * 0.66, ry, m_ColW * 0.34, 30, 23, 0xFFFFFFFF, 1002)));
+		}
+		m_Msg = Keep(DSQText(m_X + 28, m_Y + m_H - 84, m_W - 56, 32, 24, 0xFFFFFFFF, 1002));
+		m_Hint = Keep(DSQText(m_X + 28, m_Y + m_H - 46, m_W - 56, 30, 20, 0xFF9A9A9A, 1002));
+		if (m_Hint)
+			m_Hint.SetText("Click or Enter: trade one   -   Shift: ten   -   Left / Right: buy or sell   -   Esc: close");
+		GetGame().GetMission().PlayerControlDisable(INPUT_EXCLUDE_ALL);
+		GetGame().GetUIManager().ShowUICursor(true);
+		// keys still held from the conversation must not trade right away
+		Pressed(KeyCode.KC_RETURN);
+		Pressed(KeyCode.KC_SPACE);
+		Pressed(KeyCode.KC_ESCAPE);
+		Pressed(KeyCode.KC_F);
+		Pressed(KeyCode.KC_UP);
+		Pressed(KeyCode.KC_DOWN);
+		Pressed(KeyCode.KC_LEFT);
+		Pressed(KeyCode.KC_RIGHT);
+		m_MouseDown = (GetMouseState(MouseState.LEFT) & MB_PRESSED_MASK) != 0;
+		GetMousePos(m_MX, m_MY);
+	}
+
+	// the two columns from the packet: items grouped under their category headings
+	void Fill()
+	{
+		m_Lines0.Clear();
+		m_Lines1.Clear();
+		m_Head0.Clear();
+		m_Head1.Clear();
+		string cat0 = "-";
+		string cat1 = "-";
+		for (int i = 0; i < m_Pkt.rows.Count(); i++)
+		{
+			DSTradeRow r = m_Pkt.rows.Get(i);
+			if (r.buy != "")
+			{
+				if (r.cat != cat0 && r.cat != "")
+				{
+					m_Lines0.Insert(-1);
+					m_Head0.Insert(r.cat);
+				}
+				cat0 = r.cat;
+				m_Lines0.Insert(i);
+				m_Head0.Insert("");
+			}
+			if (r.sell != "")
+			{
+				if (r.cat != cat1 && r.cat != "")
+				{
+					m_Lines1.Insert(-1);
+					m_Head1.Insert(r.cat);
+				}
+				cat1 = r.cat;
+				m_Lines1.Insert(i);
+				m_Head1.Insert("");
+			}
+		}
+		m_Sel0 = FixSel(m_Lines0, m_Sel0, 1);
+		m_Sel1 = FixSel(m_Lines1, m_Sel1, 1);
+		if (m_Lines0.Count() == 0)
+			m_Side = 1;
+		if (m_Lines1.Count() == 0)
+			m_Side = 0;
+	}
+
+	// the nearest item line (not a heading) from sel, looking in direction dir first
+	int FixSel(array<int> lines, int sel, int dir)
+	{
+		int cnt = lines.Count();
+		if (cnt == 0)
+			return 0;
+		if (sel < 0)
+			sel = 0;
+		if (sel >= cnt)
+			sel = cnt - 1;
+		int k = sel;
+		while (k >= 0 && k < cnt && lines.Get(k) < 0)
+			k = k + dir;
+		if (k >= 0 && k < cnt)
+			return k;
+		k = sel;
+		while (k >= 0 && k < cnt && lines.Get(k) < 0)
+			k = k - dir;
+		if (k >= 0 && k < cnt)
+			return k;
+		return 0;
+	}
+
+	void RenderColumn(array<int> lines, array<string> heads, array<TextWidget> names, array<TextWidget> prices, int top, int sel, bool buy, bool active)
+	{
+		for (int k = 0; k < m_Rows; k++)
+		{
+			TextWidget nw = names.Get(k);
+			TextWidget pw = prices.Get(k);
+			if (!nw || !pw)
+				continue;
+			int line = top + k;
+			if (line >= lines.Count())
+			{
+				nw.SetText("");
+				pw.SetText("");
+				continue;
+			}
+			int ri = lines.Get(line);
+			if (ri < 0)
+			{
+				nw.SetColor(0xFFC8A864);
+				nw.SetText("- " + heads.Get(line) + " -");
+				pw.SetText("");
+				continue;
+			}
+			DSTradeRow r = m_Pkt.rows.Get(ri);
+			string label = r.name;
+			if (r.n > 1)
+				label = label + "  x" + r.n;
+			string price;
+			bool ok;
+			if (buy)
+			{
+				price = r.buy;
+				if (r.why != "")
+					price = price + "  (locked)";
+				else if (r.stock == 0)
+					price = price + "  (sold out)";
+				else if (r.stock > 0)
+					price = price + "  (" + r.stock + " left)";
+				ok = r.canBuy;
+			}
+			else
+			{
+				price = r.sell + "  (you have " + r.have + ")";
+				ok = r.canSell;
+			}
+			int col = 0xFF8A8A8A;
+			if (ok)
+				col = 0xFFFFFFFF;
+			if (active && line == sel)
+				col = 0xFFFFE9A8;
+			nw.SetColor(col);
+			pw.SetColor(col);
+			nw.SetText(label);
+			pw.SetText(price);
+		}
+	}
+
+	void Render()
+	{
+		if (!m_Open || !m_Pkt)
+			return;
+		if (m_Title)
+			m_Title.SetText(m_Pkt.title);
+		if (m_Sub)
+		{
+			string sub = "Your money: " + m_Pkt.money;
+			if (m_Pkt.disc > 0)
+				sub = sub + "      " + m_Pkt.tier + ": " + m_Pkt.disc + "% off";
+			m_Sub.SetText(sub);
+		}
+		// keep the selected line on screen
+		if (m_Sel0 < m_Top0)
+			m_Top0 = m_Sel0;
+		if (m_Sel0 >= m_Top0 + m_Rows)
+			m_Top0 = m_Sel0 - m_Rows + 1;
+		if (m_Sel1 < m_Top1)
+			m_Top1 = m_Sel1;
+		if (m_Sel1 >= m_Top1 + m_Rows)
+			m_Top1 = m_Sel1 - m_Rows + 1;
+		RenderColumn(m_Lines0, m_Head0, m_Name0, m_Price0, m_Top0, m_Sel0, true, m_Side == 0);
+		RenderColumn(m_Lines1, m_Head1, m_Name1, m_Price1, m_Top1, m_Sel1, false, m_Side == 1);
+		if (m_Hi0)
+		{
+			m_Hi0.Show(m_Side == 0 && m_Lines0.Count() > 0);
+			m_Hi0.SetPos(m_X + 20, m_RowY + (m_Sel0 - m_Top0) * 30);
+		}
+		if (m_Hi1)
+		{
+			m_Hi1.Show(m_Side == 1 && m_Lines1.Count() > 0);
+			m_Hi1.SetPos(m_X + m_W * 0.5 + 12, m_RowY + (m_Sel1 - m_Top1) * 30);
+		}
+		if (m_Msg)
+		{
+			// a locked item explains itself while it is selected; otherwise the last trade's result
+			string why = "";
+			if (m_Side == 0 && m_Sel0 < m_Lines0.Count() && m_Lines0.Get(m_Sel0) >= 0)
+				why = m_Pkt.rows.Get(m_Lines0.Get(m_Sel0)).why;
+			if (why != "")
+			{
+				m_Msg.SetText("Locked: " + why);
+				m_Msg.SetColor(0xFFE8D29A);
+			}
+			else
+			{
+				m_Msg.SetText(m_Pkt.msg);
+				if (m_Pkt.good)
+					m_Msg.SetColor(0xFF9BE59B);
+				else
+					m_Msg.SetColor(0xFFF08A7A);
+			}
+		}
+	}
+
+	void Trade(int qty)
+	{
+		array<int> lines = m_Lines0;
+		int sel = m_Sel0;
+		string act = "buy";
+		if (m_Side == 1)
+		{
+			lines = m_Lines1;
+			sel = m_Sel1;
+			act = "sell";
+		}
+		if (sel < 0 || sel >= lines.Count() || lines.Get(sel) < 0)
+			return;
+		DSTradeRow r = m_Pkt.rows.Get(lines.Get(sel));
+		DSQuests.Get().SendToServer(DSQ_RPC_TRADE, m_Pkt.quest, act + "|" + m_Pkt.node + "|" + r.i + "|" + qty);
+	}
+
+	void Move(int dir)
+	{
+		if (m_Side == 0)
+			m_Sel0 = FixSel(m_Lines0, m_Sel0 + dir, dir);
+		else
+			m_Sel1 = FixSel(m_Lines1, m_Sel1 + dir, dir);
+		Render();
+	}
+
+	void Close()
+	{
+		for (int i = 0; i < m_All.Count(); i++)
+		{
+			Widget w = m_All.Get(i);
+			if (w)
+				w.Unlink();
+		}
+		m_All.Clear();
+		m_Name0.Clear();
+		m_Price0.Clear();
+		m_Name1.Clear();
+		m_Price1.Clear();
+		m_Hi0 = null;
+		m_Hi1 = null;
+		if (m_Open)
+		{
+			GetGame().GetMission().PlayerControlEnable(true);
+			GetGame().GetUIManager().ShowUICursor(false);
+		}
+		m_Open = false;
+	}
+
+	void Update(float dt)
+	{
+		if (!m_Open)
+			return;
+		m_Age += dt;
+		bool esc = Pressed(KeyCode.KC_ESCAPE);
+		bool up = Pressed(KeyCode.KC_UP);
+		bool down = Pressed(KeyCode.KC_DOWN);
+		bool left = Pressed(KeyCode.KC_LEFT);
+		bool right = Pressed(KeyCode.KC_RIGHT);
+		bool enter = Pressed(KeyCode.KC_RETURN);
+		bool space = Pressed(KeyCode.KC_SPACE);
+		int qty = 1;
+		if (KeyState(KeyCode.KC_LSHIFT) != 0)
+			qty = 10;
+		if (KeyState(KeyCode.KC_RSHIFT) != 0)
+			qty = 10;
+		if (esc)
+		{
+			Close();
+			return;
+		}
+		if (m_Age < 0.2)
+			return;
+		if (up)
+			Move(-1);
+		if (down)
+			Move(1);
+		if (left && m_Lines0.Count() > 0)
+		{
+			m_Side = 0;
+			Render();
+		}
+		if (right && m_Lines1.Count() > 0)
+		{
+			m_Side = 1;
+			Render();
+		}
+		if (enter || space)
+		{
+			Trade(qty);
+			return;
+		}
+		// mouse: moving over a line selects it (and its side), a click trades. A cursor that just sits
+		// there must not steal the selection back from the arrow keys.
+		int mx, my;
+		GetMousePos(mx, my);
+		bool down2 = (GetMouseState(MouseState.LEFT) & MB_PRESSED_MASK) != 0;
+		bool click = down2 && !m_MouseDown;
+		m_MouseDown = down2;
+		bool moved = mx != m_MX || my != m_MY;
+		m_MX = mx;
+		m_MY = my;
+		if (!moved && !click)
+			return;
+		bool inRows = false;
+		if (my >= m_RowY && my < m_RowY + m_Rows * 30 && mx >= m_X && mx <= m_X + m_W)
+			inRows = true;
+		if (inRows)
+		{
+			int k = (int)((my - m_RowY) / 30);
+			int side = 0;
+			if (mx > m_X + m_W * 0.5)
+				side = 1;
+			array<int> lines = m_Lines0;
+			int top = m_Top0;
+			if (side == 1)
+			{
+				lines = m_Lines1;
+				top = m_Top1;
+			}
+			int line = top + k;
+			if (line < lines.Count() && lines.Get(line) >= 0)
+			{
+				int was = m_Sel0;
+				if (side == 1)
+					was = m_Sel1;
+				if (side != m_Side || line != was)
+				{
+					m_Side = side;
+					if (side == 0)
+						m_Sel0 = line;
+					else
+						m_Sel1 = line;
+					Render();
+				}
+			}
+			else
+				inRows = false;
+		}
+		if (click && inRows)
+			Trade(qty);
 	}
 }
 
@@ -5995,7 +7060,7 @@ modded class PlayerBase
 	override void OnRPC(PlayerIdentity sender, int rpc_type, ParamsReadContext ctx)
 	{
 		super.OnRPC(sender, rpc_type, ctx);
-		if (rpc_type >= DSQ_RPC_NPCS && rpc_type <= DSQ_RPC_SHOT)
+		if (rpc_type >= DSQ_RPC_NPCS && rpc_type <= DSQ_RPC_LAST)
 			DSQuests.Get().HandleRPC(this, sender, rpc_type, ctx);
 	}
 
@@ -6244,4 +7309,55 @@ class CfgMods
 	};
 };
 ${extra || ''}`;
+
+  // dollar bills (tools/money.py writes the model and textures into <mod>\money): one stackable item per
+  // denomination, all on the same mesh with their own texture. Traders and quest rewards pay in these.
+  R.DOLLARS = [1, 5, 10, 20, 50, 100];
+  R.dollarClass = (n) => 'DSQ_Dollar' + n;
+  // (displayName must not start with $: DayZ reads that as a stringtable key)
+  R.moneyConfig = (mod) => {
+    const words = { 1: 'One', 5: 'Five', 10: 'Ten', 20: 'Twenty', 50: 'Fifty', 100: 'One hundred' };
+    return String.raw`
+class CfgVehicles
+{
+	class Inventory_Base;
+	class DSQ_Money_Base: Inventory_Base
+	{
+		scope = 0;
+		displayName = "Dollars";
+		descriptionShort = "Paper money. Traders take it.";
+		model = "${mod}\money\dollar.p3d";
+		weight = 1;
+		itemSize[] = {1, 1};
+		absorbency = 0.5;
+		varWetMax = 1;
+		canBeSplit = 1;
+		varQuantityInit = 1;
+		varQuantityMin = 0;
+		varQuantityMax = 1000;
+		varQuantityDestroyOnMin = 1;
+		rotationFlags = 16;
+		hiddenSelections[] = {"camo"};
+		soundImpactType = "textile";
+		class DamageSystem
+		{
+			class GlobalHealth
+			{
+				class Health
+				{
+					hitpoints = 15;   // no healthLevels: their materials would replace the bills' look even when pristine
+				};
+			};
+		};
+	};
+${R.DOLLARS.map((n) => String.raw`	class ${R.dollarClass(n)}: DSQ_Money_Base
+	{
+		scope = 2;
+		displayName = "Dollars ($${n})";
+		descriptionShort = "${words[n]}-dollar bills (Chernarus Reserve Notes). Traders take them.";
+		hiddenSelectionsTextures[] = {"${mod}\money\dollar_${n}_co.paa"};
+	};`).join('\n')}
+};
+`;
+  };
 })();

@@ -53,6 +53,7 @@
     s.addEventListener('change', () => { on(s.value); S.commit(); });
     return s;
   }
+  T.ui = { txt, num, chk, sel };   // shared with the traders tab (traders.js)
   function color(v, on) {
     const i = el('input', { type: 'color', value: v || '#ffffff' });
     i.addEventListener('input', () => on(i.value));
@@ -362,9 +363,9 @@
     const body = el('div', {});
     const redraw = () => {
       U.clear ? U.clear(body) : (body.innerHTML = '');
-      const tabs = el('div', { class: 'btn-row st-row' }, [['stats', '📊 Stats'], ['factions', '🏳 Factions'], ['reqs', '🔒 Item requirements'], ['hud', '🖥 HUD & character sheet']].map(([k, l]) =>
+      const tabs = el('div', { class: 'btn-row st-row' }, [['stats', '📊 Stats'], ['factions', '🏳 Factions'], ['reqs', '🔒 Item requirements'], ['hud', '🖥 HUD & character sheet'], ['traders', '🛒 Traders & money']].map(([k, l]) =>
         el('button', { class: 'btn' + (tab === k ? ' primary' : ''), onclick: () => { tab = k; redraw(); } }, l)));
-      body.append(tabs, tab === 'stats' ? statsTab(redraw) : tab === 'factions' ? factionsTab(redraw) : tab === 'reqs' ? reqsTab(redraw) : hudTab(redraw));
+      body.append(tabs, tab === 'stats' ? statsTab(redraw) : tab === 'factions' ? factionsTab(redraw) : tab === 'reqs' ? reqsTab(redraw) : tab === 'traders' ? DS.Traders.tab(redraw) : hudTab(redraw));
     };
     redraw();
     T._close = DS.app.modal({

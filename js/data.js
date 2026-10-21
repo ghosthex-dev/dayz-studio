@@ -254,6 +254,7 @@
         { k: 'radius', t: 'num', label: 'Interaction distance (m)', def: 4, min: 1 },
         { k: 'nomark', t: 'bool', label: 'Hide from the map (players must find this NPC themselves)', def: false },
         { k: 'faction', t: 'factionpick', label: 'Faction', def: '', help: 'The NPC acts on the player’s standing with this faction: Hostile players get warned, refused and - with a gun in the NPC’s hands - shot at; trade replies get the tier’s discount.' },
+        { k: 'trader', t: 'traderpick', label: 'Trader', def: '', help: 'The NPC sells and buys from this price list: its conversation offers “Let’s trade.”, which opens a buy / sell screen in game.' },
         { k: 'cond', t: 'cond', label: 'Only appears while', def: null, kinds: 'world', help: 'Leave on “Always” for an NPC that is always there. Otherwise the NPC shows up and leaves on its own, e.g. a faction leader once a server variable is set, or a night trader.' },
         { k: 'dialog', t: 'dialog', label: 'Conversation', def: null },
         { k: 'text', t: 'area', label: 'Quick greeting (used when no conversation is written)', def: 'Hey, survivor. I need a favour...' }],

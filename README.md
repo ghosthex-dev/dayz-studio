@@ -466,6 +466,51 @@ The condition picker gained **Player stat** (wherever a player is involved) and 
 holds when the check fails).
 Stats, item rules and the HUD are compiled into the quest mod, so **Build installable mod** after changing them.
 
+## Money: dollar bills
+
+Vanilla DayZ has no money, so the quest mod brings its own: **dollar bills** in $1, $5, $10, $20, $50 and $100
+(item classes `DSQ_Dollar1` … `DSQ_Dollar100`). They are real inventory items - they stack up to 1,000 bills,
+split like rags, can be dropped, looted and lost on death - and every denomination has its own colour, so players
+tell them apart at a glance. Hand them out as quest rewards or conversation gifts like any other item
+(e.g. `DSQ_Dollar20` × 150 gives one stack of 150 twenties); traders will take them too.
+
+* Every mod you build includes the bills (model + textures, about 0.8 MB). The first build takes about a minute
+  longer while DayZ Tools converts them; after that they come from a cache.
+* **Your own bill artwork:** put images in `Documents\DayZStudio\Assets\Currency` - `dollar_20_front.png` and
+  `dollar_20_back.png` (or a single `dollar_20.png` for both sides, `.jpg` works too) - and the next build uses
+  them instead of Studio's "Chernarus Reserve Notes". They stay on your PC; only the converted textures go into
+  your mod, so check that your artwork's license allows that before you publish.
+* Amounts for stackable items (bills, rags, nails …) in rewards and gifts are now a *quantity*: "Rag × 2" gives two
+  rags, no longer two full stacks.
+
+## Traders
+
+**File ▸ 🛒 Traders & money** (also a tab in 📊 Player stats) sets up stores. A trader is a price list: what the NPC
+sells and what it buys back. Give a quest NPC the trader in its **Trader** field (Talk to NPC node) and its
+conversation gets a **"Let's trade."** reply. Picking that reply opens a two-column buy/sell screen in game.
+
+* **The price list** - per row: item class, an optional display name, what the player pays, what the player gets
+  for selling one back (0 = the trader doesn't sell it / doesn't buy it), how many pieces one trade covers
+  ("5.56 rounds × 20"), a **stock** limit and a **category** heading. Leave stock empty for endless.
+  Limited stock refills when the server restarts.
+* **🔒 Sold only if** - any condition can lock a row, e.g. "Survivors at Friendly". A locked row shows "(locked)",
+  and selecting it shows your reason ("Morphine is for friends of the camp.").
+* **Paying** - prices are in dollars by default. The trader takes the biggest bills that fit first and gives change
+  back in bills. Players can only sell items that aren't ruined, aren't being worn and are empty, so nobody loses
+  the loot in their backpack by selling the backpack.
+* **Factions** - an NPC with a faction refuses to trade with players its faction sees as Hostile. Tiers with a
+  discount get it on everything the trader sells, and the store's header shows it ("Friendly: 10% off").
+* **Your own currency** - if your server uses a mod that adds other money (coins, bottle caps, a ruble mod…), add a
+  currency under **Custom currencies**. It can be **money items** (each class with its value, e.g. `Coin_Gold` = 100)
+  or **a player stat** used as a bank balance. Then pick it in the trader's "Pays and charges in".
+* **In game** - click or press Enter to trade one; hold Shift to trade ten. Use the arrow keys or the mouse to move
+  around and Esc to close. The server checks every trade: the player must still stand next to the NPC and have the
+  money and the items. Each trade is announced on the screen.
+
+The Showcase template includes **Mirek's camp store**: food, bandages, ammo, Morphine for Friendly players only, and a
+small stock of magazines. It also buys apples and food back. The settings go into
+`profile/DZStudioQuests/trade.json`, which the studio server checks before every build.
+
 ## Factions & reputation
 
 **📊 Player stats ▸ 🏳 Factions** sets up factions (Survivors, Bandits…) and how players stand with them:

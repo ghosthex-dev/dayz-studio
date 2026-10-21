@@ -424,6 +424,7 @@
         hook: R.hookEditor,
         quests: questsPayload(),
         factions: DS.exporters.factionsJson ? DS.exporters.factionsJson(S.project) : '',
+        trade: DS.exporters.tradeJson ? DS.exporters.tradeJson(S.project) : '',
       });
       if (!r.ok) throw new Error(r.error || 'build failed');
       if (L.fresh || L.launching) {

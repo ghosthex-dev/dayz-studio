@@ -292,6 +292,7 @@
         { label: 'Test on a local server (multiplayer)…', run: () => A.serverDialog() },
         { label: '☁ Publish to Steam Workshop…', run: () => DS.Workshop.open() },
         { label: '📊 Player stats, item requirements & HUD…', run: () => DS.Stats.open() },
+        { label: '🛒 Traders & money…', run: () => DS.Stats.open('traders') },
         '-', { head: 'Server' },
         { label: '⚙ Server settings (serverDZ.cfg)…', run: () => DS.ServerTools.cfgEditor() },
         { label: '⚖ Loot economy multipliers (types.xml)…', run: () => DS.ServerTools.economy() },

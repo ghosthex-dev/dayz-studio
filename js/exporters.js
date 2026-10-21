@@ -182,6 +182,7 @@
         setPos(p.pos); o.cls = p.npc; o.title = p.name || ''; o.text = p.text || ''; o.yaw = p.yaw || 0; o.radius = p.radius; o.items = items(p.gear);
         o.hands = String(p.hands || '').trim();
         o.faction = String(p.faction || '');
+        if (p.trader && (((S.project.trade || {}).traders) || []).some((t) => t.id === p.trader)) o.trader = p.trader;
         { const g = guardGun(o.hands); if (o.faction && g) { o.ammo = g[1]; o.shot = shotSet(g); } }
         if (p.dialog) ['offer', 'active', 'done', 'locked'].forEach((k) => { const d = dlgOut(p.dialog[k]); if (d) o[k] = d; });
         break;
@@ -263,6 +264,38 @@
   X.guardGun = guardGun;
 
   /** factions.json (validated again by the studio server before it goes into the mod); '' without factions */
+  /* traders & money -> trade.json in the server profile (read by DSQuests.LoadTrade). The dollar bills of the quest
+     mod are always there as currency "dollars"; the project can add its own (a modded money item, or a stat). */
+  X.dollarsCurrency = () => ({ id: 'dollars', name: 'Dollars', symbol: '$', kind: 'items', stat: '',
+    items: DS.RUNTIME.DOLLARS.slice().reverse().map((v) => ({ c: DS.RUNTIME.dollarClass(v), value: v })) });
+  function tradeJson(P) {
+    const T = P.trade || {};
+    const traders = (T.traders || []).filter((t) => t.id);
+    if (!traders.length) return '';
+    const own = (T.currencies || []).filter((c) => c.id && c.id !== 'dollars').map((c) => ({
+      id: c.id, name: c.name || c.id, symbol: c.symbol || '', kind: c.kind === 'stat' ? 'stat' : 'items', stat: c.stat || '',
+      items: (c.items || []).filter((i) => i.c && +i.value > 0).map((i) => ({ c: String(i.c).trim(), value: Math.round(+i.value) })).sort((a, b) => b.value - a.value),
+    }));
+    const grouped = (items) => {   // keep the author's order, but each category together (the trader screen shows headings)
+      const cats = [];
+      items.forEach((i) => { const k = (i.cat || '').trim(); if (!cats.includes(k)) cats.push(k); });
+      return cats.flatMap((k) => items.filter((i) => (i.cat || '').trim() === k));
+    };
+    return JSON.stringify({
+      currencies: [X.dollarsCurrency()].concat(own),
+      traders: traders.map((t) => ({
+        id: t.id, name: t.name || '', currency: t.currency || 'dollars',
+        items: grouped((t.items || []).filter((i) => String(i.c || '').trim())).map((i) => {
+          const o = { c: String(i.c).trim(), name: i.name || '', buy: Math.max(0, Math.round(+i.buy || 0)), sell: Math.max(0, Math.round(+i.sell || 0)),
+            n: Math.max(1, Math.round(+i.n || 1)), stock: i.stock === '' || i.stock == null || +i.stock < 0 ? -1 : Math.round(+i.stock), cat: (i.cat || '').trim() };
+          if (i.need && i.need.kind) { o.need = DS.Cond.out(i.need); o.needText = i.needText || ''; }
+          return o;
+        }),
+      })),
+    });
+  }
+  X.tradeJson = tradeJson;
+
   function factionsJson(P) {
     const F = P.factions;
     if (!F || !(F.list || []).length) return '';
@@ -831,12 +864,15 @@ Format used: 24-byte header [cells, cells, mapWidth, mapHeight, 32, 0], uint32 u
       name: nm,
       // mod.cpp (what the DayZ launcher shows) + the Workshop link in INSTALL.txt
       title: ws.title || nm, overview: ws.overview || '', author: P.meta.author || '', workshopId: ws.id || '',
-      config: DS.RUNTIME.configCpp(nm, P.meta.author, X.soundConfig(nm)),
+      // + the dollar bills: the studio server adds their model and textures to the build (tools/money.py)
+      config: DS.RUNTIME.configCpp(nm, P.meta.author, X.soundConfig(nm) + DS.RUNTIME.moneyConfig(nm)),
+      money: true,
       core: DS.RUNTIME.core,
       custom: customScripts(P),
       hook: DS.RUNTIME.hookMod,
       quests: questsJson(P),
       factions: factionsJson(P),
+      trade: tradeJson(P),
       sounds: DS.Sounds ? DS.Sounds.all().map((s) => ({ id: s.id, ext: s.ext })) : [],
     };
   };
