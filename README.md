@@ -65,13 +65,15 @@ GitHub builds the installer and attaches it, with the `latest.yml` and `.blockma
 
 DayZ Studio contains no game data, so it builds it from your own install once per map:
 
-1. **2D map imagery** - in the **🗺 Map** view, with nothing selected, press **⬇ Extract map imagery from DayZ**
-   in the right panel (all maps at once, a few minutes).
+1. **2D map imagery** - in the **🗺 Map** view, with nothing selected, press **⬇ Extract … imagery from DayZ**
+   in the right panel (just the map you picked, a few minutes).
 2. **Terrain, buildings and classes** - open the **⚙ Game setup** panel (a tab on the left) and press **⬇ Capture from the game**. DayZ
    starts, records the terrain and closes again (a few minutes). Then press **☰ Capture class list**.
 3. **Everything else on the map** *(for the 3D tab)* - press **🌲 Capture world objects** (about 3 minutes).
 
-Pick the map in the project settings (right panel, nothing selected) before capturing another map.
+Pick the map in the project settings (right panel, nothing selected) before capturing another map. The Map list
+shows the maps your DayZ actually has: DLC maps (Sakhal, Nasdara) are marked *(DLC)*, ones you don't have
+*(not installed)*, and a DLC map Bohemia releases later appears there by itself once Steam has downloaded it.
 
 ### 4. Make something
 
@@ -110,7 +112,8 @@ with the same key, or servers have to install a new `.bikey`.
 ## Feature guide
 
 ## What it does
-- **Map editor** – to-scale canvas (Chernarus+, Livonia, Sakhal, Namalsk, Deer Isle, custom size), pan/zoom,
+- **Map editor** – to-scale canvas (Chernarus+, Livonia, Sakhal, Nasdara and any newer DLC map Studio finds in
+  your DayZ install, Namalsk, Deer Isle, custom size), pan/zoom,
   place/move/rotate/group objects, prefabs, background image, optional vanilla-building layer from `mapgrouppos.xml`.
 - **Quest editor** – node graph: Triggers → Objectives → Rewards (+ delay / wait-for-all / complete).
   Quest locations can be picked on the map or **linked to placed objects** and follow them.
@@ -186,12 +189,17 @@ reshape, drag the outline to move. Export writes a complete `areaflags.map` (+ `
 mission file. File ▸ Import can load your own server's `areaflags.map` as the base.
 
 ## Real terrain imagery
-`maps/<world>/` holds satellite tiles extracted from your own DayZ install (Chernarus+, Livonia, Sakhal are
-included in this copy). The map shows a 4096px overview and swaps in 512px tiles as you zoom.
-For another install, DLC or mod map run:
+`maps/<world>/` holds satellite tiles extracted from your own DayZ install. The map shows a 4096px overview and
+swaps in 512px tiles as you zoom.
+
+Studio finds the maps itself: every `worlds_<map>_data.pbo` in `DayZ\Addons` or in a DLC folder (`DayZ\sakhal`,
+`DayZ\nasdara` …) and every `dayzOffline.<map>` mission of DayZ Server. A map's size comes from its
+`areaflags.map`, so a new DLC map needs no Studio update. From the command line:
 
     pip install pillow
-    python tools/extract_maps.py                    # auto-detects Steam DayZ
+    python tools/extract_maps.py                    # every map, auto-detects Steam DayZ
+    python tools/extract_maps.py --world nasdara    # just one map
+    python tools/worlds.py                          # which maps this PC has
     python tools/extract_maps.py --pbo "C:\path\to\worlds_xyz_data.pbo" --name xyz
 
 The imagery comes from game files you own - keep it for personal use, do not redistribute `maps/`.

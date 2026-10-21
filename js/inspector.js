@@ -509,11 +509,14 @@
   function projectInspector() {
     const m = S.project.meta;
     const ch = () => S.changed('meta');
-    const worldSel = selectInp(m.world, DS.WORLDS.map((w) => [w.id, w.name]), (v) => {
+    const cur = S.world();
+    const worldOpts = DS.WORLDS.map((w) => [w.id, DS.worldLabel(w)]).concat(cur.missing ? [[cur.id, cur.name]] : []);
+    const worldSel = selectInp(m.world, worldOpts, (v) => {
       m.world = v;
       m.mapSize = S.world().size;
       S.structure();
       DS.MapView.fit();
+      loadMapLayers(v);
     });
     const body = el('div', { class: 'ins-body' },
       el('div', { class: 'ins-head' }, el('div', null, el('div', { class: 'ins-title' }, 'Project'), el('div', { class: 'ins-sub' }, 'Nothing selected — click an object to edit it'))),
@@ -522,12 +525,15 @@
         row('Author', textInp(m.author, (v) => { m.author = v; ch(); }))),
       section('World',
         row('Map', worldSel),
+        cur.installed === false ? el('div', { class: 'ins-help warn-text' }, `${cur.name} isn't installed in your DayZ. You can still place things on it, but its imagery, the game view and play-testing need the map - install it through Steam (DLC maps: buy or download the DLC).`) : null,
+        cur.missing ? el('div', { class: 'ins-help warn-text' }, `This project was made for “${cur.id}”, a map this PC doesn't have. Its objects and quests are kept; install the map to see its imagery and test in game.`) : null,
+        cur.installed && cur.server === false && !cur.mod ? el('div', { class: 'ins-help' }, `DayZ Server has no mission for ${cur.name} yet - update DayZ Server in Steam to test on a local server.`) : null,
         row('Map size (m)', numInp(m.mapSize, (v) => { m.mapSize = Math.max(512, v); ch(); DS.MapView.invalidate(); }, { step: 256 }), 'Square world side length in metres. Chernarus+ = 15360.'),
         row('Grid snap (m)', selectInp(m.snap, [[0, 'Off'], [1, '1 m'], [5, '5 m'], [10, '10 m'], [25, '25 m'], [50, '50 m']], (v) => { m.snap = +v; ch(); })),
         checkInp(m.showTerrain !== false, (v) => { m.showTerrain = v; ch(); DS.MapView.invalidate(); }, 'Show game terrain imagery'),
         checkInp(m.brighten !== false, (v) => { m.brighten = v; ch(); DS.MapView.invalidate(); }, 'Brighten terrain (the raw satellite is dark)'),
         el('div', { class: 'ins-help' }, { ok: '✔ Terrain imagery loaded for this map.', loading: 'Loading terrain…', none: 'No terrain imagery for this map yet. Extract it from your DayZ install (a few minutes, once), or load your own image below.' }[DS.MapView.terrainState()]),
-        DS.MapView.terrainState() === 'none' ? extractMapsButton() : null,
+        DS.MapView.terrainState() === 'none' && cur.installed !== false && !cur.missing ? extractMapsButton(cur) : null,
         checkInp(m.showTowns !== false, (v) => { m.showTowns = v; ch(); DS.MapView.invalidate(); }, 'Show town labels'),
         checkInp(m.showRef !== false, (v) => { m.showRef = v; ch(); DS.MapView.invalidate(); }, 'Show vanilla building layer (if imported)'),
         checkInp(!!m.showDensity, (v) => { m.showDensity = v; ch(); DS.MapView.invalidate(); I.render(); }, '🔥 Show performance heatmap (object density)'),
@@ -548,10 +554,19 @@
   /** hotspots of the performance heatmap */
   /** "Extract map imagery": runs tools/extract_maps.py on the studio server against the user's own DayZ install */
   let mapsBusy = false;
-  function extractMapsButton() {
+
+  // the loot and zone layers belong to the map: load the new map's (fresh = again, e.g. right after extracting it)
+  function loadMapLayers(world, fresh) {
+    if (DS.Loot) { if (fresh) DS.Loot.loadedWorld = null; DS.Loot.load(world).then(() => S.emit('loot')); }
+    if (DS.Zones) { if (fresh) DS.Zones.loadedWorld = null; DS.Zones.load(world).then(() => DS.MapView.invalidate()); }
+  }
+
+  function extractMapsButton(w) {
     const line = el('div', { class: 'ins-help' }, mapsBusy ? 'Extracting… (keep Studio open)' : '');
+    // a map the server found is extracted on its own (the others are not redone); otherwise every map
+    const one = w && w.installed ? w.id : '';
     const btn = el('button', { class: 'btn sm primary', disabled: mapsBusy, onclick: async () => {
-      const r = await fetch('/api/maps/extract', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then((x) => x.json()).catch(() => ({ ok: false, error: 'studio server not running' }));
+      const r = await fetch('/api/maps/extract', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(one ? { world: one } : {}) }).then((x) => x.json()).catch(() => ({ ok: false, error: 'studio server not running' }));
       if (!r.ok) return DS.toast(r.error || 'Could not start', 'error', 5000);
       mapsBusy = true;
       btn.disabled = true;
@@ -563,13 +578,16 @@
         if (s.running) continue;
         mapsBusy = false;
         if (s.done) {
-          DS.toast('Map imagery extracted. Loot and zone layers show up after Studio is restarted.', 'ok', 6000);
+          DS.toast('Map imagery, loot and zones extracted.', 'ok', 6000);
           DS.MapView.reloadTerrain();
+          loadMapLayers(S.project.meta.world, true);
+          const cw = S.world();
+          if (one && cw.id === one) cw.imagery = true;
         } else DS.toast('Extraction failed: ' + ((s.log || []).slice(-1)[0] || 'unknown error'), 'error', 8000);
         I.render();
         return;
       }
-    } }, '⬇ Extract map imagery from DayZ');
+    } }, one ? `⬇ Extract ${w.name} imagery from DayZ` : '⬇ Extract map imagery from DayZ');
     return el('div', { class: 'ins-row' }, btn, line);
   }
 

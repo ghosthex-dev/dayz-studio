@@ -146,7 +146,7 @@ def game_alive():
 
 
 def world_suffix(world):
-    return {'chernarusplus': 'chernarusplus', 'enoch': 'enoch', 'sakhal': 'sakhal'}.get(world, world)
+    return re.sub(r'[^A-Za-z0-9_]', '', str(world)) or 'chernarusplus'
 
 
 def start_capture(body):
@@ -232,9 +232,6 @@ def finalize_capture(world):
     return got
 
 
-EDITOR_MAPS = {'chernarusplus': 'ChernarusPlus', 'enoch': 'Enoch', 'sakhal': 'Sakhal'}
-
-
 def ensure_editor_mission(map_name):
     # Editor missions live in Documents/DayZ/Editor/Missions/Editor.<Map> (init.c + MapGroupProto.xml)
     root = os.path.join(DOCS_DAYZ, 'Editor', 'Missions')
@@ -311,7 +308,7 @@ def launch_editor(body):
                     os.remove(os.path.join(base, fn))
                 except OSError:
                     pass
-    map_name = EDITOR_MAPS.get(body.get('world', 'chernarusplus'))
+    map_name = WORLDS.world_class(world_suffix(body.get('world', 'chernarusplus')))
     if engine == 'dabs':
         mod_list = [env['mods'][n] for n in ('CF', 'DabsFramework', 'DayZEditor')] + [LINK_DIR_MOD]
         mission = ensure_editor_mission(map_name) if map_name else None
@@ -357,7 +354,11 @@ def launch_editor(body):
 SRV_ROOT = os.path.join(GAME_DATA, 'server')
 SRV_PROFILE = os.path.join(SRV_ROOT, 'profile')
 SRV_PORT = 2302
-SRV_WORLDS = {'chernarusplus': 'dayzOffline.chernarusplus', 'enoch': 'dayzOffline.enoch', 'sakhal': 'dayzOffline.sakhal'}
+
+
+def srv_mission(world):
+    """DayZ Server's stock mission for a map (dayzOffline.<id>), '' when it has none"""
+    return WORLDS.server_mission(find_server(), world)
 
 
 def find_server():
@@ -414,8 +415,11 @@ def local_server_start(body):
     em = os.path.join(BUILD_DIR, '@' + nm)
     if not nm or not os.path.isdir(em):
         return {'ok': False, 'error': 'Build the mod first (Export > Build installable mod).'}
-    world = body.get('world', 'chernarusplus')
-    template = SRV_WORLDS.get(world, 'dayzOffline.chernarusplus')
+    world = world_suffix(body.get('world', 'chernarusplus'))
+    template = srv_mission(world)
+    if not template:
+        return {'ok': False, 'error': 'DayZ Server has no mission for %s (mpmissions\\dayzOffline.%s). If it is a new DLC map, '
+                'update DayZ Server in Steam; a mod map needs its own server mission.' % (WORLDS.world_name(world), world)}
     os.makedirs(SRV_PROFILE, exist_ok=True)
     for fn in os.listdir(SRV_PROFILE):  # old logs
         if fn.lower().endswith(('.rpt', '.log', '.adm', '.mdmp')):
@@ -1162,6 +1166,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(link_state())
         if u.path == '/api/server/status':
             return self._json(local_server_status())
+        if u.path == '/api/worlds':
+            return self._json({'ok': True, 'worlds': WORLDS.discover(find_env()['game'], find_server(), MAPS, DATA)})
         if u.path == '/api/maps/status':
             return self._json({'ok': True, 'running': maps_job['running'], 'done': maps_job['done'], 'log': maps_job['log'][-30:]})
         if u.path == '/api/workshop/status':
@@ -1229,7 +1235,7 @@ class Handler(SimpleHTTPRequestHandler):
         if u.path == '/api/mod/build':
             return self._json(build_export(body))
         if u.path == '/api/maps/extract':
-            return self._json(maps_extract())
+            return self._json(maps_extract(body))
         if u.path == '/api/workshop/publish':
             return self._json(WS.workshop_publish(body))
         if u.path == '/api/prefabs/save':
@@ -1293,17 +1299,21 @@ class Handler(SimpleHTTPRequestHandler):
 maps_job = {'running': False, 'log': [], 'done': False}
 
 
-def maps_extract():
+def maps_extract(body=None):
+    """all maps, or with {"world": id} just that one (a new DLC map without redoing the others)"""
     if maps_job['running']:
         return {'ok': False, 'error': 'Already extracting'}
     game = find_env()['game']
     if not game:
         return {'ok': False, 'error': 'DayZ was not found - install it from Steam first'}
+    world = re.sub(r'[^A-Za-z0-9_]', '', str((body or {}).get('world', '')))
+    if world and world not in WORLDS.game_worlds(game):
+        return {'ok': False, 'error': '%s is not installed in DayZ (no worlds_%s_data.pbo). Install it through Steam first.' % (WORLDS.world_name(world), world)}
     maps_job.update(running=True, log=['Starting…'], done=False)
 
     def run():
         try:
-            p = subprocess.Popen([sys.executable, '-u', os.path.join(HERE, 'extract_maps.py'), game], cwd=APP,
+            p = subprocess.Popen([sys.executable, '-u', os.path.join(HERE, 'extract_maps.py'), game] + (['--world', world] if world else []), cwd=APP,
                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors='replace',
                                  creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             for line in p.stdout:
@@ -1332,9 +1342,10 @@ import server_tools as ST   # noqa: E402  (needs the helpers above)
 import factions             # noqa: E402  (factions.json schema + validation)
 import workshop as WS       # noqa: E402  (Steam Workshop publishing)
 import money as MONEY       # noqa: E402  (dollar bills: model + textures)
+import worlds as WORLDS     # noqa: E402  (which maps - DLC ones included - are on this PC)
 WS.setup(dict(find_env=find_env, BUILD_DIR=BUILD_DIR))
 ST.setup(dict(find_env=find_env, find_server=find_server, pack_pbo=pack_pbo, sign_pbo=sign_pbo, steam_roots=steam_roots,
-              DATA=DATA, SRV_WORLDS=SRV_WORLDS, SRV_PROFILE=SRV_PROFILE, PROFILE=PROFILE, LOCAL_DAYZ=LOCAL_DAYZ,
+              DATA=DATA, srv_mission=srv_mission, SRV_PROFILE=SRV_PROFILE, PROFILE=PROFILE, LOCAL_DAYZ=LOCAL_DAYZ,
               server_alive=server_alive))
 
 

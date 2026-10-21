@@ -2,13 +2,16 @@
 (function () {
   const DS = (window.DS = window.DS || {});
 
+  /* The maps Studio knows without asking. Once the studio server answers, DS.loadWorlds() adds whatever else is
+     installed (a new DLC map shows up by itself) and fills in installed / imagery / size from the PC. */
   DS.WORLDS = [
     { id: 'chernarusplus', name: 'Chernarus+', size: 15360, mission: 'dayzOffline.chernarusplus' },
     { id: 'enoch', name: 'Livonia', size: 12800, mission: 'dayzOffline.enoch' },
     { id: 'sakhal', name: 'Sakhal', size: 15360, mission: 'dayzOffline.sakhal' },
-    { id: 'namalsk', name: 'Namalsk (mod map)', size: 20480, mission: 'dayzOffline.namalsk' },
-    { id: 'deerisle', name: 'Deer Isle (mod map)', size: 16384, mission: 'dayzOffline.deerisle' },
-    { id: 'custom', name: 'Custom map', size: 10240, mission: 'dayzOffline.custom' },
+    { id: 'nasdara', name: 'Nasdara', size: 16384, mission: 'dayzOffline.nasdara' },
+    { id: 'namalsk', name: 'Namalsk (mod map)', size: 20480, mission: 'dayzOffline.namalsk', mod: true },
+    { id: 'deerisle', name: 'Deer Isle (mod map)', size: 16384, mission: 'dayzOffline.deerisle', mod: true },
+    { id: 'custom', name: 'Custom map', size: 10240, mission: 'dayzOffline.custom', mod: true },
   ];
 
   /* Approximate town centres (metres, x east / z north) used only as visual landmarks. */

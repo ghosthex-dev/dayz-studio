@@ -204,7 +204,9 @@
   };
 
   /* ---------------------------------------------------------------- into the project */
-  const WORLD_BY_NAME = { chernarusplus: 'chernarusplus', chernarus: 'chernarusplus', enoch: 'enoch', livonia: 'enoch', sakhal: 'sakhal' };
+  const WORLD_BY_NAME = { chernarusplus: 'chernarusplus', chernarus: 'chernarusplus', enoch: 'enoch', livonia: 'enoch', sakhal: 'sakhal', nasdara: 'nasdara' };
+  // an editor file's map name -> a Studio map id (any map in the Map list, so new DLC maps work too)
+  const worldByName = (n) => WORLD_BY_NAME[n] || (DS.WORLDS.some((w) => w.id === n) ? n : null);
   function kindOf(cls) {
     const e = DS.Classes && DS.Classes.by && DS.Classes.by.get(cls);
     if (e) return e.kind;
@@ -225,9 +227,10 @@
     if (res.removed && res.removed.length) {
       S.project.removed = (S.project.removed || []).concat(res.removed);
     }
-    const w = WORLD_BY_NAME[String(res.map || '').toLowerCase()];
+    const w = worldByName(String(res.map || '').toLowerCase());
     if (w && w !== S.project.meta.world && opts.switchWorld !== false) {
       S.project.meta.world = w;
+      S.project.meta.mapSize = S.world().size;
       S.emit('project');
     }
     S.commit();

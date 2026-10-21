@@ -71,7 +71,7 @@ NUM_RE = {k: re.compile(r'(<%s>\s*)(-?\d+)(\s*</%s>)' % (k, k)) for k in ('nomin
 
 def types_path_for(world):
     root = server_root()
-    m = H['SRV_WORLDS'].get(world)
+    m = H['srv_mission'](world)
     if not root or not m:
         return ''
     return os.path.join(root, 'mpmissions', m, 'db', 'types.xml')

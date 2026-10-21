@@ -7,6 +7,7 @@ Reads the satellite tiles that ship inside your own DayZ install and writes them
 
     python extract_maps.py                      # auto-detect the Steam install
     python extract_maps.py "D:/Games/DayZ"      # explicit DayZ folder
+    python extract_maps.py --world nasdara      # just one map (DLC maps are found in their own DayZ/<dlc> folder)
     python extract_maps.py --pbo path/to/worlds_xyz_data.pbo --name xyz   # a mod / DLC map
 
 Needs:  pip install pillow
@@ -354,6 +355,11 @@ if __name__ == '__main__':
         name = args[args.index('--name') + 1] if '--name' in args else re.sub(r'^worlds_|_data\.pbo$', '', os.path.basename(pbo))
         extract(pbo, name)
         sys.exit(0)
+    only = None
+    if '--world' in args:  # just one map, e.g. a new DLC map:  --world nasdara
+        i = args.index('--world')
+        only = args[i + 1].lower() if i + 1 < len(args) else None
+        del args[i:i + 2]
     positional = [a for a in args if not a.startswith('--')]
     root = find_install(positional[0] if positional else None)
     if not root:
@@ -363,15 +369,17 @@ if __name__ == '__main__':
     found = 0
     loot_only = '--loot-only' in args
     search = [os.path.join(root, 'Addons')]
-    for d in os.listdir(root):  # DLC folders such as 'sakhal'
+    for d in sorted(os.listdir(root)):  # DLC folders such as 'sakhal' and 'nasdara'
         a = os.path.join(root, d, 'Addons')
-        if os.path.isdir(a):
+        if d.lower() != 'addons' and os.path.isdir(a):
             search.append(a)
     for folder in search:
         for fn in sorted(os.listdir(folder)):
             m = re.match(r'worlds_(.+)_data\.pbo$', fn, re.I)
             if m:
                 w = m.group(1).lower()
+                if only and w != only:
+                    continue
                 if not loot_only:
                     found += 1 if extract(os.path.join(folder, fn), w) else 0
                 ce = os.path.join(folder, 'worlds_%s_ce.pbo' % m.group(1))

@@ -51,7 +51,32 @@
   S.node = function (q, id) {
     return q ? q.nodes.find((n) => n.id === id) || null : null;
   };
-  S.world = () => DS.WORLDS.find((w) => w.id === S.project.meta.world) || DS.WORLDS[0];
+  // a project made for a map this PC doesn't list (e.g. a newer DLC map) keeps its own map and size
+  S.world = () => DS.WORLDS.find((w) => w.id === S.project.meta.world)
+    || (S.project.meta.world ? { id: S.project.meta.world, name: S.project.meta.world + ' (not on this PC)', size: S.project.meta.mapSize || 15360, mission: 'dayzOffline.' + S.project.meta.world, missing: true } : DS.WORLDS[0]);
+
+  /** ask the studio server which maps this PC has (/api/worlds) and merge them into DS.WORLDS: new DLC maps are
+   *  added before the mod maps, known ones get installed / imagery / size from the PC. false without a server. */
+  DS.loadWorlds = async function () {
+    const r = await fetch('/api/worlds', { cache: 'no-store' }).then((x) => x.json()).catch(() => null);
+    if (!r || !r.ok) return false;
+    (r.worlds || []).forEach((f) => {
+      let w = DS.WORLDS.find((x) => x.id === f.id);
+      if (!w) {
+        const at = DS.WORLDS.findIndex((x) => x.mod);
+        w = { id: f.id, name: f.name, size: f.size || 15360, mission: f.mission || 'dayzOffline.' + f.id, found: true };
+        DS.WORLDS.splice(at < 0 ? DS.WORLDS.length : at, 0, w);
+      }
+      if (f.size) w.size = f.size;
+      if (f.mission) w.mission = f.mission;
+      Object.assign(w, { installed: f.game, dlc: f.dlc, server: !!f.mission, imagery: f.imagery, terrain: f.terrain });
+    });
+    // official maps the server didn't find are not installed (DLC not owned / not downloaded)
+    DS.WORLDS.forEach((w) => { if (!w.mod && w.installed === undefined) w.installed = false; });
+    return true;
+  };
+  /** name for the Map list: "Nasdara (DLC)", "Sakhal (not installed)" */
+  DS.worldLabel = (w) => w.name + (w.installed === false ? ' (not installed)' : w.dlc ? ' (DLC)' : '');
 
   /** Resolve a quest position {x,y,z,ref}: linked placed objects win over stored numbers. */
   DS.resolvePos = function (p) {

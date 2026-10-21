@@ -641,6 +641,8 @@
     DS.Terrain.load();
     DS.Bounds.load();
     DS.Inspector.init(document.getElementById('right'));
+    // the maps on this PC (new DLC maps included) - the Map list updates once the server answered
+    DS.loadWorlds().then((ok) => { if (ok) { DS.Inspector.render(); updateCounts(); } });
     if (DS.Loot) DS.Loot.load(S.project.meta.world).then(() => S.emit('loot'));
     if (DS.Zones) DS.Zones.load(S.project.meta.world).then(() => DS.MapView.invalidate());
     bindToolbar();
