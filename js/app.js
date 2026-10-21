@@ -325,6 +325,13 @@
     let r;
     try {
       const payload = DS.exporters.modPayload();
+      const bad = DS.exporters.checkScripts ? DS.exporters.checkScripts(payload) : [];
+      if (bad.length) {
+        status.remove();
+        body.append(el('div', { class: 'problem error' }, 'The scripts would not compile in DayZ, so nothing was built:'),
+          ...bad.slice(0, 12).map((e) => el('div', { class: 'problem error', style: { cursor: e.origin ? 'pointer' : '' }, onclick: () => { if (e.origin && DS.Console) { close(); DS.Console.goTo(e.origin.target); } } }, e.text)));
+        return;
+      }
       r = await fetch('/api/mod/build', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then((x) => x.json());
       A.lastBuild = r.ok ? payload.name : null;
     } catch (e) {
@@ -520,6 +527,13 @@
   const rel = (dx, dz) => ({ __rel: true, dx, dz });
 
   const TEMPLATES = [
+    { name: 'Showcase: camp, factions & RPG', desc: 'Every system in one small area: a Survivor camp with a trader and a quest, a supply container you can search with enough XP, a Bandit checkpoint with an armed guard and a car as reward, XP, faction standings, a HUD and custom nodes.', run() {
+      DS.Showcase.addTo(S.project, DS.MapView.center());
+      S.structure();
+      S.setView('map');
+      S.commit();
+      DS.toast('Build it with File ▸ Build installable mod, or try it with ⌨ Console ▸ Compile on local server', 'ok', 6000);
+    } },
     { name: 'Survivor camp + checkpoint', desc: 'Map example: a camp and a military checkpoint made from prefabs.', run() {
       const c = DS.MapView.center();
       const place = (pf, dx, dz, yaw) => {

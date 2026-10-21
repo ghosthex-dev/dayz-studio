@@ -100,13 +100,14 @@
       const name = r[1];
       const ln = lineOf(m, r.index);
       if (RESERVED.has(name)) { add(ln, 'error', `Line ${ln}: "${name}" is a reserved word in Enforce Script and can't be a variable name - rename it (e.g. "${name}Value").`); continue; }
+      if (opts.file) continue;   // whole files: only reserved words here, duplicates per function (C.checkFile)
       if (opts.params && opts.params.includes(name)) add(ln, 'error', `Line ${ln}: "${name}" is already one of this node's settings - pick another name for the new variable.`);
       if ((opts.vars || []).some((v) => v[0] === name) || ['args'].includes(name)) add(ln, 'error', `Line ${ln}: "${name}" is already given to your code - pick another name.`);
       if (opts.mode === 'init' && ['ent', 'pos', 'k'].includes(name)) add(ln, 'error', `Line ${ln}: "${name}" is already a variable of the generated init.c - pick another name.`);
       if (seen.has(name)) add(ln, 'error', `Line ${ln}: "${name}" is declared a second time (first on line ${seen.get(name)}). Enforce Script doesn't allow the same name twice in one function - not even in separate { } blocks or two for-loops. Rename one.`);
       else seen.set(name, ln);
     }
-    lines.forEach((l, i) => {
+    if (!opts.file) lines.forEach((l, i) => {
       const n = i + 1;
       const t = l.trim();
       if (!t) return;
@@ -135,6 +136,38 @@
     let r;
     while ((r = rx.exec(m))) out.push({ name: r[1], line: lineOf(m, r.index) });
     return out;
+  };
+
+  /** a whole generated script file (DSQuests.c, DSCustom.c, ...): only the checks that never misfire on long files -
+      control characters, brackets / quotes / comments, reserved words as names, and the same local declared twice in
+      one function (Enforce refuses that even in separate blocks). -> [{ line, level, msg }] */
+  C.checkFile = function (code) {
+    code = String(code || '');
+    const out = [];
+    const lines = code.split('\n');
+    lines.forEach((l, i) => {
+      const cc = l.match(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/);
+      if (cc) out.push({ line: i + 1, level: 'error', msg: `Line ${i + 1} contains an invisible control character (code ${cc[0].charCodeAt(0)}) - DayZ can't compile it.` });
+    });
+    C.lint(code, { file: true }).forEach((i) => out.push(i));
+    // duplicate locals, per function: a function starts at a ")" line one brace deep and ends when the depth drops back
+    const m = mask(code).split('\n');
+    const TYPE = /^\s+(?:ref\s+|autoptr\s+|const\s+)?(int|float|bool|string|vector|auto|typename|(?:array|map|set)<[^;()]*?>|[A-Z]\w*(?:<[^;()]*?>)?)\s+([A-Za-z_]\w*)\s*(=|;)/;
+    let depth = 0, fn = '', decl = new Map();
+    m.forEach((t, i) => {
+      const n = i + 1;
+      if (depth === 1 && /\)\s*$/.test(t.trim()) && !/;\s*$/.test(t)) { fn = t.trim(); decl = new Map(); }
+      if (depth >= 2) {
+        const d = t.match(TYPE);
+        const f = t.match(/\bfor\s*\(\s*(int|float)\s+(\w+)/);
+        [d && d[2], f && f[2]].filter(Boolean).forEach((name) => {
+          if (decl.has(name)) out.push({ line: n, level: 'error', msg: `Line ${n}: "${name}" is declared twice in ${fn.replace(/\s*\(.*$/, '')}() (first on line ${decl.get(name)}).` });
+          else decl.set(name, n);
+        });
+      }
+      for (const ch of t) { if (ch === '{') depth++; else if (ch === '}') depth--; }
+    });
+    return out.sort((a, b) => a.line - b.line);
   };
 
   /* ---------------- log lines from the game in plain English ---------------- */

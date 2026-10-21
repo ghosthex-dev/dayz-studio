@@ -316,6 +316,9 @@ if __name__ == '__main__':
                      {'id': 'bandits', 'name': 'Bandits', 'start': -100}]
     d['relations'] = [{'from': 'survivors', 'to': 'bandits', 'factor': -0.5}]
     out, err = validate_text(json.dumps(d))
-    print('valid:', err is None)
+    print('valid:', err is None, err or '')
     bad = dict(d, tiers=d['tiers'][:2])
-    print('missing tier caught:', validate_text(json.dumps(bad))[1])
+    caught = validate_text(json.dumps(bad))[1]
+    print('missing tier caught:', caught)
+    if err is not None or not caught:
+        raise SystemExit(1)

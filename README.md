@@ -76,6 +76,11 @@ Pick the map in the project settings (right panel, nothing selected) before capt
 - **Export ▸ 🧰 Build installable mod (PBO)…** builds the mod, signs it and zips it with an `INSTALL.txt` for
   server owners. **🖧 Test on a local server** runs it on a real DayZ Server on your PC first.
 
+New to it? **File ▸ Templates & examples… ▸ Showcase: camp, factions & RPG** drops a small working area at the
+centre of the map view that uses every system: a Survivor camp with a trader and a quest, a supply container that
+needs XP, a Bandit checkpoint with an armed guard, a car as a reward, XP, faction standings, a HUD and custom nodes.
+Build it or run it on the local server and play through it, then open the nodes to see how each part is made.
+
 Projects save automatically to `Documents\DayZStudio\Projects` (**File ▸ Recent projects and backups…**). Mod
 signing keys are kept in `Documents\DayZStudio\Keys`. **Back them up**: future versions of your mod must be signed
 with the same key, or servers have to install a new `.bikey`.
@@ -508,6 +513,11 @@ File ▸ **Server**:
   Player, Hold an Item, Climb Above). Custom nodes are kept in a library shared by every project
   (`Documents/DayZStudio/Nodes`, share the .json files) and a project keeps a copy of each one it uses, so it builds
   anywhere. They show up in the node menu like the built-in ones; **Make your own node…** is at the bottom of it.
+* **Checked before every build** - building the mod, ▶ Compile on local server and ▶ Play-test first run the checker
+  over the whole generated script. If something would stop DayZ from compiling, nothing is built and you get a list
+  of the problems; click one to jump to the node it came from. (For contributors: GitHub runs the same checks on
+  every push, against the Showcase project - `node tools/check_scripts.js` runs them locally, and you can pass it
+  your own `.dzstudio.json` files too.)
 
 ## A Personal Note on the AI usage in creating this project
 While I utilized Claude to streamline aspects of development, DayZ Studio is by no means an automated AI creation. Countless hours of my own intense effort, problem-solving, and personal dedication went into building and refining this project. Far from being generic "AI slop," this is the result of genuine work and creative passion. I ask that you please respect the time and effort that went into bringing this project to life.

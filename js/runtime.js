@@ -875,6 +875,12 @@ class DSQuests
 			{
 				TStringArray gp = new TStringArray;
 				gives.Get(gi).Split(" ", gp);
+				if (gp.Get(0) == "@tp" && gp.Count() >= 3)
+				{
+					p.SetPosition(GroundPos(gp.Get(1).ToFloat(), 0, gp.Get(2).ToFloat()));   // play-test: "@tp x z"
+					Say("teleported to " + gp.Get(1) + " " + gp.Get(2));
+					continue;
+				}
 				if (gp.Get(0) == "@die")
 				{
 					p.SetHealth("", "", 0);   // play-test: die (stats that reset on death, quests that fail on death)
@@ -2201,6 +2207,8 @@ class DSQuests
 			PlayerBase npc = PlayerBase.Cast(m_Raised.Get(i));
 			if (npc)
 				npc.m_DSGuardWant = false;
+			if (npc && m_Debug)
+				Say(npc.GetType() + " lowers its gun");
 			m_Raised.Remove(i);
 			m_RaisedT.Remove(i);
 		}

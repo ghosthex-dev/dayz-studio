@@ -1,0 +1,27 @@
+# Checks every push: the editor's JavaScript parses, the Enforce Script it generates would compile (brackets, quotes,
+# reserved words, duplicate locals, control characters) and the Python tools load. DayZ itself is not needed.
+name: Check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: JavaScript parses
+        run: for f in js/*.js; do node --check "$f" || exit 1; done
+      - name: Generated Enforce Script
+        run: node tools/check_scripts.js
+      - name: Python tools
+        run: |
+          python -m py_compile tools/studio_server.py tools/server_tools.py tools/factions.py
+          python tools/factions.py

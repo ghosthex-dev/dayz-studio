@@ -98,6 +98,14 @@
     srcSel.value = 'server';
     let payload;
     try { payload = DS.exporters.modPayload(); } catch (e) { setState('bad', 'Export failed: ' + e.message); return; }
+    const bad = DS.exporters.checkScripts ? DS.exporters.checkScripts(payload) : [];
+    if (bad.length) {
+      setState('bad', `${bad.length} script error(s) - not built (see below)`);
+      bad.slice(0, 20).forEach((e) => body.append(el('div', { class: 'lg-e' }, '✖ ' + e.text),
+        e.origin ? el('span', { class: 'lg-plain' }, el('a', { onclick: () => goTo(e.origin.target) }, 'Open ' + e.origin.label)) : null));
+      body.scrollTop = body.scrollHeight;
+      return;
+    }
     // stop a running server first and wait until it is really gone: it keeps the mod's PBO open
     let st = await api('/api/server/status');
     if (st.running) {
@@ -157,6 +165,7 @@
     document.body.append(panel);
     poll();
   };
+  K.goTo = goTo;
   K.close = function () {
     if (panel) panel.remove();
     panel = null;

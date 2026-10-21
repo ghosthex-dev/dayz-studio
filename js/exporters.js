@@ -803,6 +803,26 @@ Format used: 24-byte header [cells, cells, mapWidth, mapHeight, 32, 0], uint32 u
   X.questsJson = () => questsJson(S.project);
   X.customScripts = () => customScripts(S.project);
   /** everything the studio server needs to pack the quest mod into an installable PBO */
+  /** the generated scripts, checked before anything is built (DS.Code.checkFile): -> [{ file, line, msg, text,
+      origin (where in Studio the code came from, or null), studio (true: the generated part - a Studio bug) }] */
+  X.checkScripts = function (p) {
+    const out = [];
+    const files = [['DSQuests.c', p.core], ['DSCustom.c', p.custom], ['DSMission.c', p.hook]];
+    files.forEach(([file, text]) => {
+      if (!text || !DS.Code || !DS.Code.checkFile) return;
+      DS.Code.checkFile(text).filter((i) => i.level === 'error').forEach((i) => {
+        const map = file === 'DSCustom.c' && X.lineMap ? X.lineMap['dscustom.c'] || [] : [];
+        const origin = map.find((e) => i.line >= e.from && i.line <= e.to) || null;
+        const plain = i.msg.replace(/^Line \d+:\s*/, '');
+        let text2;
+        if (origin) text2 = `${origin.label}${origin.codeLine && i.line >= origin.codeFrom ? ', line ' + (i.line - origin.codeFrom + 1) : ''}: ${plain}`;
+        else text2 = `${file} line ${i.line} (written by Studio - please report this): ${plain}`;
+        out.push({ file, line: i.line, msg: i.msg, text: text2, origin, studio: !origin });
+      });
+    });
+    return out;
+  };
+
   X.modPayload = function () {
     const P = S.project;
     const nm = U.safeName(P.meta.modName || 'DZStudioQuests');

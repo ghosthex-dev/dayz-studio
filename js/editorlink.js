@@ -413,11 +413,14 @@
     S.emit('linkstate');
     try {
       const R = DS.RUNTIME;
+      const custom = DS.exporters.customScripts();
+      const bad = DS.exporters.checkScripts ? DS.exporters.checkScripts({ core: R.core, custom, hook: R.hookEditor }) : [];
+      if (bad.length) throw new Error('the scripts would not compile - ' + bad[0].text + (bad.length > 1 ? ` (+${bad.length - 1} more, see ⌨ Console)` : ''));
       const r = await api('/api/playtest/prepare', {
         config: R.configTest + (DS.exporters.soundConfig ? DS.exporters.soundConfig('DZStudioQuestTest') : ''),
         sounds: DS.Sounds ? DS.Sounds.all().map((s) => ({ id: s.id, ext: s.ext })) : [],
         core: R.core,
-        custom: DS.exporters.customScripts(),
+        custom,
         hook: R.hookEditor,
         quests: questsPayload(),
         factions: DS.exporters.factionsJson ? DS.exporters.factionsJson(S.project) : '',
