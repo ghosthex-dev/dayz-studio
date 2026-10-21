@@ -48,7 +48,7 @@
     });
     S.on('selection', render);
     S.on('view', () => {
-      if (S.view === 'quests') render();
+      if (S.shown('quests')) render();
     });
     render();
   };

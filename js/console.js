@@ -95,6 +95,8 @@
   /** build the mod from the project and (re)start the local test server with it */
   K.compile = async function () {
     if (!DS.exporters || !DS.exporters.modPayload) return;
+    K.element();
+    K.open();
     srcSel.value = 'server';
     let payload;
     try { payload = DS.exporters.modPayload(); } catch (e) { setState('bad', 'Export failed: ' + e.message); return; }
@@ -130,8 +132,9 @@
     setState('', 'Compiling… (the server needs about 30 s)');
   };
 
-  K.open = function () {
-    if (panel) { panel.style.display = ''; return; }
+  /** the console's element: a panel of the docking workspace (js/dock.js, docked under the views by default) */
+  K.element = function () {
+    if (panel) return panel;
     srcSel = el('select', { class: 'inp' },
       el('option', { value: 'server' }, 'Local server · script log'),
       el('option', { value: 'server-rpt' }, 'Local server · RPT'),
@@ -142,36 +145,30 @@
     const pauseBtn = el('button', { class: 'btn sm', onclick: () => { paused = !paused; pauseBtn.textContent = paused ? '▶ Resume' : '⏸ Pause'; } }, '⏸ Pause');
     const errBtn = el('button', { class: 'btn sm', title: 'Show only errors and warnings', onclick: () => { onlyErr = !onlyErr; errBtn.classList.toggle('active', onlyErr); file = ''; offset = 0; } }, '⚠ Errors only');
     const head = el('div', { class: 'dsconsole-head' },
-      el('strong', {}, '⌨ Script console'), srcSel, statusEl,
+      srcSel, statusEl,
       el('span', { style: { flex: 1 } }),
       el('button', { class: 'btn sm primary', title: 'Build the quest mod from this project and start the local test server with it', onclick: K.compile }, '▶ Compile on local server'),
       errBtn, pauseBtn,
-      el('button', { class: 'btn sm', onclick: () => { body.replaceChildren(); errs = warns = 0; sticky = false; } }, 'Clear'),
-      el('button', { class: 'btn sm icon', title: 'Close', onclick: K.close }, '✕'));
-    panel = el('div', { class: 'dsconsole' }, head, body);
-    // drag by the header
-    head.addEventListener('mousedown', (e) => {
-      if (e.target.closest('button, select')) return;
-      const r = panel.getBoundingClientRect(), sx = e.clientX, sy = e.clientY;
-      const mv = (ev) => {
-        panel.style.left = Math.max(0, r.left + ev.clientX - sx) + 'px';
-        panel.style.top = Math.max(0, r.top + ev.clientY - sy) + 'px';
-        panel.style.right = 'auto'; panel.style.bottom = 'auto';
-      };
-      const up = () => { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); };
-      window.addEventListener('mousemove', mv);
-      window.addEventListener('mouseup', up);
-    });
-    document.body.append(panel);
-    poll();
+      el('button', { class: 'btn sm', onclick: () => { body.replaceChildren(); errs = warns = 0; sticky = false; } }, 'Clear'));
+    panel = el('div', { class: 'dsconsole docked' }, head, body);
+    return panel;
+  };
+  K.open = function () {
+    if (DS.Dock && DS.Dock.ready) DS.Dock.open('console');
+    if (!timer) poll();
   };
   K.goTo = goTo;
-  K.close = function () {
-    if (panel) panel.remove();
-    panel = null;
+  /** follow the log again (the panel is on screen) */
+  K.resume = function () { if (!timer) poll(); };
+  /** stop following the log (the panel was closed) */
+  K.stop = function () {
     clearTimeout(timer);
     timer = null;
     file = ''; offset = 0; state = '';
   };
-  K.toggle = () => (panel ? K.close() : K.open());
+  K.close = function () {
+    if (DS.Dock && DS.Dock.ready && DS.Dock.isOpen('console')) DS.Dock.close('console');
+    else K.stop();
+  };
+  K.toggle = () => (DS.Dock && DS.Dock.isOpen('console') ? K.close() : K.open());
 })();

@@ -1154,6 +1154,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(ST.logs_tail(parse_qs(u.query)))
         if u.path == '/api/nodes':
             return self._json(ST.nodes_list())
+        if u.path == '/api/workspaces':
+            return self._json(ST.profiles_list())
         if u.path == '/api/mods':
             return self._json(ST.mods_list())
         if u.path == '/api/rpt':
@@ -1232,6 +1234,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(ST.nodes_save(body))
         if u.path == '/api/nodes/delete':
             return self._json(ST.nodes_delete(body))
+        if u.path == '/api/workspaces/save':
+            return self._json(ST.profiles_save(body))
+        if u.path == '/api/workspaces/delete':
+            return self._json(ST.profiles_delete(body))
         if u.path == '/api/mods/clear':
             return self._json(ST.mods_clear())
         if u.path == '/api/fs/open':

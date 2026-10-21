@@ -67,7 +67,7 @@ DayZ Studio contains no game data, so it builds it from your own install once pe
 
 1. **2D map imagery** - in the **🗺 Map** view, with nothing selected, press **⬇ Extract map imagery from DayZ**
    in the right panel (all maps at once, a few minutes).
-2. **Terrain, buildings and classes** - open the **🎮 Game** tab and press **⬇ Capture from the game**. DayZ
+2. **Terrain, buildings and classes** - open the **⚙ Game setup** panel (a tab on the left) and press **⬇ Capture from the game**. DayZ
    starts, records the terrain and closes again (a few minutes). Then press **☰ Capture class list**.
 3. **Everything else on the map** *(for the 3D tab)* - press **🌲 Capture world objects** (about 3 minutes).
 
@@ -148,7 +148,7 @@ The 3D tab shows the game's actual building and prop meshes (roofs, windows, chi
 placed objects and for every vanilla loot building. `tools/odol_reader.py` reads the game's binarized `.p3d`
 models directly from your install (ODOL v54: plain face lists + LZO-compressed vertex arrays);
 `tools/extract_models.py <world>` writes `data/<world>/models.json|bin` (also runs automatically after a
-terrain capture, or via Game tab ▸ "Build 3D models"). Includes UVs + diffuse textures; untextured faces use wall/roof colours guessed from the
+terrain capture, or via Game setup ▸ "Build 3D models"). Includes UVs + diffuse textures; untextured faces use wall/roof colours guessed from the
 texture names. The game itself (Game view) remains the place to see true textures and lighting.
 
 ## 3D preview + capturing terrain from the game
@@ -157,7 +157,7 @@ the real terrain (satellite texture on a height mesh), your objects, vanilla loo
 boxes, loot points, loot zones and quest markers. Left-drag moves objects / pans, right-drag orbits, WASD flies;
 clicking with a placement tool puts objects on the actual ground.
 
-The **Game** tab talks to your DayZ install:
+The **⚙ Game setup** panel talks to your DayZ install:
 - **Terrain from the game** - launches DayZ once with a tiny bridge mod (`bridge/DZStudioBridge`, packed
   automatically). The game samples `SurfaceY` for the whole map and measures every model with `ClippingInfo`,
   writes `data/<world>/heights.bin` + `bounds.csv`, and the server closes it. ~1 minute.
@@ -521,15 +521,35 @@ File ▸ **Server**:
 
 ## Your workspace
 
-Arrange Studio the way you like to work - it remembers it for next time. The **▦** button (top right) has it all:
+Arrange Studio like a game-engine editor - every tool is a panel you can put where you want, and Studio remembers
+it for next time.
 
-* **Resize the side panels** by dragging their inner edge; **double-click** the edge to hide a panel. A hidden panel
-  leaves a slim tab at the edge - click it to bring the panel back. **Ctrl+B** shows / hides the left panel (assets,
-  loot, zones…), **Ctrl+Alt+B** the right panel (inspector).
-* **Swap left and right** if you're used to the inspector on the other side.
-* **Workspaces:** switch between built-in layouts - *Default*, *Mapping* (wide asset panel), *Quest writing* (opens
-  the Quests view with a wide inspector) and *Focus* (no side panels) - or save your own with **Save current layout
-  as…**. A saved workspace also remembers which view (Map, Quests, 3D, Game) it opens.
+* **Dock panels anywhere.** Drag a panel's tab and drop it: on another panel's tab bar to add it as a tab, on the
+  left / right / top / bottom of a panel to split it, or on the edge of the window. A blue box shows where it will
+  land. Drag the dividers to resize. The panels are the four views (**Map, Game, 3D, Quests**), the **Inspector**,
+  **Assets, Loot, Zones, Game setup, Scene, Quest list** and the **Script console**.
+* **Two views at once** - e.g. the Map and the Quest graph side by side, or the Map and the 3D view. Both stay live;
+  keyboard shortcuts act on the one you clicked last (its tab is underlined).
+* **Maximize** an area with the □ button on its tab bar, a double-click on the empty part of the bar, or
+  **Ctrl+Shift+F**. **Collapse** the outer left / right area to a slim strip with **Ctrl+B / Ctrl+Alt+B** (or a
+  double-click on its divider); click the strip to bring it back. Close a panel with ✕ (middle-click works too) and
+  reopen it from **▦ ▸ Panels**. Right-click a tab for more.
+* **Second monitor:** right-click a tab (or ⋯) ▸ **Float in its own window** puts the Inspector, the asset panels or
+  the console in a window of its own that you can move to another screen. It stays live, and the desktop app
+  reopens it there next time. Close the window to dock the panel back. (Views stay in the main window.)
+* **Workspaces** (**▦** button, top right): built-in layouts *Default*, *Mapping*, *Quest writing*, *Map + Quests
+  side by side*, *Scripting* (console under the views) and *Focus*.
+* **Profiles - your own setups.** **▦ ▸ Save as a new profile…** keeps everything about your workspace: the panel
+  layout (floating windows included), the view it opens, your keyboard shortcuts, the toolbar and the interface
+  size. Switch between profiles from the ▦ menu (e.g. "Quest writing on the laptop", "Two screens at home"), update
+  one after changing things, or undo your changes. **▦ ▸ Profiles: manage, import, export…** renames and deletes
+  them, **exports** a profile as a `.dzworkspace.json` file to share or keep, and **imports** one. Profiles are files
+  in `Documents\DayZStudio\Workspaces`, so they survive updates and reinstalls and can be backed up with your
+  projects. Workspaces saved by the previous version are moved there and layouts from it are converted.
+* **Keyboard shortcuts:** **▦ ▸ Keyboard shortcuts…** - click a shortcut and press new keys; Studio warns when a key
+  is already taken. New defaults: **Alt+1…4** Map / Game / 3D / Quests, **Ctrl+`** console, **Ctrl+Shift+W** the
+  workspace menu. The help (F1) always lists your own keys.
+* **Toolbar:** **▦ ▸ Customize the toolbar…** hides buttons you don't use and reorders the groups.
 * **Interface size** from 80% to 150% in the desktop app (in the browser version use Ctrl + / Ctrl −).
 
 ## Enforce Script tools

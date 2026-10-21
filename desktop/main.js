@@ -132,8 +132,16 @@ async function createWindow() {
   win.on('close', () => { try { ses.flushStorageData(); } catch (e) { /* ignore */ } });
   win.on('closed', () => clearInterval(flushTimer));
   for (const ev of ['move', 'resize', 'maximize', 'unmaximize', 'restore', 'minimize', 'show']) win.on(ev, applyRect);
-  win.on('closed', () => { stopGame(); win = null; });
-  win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
+  // floating panels (window.open from js/dock.js) close with the main window - the layout remembers them
+  win.on('closed', () => { stopGame(); win = null; BrowserWindow.getAllWindows().forEach((w) => { try { w.destroy(); } catch (e) { /* gone */ } }); });
+  win.webContents.setWindowOpenHandler(({ url, frameName }) => {
+    // a panel floated out of the docking workspace (js/dock.js): a plain window the page fills itself
+    if (/^dzs-float-/.test(frameName || '') && (!url || url === 'about:blank')) {
+      return { action: 'allow', overrideBrowserWindowOptions: { autoHideMenuBar: true, backgroundColor: '#0b0d11', icon: ICON, minWidth: 260, minHeight: 200 } };
+    }
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
 }
 
 ipcMain.handle('host:launch-editor', async (_e, body) => {

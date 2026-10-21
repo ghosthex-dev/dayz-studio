@@ -832,6 +832,51 @@ def nodes_delete(body):
     return {'ok': True}
 
 
+# ---- workspace profiles (js/workspace.js): the user's own layouts + shortcuts + toolbar + interface size, one file
+#      each in Documents/DayZStudio/Workspaces - they survive updates and can be backed up or shared
+PROFILES_DIR = os.path.join(DOCS, 'Workspaces')
+
+
+def _profile_file(name):
+    stem = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', str(name or '')).strip(' .')[:80]
+    return os.path.join(PROFILES_DIR, stem + '.dzworkspace.json') if stem else None
+
+
+def profiles_list():
+    out = []
+    if os.path.isdir(PROFILES_DIR):
+        for fn in sorted(os.listdir(PROFILES_DIR)):
+            if fn.endswith('.json'):
+                try:
+                    j = json.load(open(os.path.join(PROFILES_DIR, fn), encoding='utf-8'))
+                    if isinstance(j, dict) and j.get('name') and isinstance(j.get('layout'), dict):
+                        out.append(j)
+                except (OSError, ValueError):
+                    continue
+    return {'ok': True, 'profiles': out, 'dir': PROFILES_DIR}
+
+
+def profiles_save(body):
+    p = body.get('profile') or {}
+    f = _profile_file(p.get('name'))
+    if not f or not isinstance(p.get('layout'), dict):
+        return {'ok': False, 'error': 'nothing to save'}
+    os.makedirs(PROFILES_DIR, exist_ok=True)
+    p['saved'] = time.time()
+    tmp = f + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as fh:
+        json.dump(p, fh, indent=1)
+    os.replace(tmp, f)
+    return {'ok': True, 'path': f}
+
+
+def profiles_delete(body):
+    f = _profile_file(body.get('name'))
+    if f and os.path.isfile(f):
+        os.remove(f)
+    return {'ok': True}
+
+
 # every endpoint answers {'ok': False, 'error': ...} instead of dropping the connection (permissions, locked files...)
 def _safe(fn):
     def run(*a, **k):
@@ -847,5 +892,5 @@ def _safe(fn):
 
 for _n in ('servercfg_get', 'servercfg_save', 'types_source', 'types_apply', 'pbo_sources', 'fs_list', 'pbo_info',
            'pbo_unpack', 'pbo_pack', 'pbo_models', 'mods_list', 'mods_clear', 'logs_tail', 'nodes_list', 'nodes_save',
-           'nodes_delete'):
+           'nodes_delete', 'profiles_list', 'profiles_save', 'profiles_delete'):
     globals()[_n] = _safe(globals()[_n])

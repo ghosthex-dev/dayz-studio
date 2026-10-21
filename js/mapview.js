@@ -60,7 +60,7 @@
     ['changed', 'selection', 'tool', 'asset', 'view', 'project'].forEach((ev) => S.on(ev, () => (dirty = true)));
     S.on('project', () => M.fit());
     (function loop() {
-      if (dirty && S.view === 'map') {
+      if (dirty && S.shown('map')) {
         dirty = false;
         draw();
       }

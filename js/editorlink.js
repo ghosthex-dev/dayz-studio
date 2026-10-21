@@ -629,6 +629,7 @@
     S.on('linkstate', renderBar);
     S.on('link', renderBar);
     S.on('view', () => { renderBar(); layout(); });
+    S.on('layout', layout);   // docked somewhere else: follow the panel
     renderBar();
     setTimeout(poll, 300);
   };
@@ -640,7 +641,7 @@
   function layout() {
     if (!host || !embed) return;
     const r = embed.getBoundingClientRect();
-    const visible = S.view === 'game' && !overlayOpen() && r.width > 40 && r.height > 40;
+    const visible = S.shown('game') && !overlayOpen() && r.width > 40 && r.height > 40;
     host.setRect({ x: r.left, y: r.top, w: r.width, h: r.height, visible });
     renderOverlay();
   }

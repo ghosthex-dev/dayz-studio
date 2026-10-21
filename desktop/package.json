@@ -1,6 +1,6 @@
 {
   "name": "dayz-studio-desktop",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "DayZ Studio desktop shell - hosts the editor and embeds the real game window",
   "author": "ghosthex-dev",
   "main": "main.js",

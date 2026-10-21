@@ -104,7 +104,7 @@
       pendTimer = null;
       const p = pending;
       pending = {};
-      if (S.view === 'view3d') refresh(p);
+      if (S.shown('view3d')) refresh(p);
     }, 60);
   }
 
@@ -415,7 +415,7 @@
   }
   function loop() {
     requestAnimationFrame(loop);
-    if (S.view !== 'view3d') return;
+    if (!S.shown('view3d')) return;
     // keyboard fly: move the target on the ground plane
     let mv = false;
     const sp = cam.dist * 0.012;
@@ -653,7 +653,7 @@
     }
   }
   function onMove(e) {
-    if (S.view !== 'view3d') return;
+    if (!S.shown('view3d')) return;
     if (!drag) {
       // hover feedback for the gizmo + remember where the cursor is on the ground
       if (e.target === canvas) {

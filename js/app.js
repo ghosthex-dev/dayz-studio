@@ -163,7 +163,56 @@
     const t = e.target;
     return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
   }
+  /** keyboard shortcuts: commands with default keys the user can change (DS.Keys, ▦ ▸ Keyboard shortcuts…) */
   function hotkeys() {
+    const R = (id, label, group, keys, run) => DS.Keys.register({ id, label, group, keys, run });
+    const rotate = (d) => {
+      if (S.view === 'map') { if (!DS.actions.rotate(d)) DS.MapView.placeYaw(d); }
+      else if (S.view === 'view3d') DS.actions.rotate(d);
+    };
+    const paste = () => {
+      const m = DS.MapView.mouse;
+      const c = S.view === 'view3d' && DS.View3D.cursor;
+      if (c) DS.actions.paste(c[0], c[2]);
+      else DS.actions.paste(m.inside ? m.wx : DS.MapView.view.x, m.inside ? m.wz : DS.MapView.view.z);
+    };
+    R('save', 'Save project', 'File', ['Ctrl+S'], () => A.saveProject());
+    R('undo', 'Undo', 'Edit', ['Ctrl+Z'], () => S.undo());
+    R('redo', 'Redo', 'Edit', ['Ctrl+Y', 'Ctrl+Shift+Z'], () => S.redo());
+    R('copy', 'Copy', 'Edit', ['Ctrl+C'], () => { if (DS.actions.copy()) DS.toast('Copied', 'info', 900); });
+    R('paste', 'Paste at the mouse', 'Edit', ['Ctrl+V'], paste);
+    R('duplicate', 'Duplicate', 'Edit', ['Ctrl+D'], () => DS.actions.duplicate());
+    R('selectAll', 'Select all', 'Edit', ['Ctrl+A'], () => DS.actions.selectAll());
+    R('delete', 'Delete the selection', 'Edit', ['Delete', 'Backspace'], () => DS.actions.deleteSelection());
+    R('group', 'Group', 'Edit', ['Ctrl+G'], () => DS.actions.group());
+    R('ungroup', 'Ungroup', 'Edit', ['Ctrl+Shift+G'], () => DS.actions.ungroup());
+    R('rotL', 'Rotate left 15°', 'Edit', ['Q'], () => rotate(-15));
+    R('rotR', 'Rotate right 15°', 'Edit', ['E'], () => rotate(15));
+    R('rotLf', 'Rotate left 1°', 'Edit', ['Shift+Q'], () => rotate(-1));
+    R('rotRf', 'Rotate right 1°', 'Edit', ['Shift+E'], () => rotate(1));
+    R('toolSelect', 'Select / move tool', 'Tools', ['V'], () => S.setTool('select'));
+    R('toolPan', 'Pan tool', 'Tools', ['H'], () => S.setTool('pan'));
+    R('toolMeasure', 'Measure tool', 'Tools', ['M'], () => S.setTool('measure'));
+    R('snap', 'Next grid snap size', 'Tools', ['G'], () => {
+      const steps = [0, 1, 5, 10, 25, 50];
+      const i = steps.indexOf(+S.project.meta.snap);
+      S.project.meta.snap = steps[(i + 1) % steps.length];
+      syncToolbar();
+      DS.toast('Snap: ' + (S.project.meta.snap || 'off'), 'info', 900);
+    });
+    R('focus', 'Frame the selection', 'Views', ['F'], () => { if (S.view === 'map') DS.MapView.focusSelection(); else if (S.view === 'quests') DS.NodeEditor.fit(); else if (S.view === 'game') DS.Link.focusSelection(); });
+    R('nextView', 'Next view', 'Views', ['Tab'], () => S.setView(({ map: 'game', game: 'view3d', view3d: 'quests', quests: 'map' })[S.view] || 'map'));
+    R('viewMap', 'Go to the Map', 'Views', ['Alt+1'], () => S.setView('map'));
+    R('viewGame', 'Go to the Game', 'Views', ['Alt+2'], () => S.setView('game'));
+    R('view3d', 'Go to the 3D view', 'Views', ['Alt+3'], () => S.setView('view3d'));
+    R('viewQuests', 'Go to Quests', 'Views', ['Alt+4'], () => S.setView('quests'));
+    R('maximize', 'Maximize / restore the focused area', 'Workspace', ['Ctrl+Shift+F'], () => DS.Dock.toggleMax());
+    R('sideLeft', 'Collapse / expand the left side', 'Workspace', ['Ctrl+B'], () => DS.Dock.toggleSide('left'));
+    R('sideRight', 'Collapse / expand the right side', 'Workspace', ['Ctrl+Alt+B'], () => DS.Dock.toggleSide('right'));
+    R('console', 'Show / hide the script console', 'Workspace', ['Ctrl+`'], () => DS.Dock.toggle('console'));
+    R('workspaceMenu', 'Workspace menu', 'Workspace', ['Ctrl+Shift+W'], () => DS.Workspace.menu(document.querySelector('[data-act=workspace]')));
+    R('help', 'Help & shortcuts', 'Help', ['F1', 'Shift+?'], () => A.help());
+
     window.addEventListener('keydown', (e) => {
       if (typing(e)) return;
       if (document.querySelector('.modal-back')) {
@@ -171,18 +220,7 @@
         return;
       }
       const k = e.key.toLowerCase();
-      const ctrl = e.ctrlKey || e.metaKey;
-      if (ctrl) {
-        if (k === 'z') { e.preventDefault(); e.shiftKey ? S.redo() : S.undo(); }
-        else if (k === 'y') { e.preventDefault(); S.redo(); }
-        else if (k === 'd') { e.preventDefault(); DS.actions.duplicate(); }
-        else if (k === 'c') { DS.actions.copy() && DS.toast('Copied', 'info', 900); }
-        else if (k === 'v') { e.preventDefault(); const m = DS.MapView.mouse; const c = S.view === 'view3d' && DS.View3D.cursor; if (c) DS.actions.paste(c[0], c[2]); else DS.actions.paste(m.inside ? m.wx : DS.MapView.view.x, m.inside ? m.wz : DS.MapView.view.z); }
-        else if (k === 'a') { e.preventDefault(); DS.actions.selectAll(); }
-        else if (k === 's') { e.preventDefault(); A.saveProject(); }
-        else if (k === 'g') { e.preventDefault(); e.shiftKey ? DS.actions.ungroup() : DS.actions.group(); }
-        return;
-      }
+      // fixed keys: drawing a zone, Esc, nudging with the arrows
       if (S.tool === 'zone' && DS.Zones.draft) {
         if (k === 'enter') { DS.Zones.finish(); return; }
         if (k === 'backspace' || k === 'delete') { e.preventDefault(); DS.Zones.undoPoint(); return; }
@@ -192,25 +230,10 @@
         if (DS.MapView.isPicking()) DS.MapView.cancelPick();
         else if (S.tool === 'place') { S.asset = null; S.setTool('select'); }
         else S.select(null, []);
-      } else if (k === 'delete' || k === 'backspace') { e.preventDefault(); DS.actions.deleteSelection(); }
-      else if (k === 'q' || k === 'e') {
-        const d = (k === 'q' ? -1 : 1) * (e.shiftKey ? 1 : 15);
-        if (S.view === 'map') {
-          if (!DS.actions.rotate(d)) DS.MapView.placeYaw(d);
-        } else if (S.view === 'view3d') DS.actions.rotate(d);
-      } else if (k === 'v') S.setTool('select');
-      else if (k === 'h') S.setTool('pan');
-      else if (k === 'm') S.setTool('measure');
-      else if (k === 'f') { if (S.view === 'map') DS.MapView.focusSelection(); else if (S.view === 'quests') DS.NodeEditor.fit(); else if (S.view === 'game') DS.Link.focusSelection(); }
-      else if (k === 'g') {
-        const steps = [0, 1, 5, 10, 25, 50];
-        const i = steps.indexOf(+S.project.meta.snap);
-        S.project.meta.snap = steps[(i + 1) % steps.length];
-        syncToolbar();
-        DS.toast('Snap: ' + (S.project.meta.snap || 'off'), 'info', 900);
-      } else if (k === 'tab') { e.preventDefault(); S.setView(({ map: 'game', game: 'view3d', view3d: 'quests', quests: 'map' })[S.view] || 'map'); }
-      else if (k === 'f1' || k === '?') { e.preventDefault(); A.help(); }
-      else if (k.startsWith('arrow') && S.view === 'map') {
+        return;
+      }
+      if (DS.Keys.handle(e)) return;
+      if (k.startsWith('arrow') && S.view === 'map' && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         const st = e.shiftKey ? 10 : 1;
         const d = { arrowleft: [-st, 0], arrowright: [st, 0], arrowup: [0, st], arrowdown: [0, -st] }[k];
@@ -228,10 +251,6 @@
     if (document.activeElement !== pn) pn.value = S.project.meta.name;
     document.querySelector('[data-act=undo]').disabled = !S.canUndo();
     document.querySelector('[data-act=redo]').disabled = !S.canRedo();
-    document.getElementById('map-wrap').classList.toggle('hidden', S.view !== 'map');
-    document.getElementById('quest-wrap').classList.toggle('hidden', S.view !== 'quests');
-    document.getElementById('view3d-wrap').classList.toggle('hidden', S.view !== 'view3d');
-    document.getElementById('game-wrap').classList.toggle('hidden', S.view !== 'game');
     const hint = document.getElementById('tool-hint');
     if (S.view === 'map') {
       if (S.tool === 'place' && S.asset) hint.textContent = `Placing: ${S.asset.label || S.asset.c}  •  click to place  •  Q/E rotate (${Math.round(DS.MapView.placeYaw())}°)  •  Esc to stop`;
@@ -240,16 +259,8 @@
       else if (S.tool === 'measure') hint.textContent = 'Measure: click-drag between two points';
       else hint.textContent = 'Click to select  •  drag to move  •  drag empty space to box-select  •  Space/middle-drag pans  •  wheel zooms';
     }
-    hint.classList.toggle('hidden', S.view !== 'map');
-    if (S.view === 'view3d' && lastView3 !== 'view3d') DS.View3D.show();
-    lastView3 = S.view;
-    if (lastView !== S.view) {
-      lastView = S.view;
-      if (S.view === 'map') DS.MapView.resize();
-    }
+    hint.classList.toggle('hidden', !S.shown('map'));
   }
-  let lastView = null;
-  let lastView3 = null;
 
   function updateCounts() {
     const P = S.project;
@@ -475,21 +486,24 @@
 
   /* ---------- help ---------- */
   A.help = function () {
+    // the user's own shortcuts (DS.Keys), so this table is right after they change them
+    const k = (...ids) => ids.map((id) => DS.Keys.label(id)).filter(Boolean).join('  •  ');
     const keys = [
-      ['Select / move', 'V  •  drag objects, drag empty space = box select (Shift adds)'],
-      ['Pan / zoom', 'Hold Space or middle-mouse drag  •  mouse wheel'],
-      ['Rotate', 'Q / E (15°)  •  Shift+Q / Shift+E (1°)'],
-      ['Delete', 'Delete / Backspace'],
-      ['Duplicate / copy / paste', 'Ctrl+D  •  Ctrl+C  •  Ctrl+V (at cursor)'],
-      ['Group / ungroup', 'Ctrl+G  •  Ctrl+Shift+G'],
+      ['Select / move', k('toolSelect') + '  •  drag objects, drag empty space = box select (Shift adds)'],
+      ['Pan / zoom', 'Hold Space or middle-mouse drag  •  mouse wheel  •  pan tool ' + k('toolPan')],
+      ['Rotate', k('rotL', 'rotR') + ' (15°)  •  ' + k('rotLf', 'rotRf') + ' (1°)'],
+      ['Delete', k('delete')],
+      ['Duplicate / copy / paste', k('duplicate', 'copy', 'paste') + ' (at the mouse)'],
+      ['Group / ungroup', k('group', 'ungroup')],
       ['Nudge', 'Arrow keys 1 m  •  Shift+Arrow 10 m'],
-      ['Undo / redo', 'Ctrl+Z  •  Ctrl+Y'],
-      ['Grid snap', 'G cycles  •  hold Ctrl while dragging to ignore snap'],
-      ['Frame selection', 'F'],
-      ['Switch Map ⇄ Quests', 'Tab'],
+      ['Undo / redo', k('undo', 'redo')],
+      ['Grid snap', k('snap') + ' cycles  •  hold Ctrl while dragging to ignore snap'],
+      ['Frame selection', k('focus')],
+      ['Views', k('nextView') + ' next  •  ' + k('viewMap', 'viewGame', 'view3d', 'viewQuests') + ' Map / Game / 3D / Quests'],
+      ['Workspace', k('sideLeft') + ' / ' + k('sideRight') + ' collapse a side  •  ' + k('maximize') + ' maximize  •  ' + k('console') + ' console'],
       ['Stop placing / cancel pick', 'Esc'],
-      ['Measure', 'M, then click-drag'],
-      ['Save project', 'Ctrl+S'],
+      ['Measure', k('toolMeasure') + ', then click-drag'],
+      ['Save project', k('save')],
     ];
     const body = el('div', { class: 'help' },
       el('h3', null, 'Quick start'),
@@ -503,6 +517,7 @@
       el('p', null, 'DayZ maps are square. X runs west→east, Z runs south→north, Y is height. Yaw 0° faces north and increases clockwise. Y = 0 on an object means “place on the ground” in the init.c and quest-framework exports.'),
       el('h3', null, 'Shortcuts'),
       el('table', { class: 'keys' }, keys.map((k) => el('tr', null, el('td', null, k[0]), el('td', { class: 'mono' }, k[1])))),
+      el('p', null, el('a', { href: '#', onclick: (e) => { e.preventDefault(); const m = document.querySelector('.modal-back'); if (m) m.remove(); DS.Keys.open(); } }, 'Change the keyboard shortcuts…')),
       el('h3', null, 'About class names'),
       el('p', null, 'The built-in catalogue is a convenience list. For your exact game version use File ▸ Import ▸ types.xml / mapgroupproto.xml so every class on your server is searchable. You can also type any class name manually.')
     );
@@ -615,6 +630,9 @@
   function boot() {
     const had = S.load();
     if (!had) S.resetHistory();
+    // the docking workspace first, so every panel already sits where it will be shown when its module starts
+    DS.Browser.init();
+    if (DS.Workspace) DS.Workspace.init();
     DS.MapView.init(document.getElementById('map'));
     DS.NodeEditor.init(document.getElementById('quest-wrap'));
     DS.View3D.init(document.getElementById('view3d-wrap'));
@@ -622,8 +640,6 @@
     DS.Terrain.load();
     DS.Bounds.load();
     DS.Inspector.init(document.getElementById('right'));
-    if (DS.Workspace) DS.Workspace.init();
-    DS.Browser.init(document.getElementById('left'));
     if (DS.Loot) DS.Loot.load(S.project.meta.world).then(() => S.emit('loot'));
     if (DS.Zones) DS.Zones.load(S.project.meta.world).then(() => DS.MapView.invalidate());
     bindToolbar();
@@ -639,6 +655,7 @@
     window.addEventListener('beforeunload', () => S.save());
     syncToolbar();
     updateCounts();
+    if (DS.Workspace) DS.Workspace.start();
     const welcome = () => {
       if (!had && !localStorage.getItem('dzstudio.welcomed')) {
         try { localStorage.setItem('dzstudio.welcomed', '1'); } catch (e) {}

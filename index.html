@@ -9,7 +9,7 @@
 <body>
 <header id="topbar">
   <div class="brand"><span class="brand-mark">◈</span><span class="brand-name">DayZ Studio</span></div>
-  <div class="tb-group">
+  <div class="tb-group" id="tbg-file">
     <button class="btn" data-act="file" title="Project menu">File ▾</button>
     <button class="btn icon" data-act="undo" title="Undo (Ctrl+Z)">↶</button>
     <button class="btn icon" data-act="redo" title="Redo (Ctrl+Y)">↷</button>
@@ -32,7 +32,7 @@
   </div>
   <div class="tb-spacer"></div>
   <input id="proj-name" class="inp proj-name" type="text" spellcheck="false" title="Project name" />
-  <div class="tb-group">
+  <div class="tb-group" id="tbg-actions">
     <button class="btn" data-act="validate" title="Check the project for mistakes">✔ Check <span id="problem-badge" class="badge hidden">0</span></button>
     <button class="btn primary" data-act="export" title="Generate server files">⇩ Export</button>
     <button class="btn icon" data-act="workspace" title="Workspace: panels, layouts and interface size">▦</button>
@@ -40,20 +40,19 @@
   </div>
 </header>
 
-<main id="workspace">
-  <aside id="left" class="panel"></aside>
-  <section id="center">
-    <div id="map-wrap">
-      <canvas id="map" tabindex="0"></canvas>
-      <div id="pick-banner" class="pick-banner hidden"></div>
-      <div id="tool-hint" class="tool-hint"></div>
-    </div>
-    <div id="quest-wrap" class="hidden"></div>
-    <div id="view3d-wrap" class="hidden"></div>
-    <div id="game-wrap" class="hidden"></div>
-  </section>
+<!-- the docking workspace (js/dock.js, js/workspace.js): the panels below are moved into it when Studio starts -->
+<main id="workspace"></main>
+<div id="dk-stash" hidden>
+  <div id="map-wrap">
+    <canvas id="map" tabindex="0"></canvas>
+    <div id="pick-banner" class="pick-banner hidden"></div>
+    <div id="tool-hint" class="tool-hint"></div>
+  </div>
+  <div id="quest-wrap" class="hidden"></div>
+  <div id="view3d-wrap" class="hidden"></div>
+  <div id="game-wrap" class="hidden"></div>
   <aside id="right" class="panel"></aside>
-</main>
+</div>
 
 <footer id="statusbar">
   <span id="st-coords" class="mono">X 0.0   Z 0.0</span>
@@ -103,6 +102,8 @@
 <script src="js/stats.js"></script>
 <script src="js/workshop.js"></script>
 <script src="js/updates.js"></script>
+<script src="js/keys.js"></script>
+<script src="js/dock.js"></script>
 <script src="js/workspace.js"></script>
 <script src="js/servertools.js"></script>
 <script src="js/console.js"></script>

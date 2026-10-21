@@ -1,5 +1,13 @@
 # Customizable workspace - v2 plan (docking)
 
+> **Status (October 2026): v2 is built** - `js/dock.js` (layout tree, tab groups, splits, sashes, drag-to-dock with
+> drop preview, collapse to strips, maximize, floating windows via `window.open` + moving the panel element into
+> the popup), `js/workspace.js` (panels, presets, saved workspaces, v1 conversion, toolbar customization, ▦ menu),
+> `js/keys.js` (command registry + shortcut editor). Views gate drawing on `S.shown(view)` instead of `S.view`;
+> `S.view` is now "the focused view". The plan below is kept for reference. Not done / later: floating *views*
+> (they use window-level mouse handlers), dialogs opened from a floating panel show in the main window, and the
+> docked DayZ game window was not re-tested in every arrangement.
+
 v1 shipped in `js/workspace.js` (October 2026): resizable and collapsible side panels, swap sides, interface size
 (desktop: real page zoom through `studioHost.setZoom` in `desktop/preload.js`), built-in presets (Default, Mapping,
 Quest writing, Focus) and the user's own named workspaces. State lives in local storage:

@@ -5,29 +5,40 @@
   const U = DS.util;
   const el = U.el;
   const B = (DS.Browser = {});
-  let root, body, tab = 'assets', search = '';
+  let body, tab = 'assets', search = '';
   const open = new Set(['buildings', 'props']);
 
-  B.init = function (container) {
-    root = container;
-    root.innerHTML = '';
-    const tabs = el('div', { class: 'tabs' });
-    [['assets', 'Assets'], ['loot', 'Loot'], ['zones', 'Zones'], ['game', 'Game'], ['scene', 'Scene'], ['quests', 'Quests']].forEach(([id, label]) =>
-      tabs.append(el('button', { class: 'tab', 'data-tab': id, onclick: () => { tab = id; draw(); } }, label))
-    );
-    const q = el('input', { class: 'inp search', type: 'search', placeholder: 'Search…', oninput: (e) => { search = e.target.value.toLowerCase(); draw(); } });
-    body = el('div', { class: 'pane-scroll' });
-    root.append(tabs, q, body);
-    ['structure', 'selection', 'tool', 'asset', 'loot', 'zones', 'game', 'terrain3d', 'classes', 'stamps'].forEach((ev) => S.on(ev, draw));
+  /* each tab (assets, loot, zones, game, scene, quests) is its own dockable panel (js/dock.js): B.mount(tab) makes
+     its element once; every mount that is on screen is redrawn when the project changes */
+  const mounts = {};   // tab -> { root, body, search }
+  B.init = function () {
+    ['structure', 'selection', 'tool', 'asset', 'loot', 'zones', 'game', 'terrain3d', 'classes', 'stamps', 'layout'].forEach((ev) => S.on(ev, draw));
     S.on('changed', U.debounce(draw, 250));
-    draw();
   };
 
-  B.show = function (t) { tab = t; draw(); };
+  B.mount = function (t) {
+    if (mounts[t]) return mounts[t].root;
+    const m = { tab: t, search: '' };
+    const q = el('input', { class: 'inp search', type: 'search', placeholder: 'Search…', oninput: (e) => { m.search = e.target.value.toLowerCase(); drawOne(m); } });
+    m.body = el('div', { class: 'pane-scroll' });
+    m.root = el('div', { class: 'dk-browser' }, q, m.body);
+    mounts[t] = m;
+    setTimeout(() => drawOne(m), 0);
+    return m.root;
+  };
+
+  /** show a tab: the panel of the same name */
+  B.show = function (t) {
+    const id = { quests: 'outline', game: 'gamedata' }[t] || t;
+    if (DS.Dock) DS.Dock.open(id);
+  };
 
   function draw() {
-    if (!body) return;
-    root.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === tab));
+    Object.values(mounts).forEach((m) => { if (m.root.isConnected && m.root.offsetParent !== null) drawOne(m); });
+  }
+
+  function drawOne(m) {
+    tab = m.tab; body = m.body; search = m.search;
     const st = body.scrollTop;
     body.innerHTML = '';
     if (tab === 'assets') drawAssets();
@@ -97,7 +108,7 @@
         DS.Classes.groups.forEach((g) => body.append(group(g.id, g.title, g.items.length, g.items.slice(0, 500).map((e) => assetRow(e.c, e.c, e.kind)))));
       }
     } else if (DS.Classes && DS.Classes.state === 'none' && !search) {
-      body.append(el('div', { class: 'hint-box' }, 'Game ▸ "Capture class list" adds every class in the game to this panel.'));
+      body.append(el('div', { class: 'hint-box' }, 'Game setup ▸ "Capture class list" adds every class in the game to this panel.'));
     }
     // imported
     const imp = DS.imported.items.filter((c) => !search || c.toLowerCase().includes(search)).slice(0, 400);

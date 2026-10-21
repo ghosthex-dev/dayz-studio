@@ -106,10 +106,13 @@
     S.emit('selection');
   };
   S.isSel = (kind, id) => S.sel.kind === kind && S.sel.ids.includes(id);
+  // S.view is the focused view (keyboard shortcuts act on it); with the docking workspace several views can be on
+  // screen at once - S.shown(v) says whether a view is visible and should keep drawing
   S.setView = function (v) {
     S.view = v;
     S.emit('view');
   };
+  S.shown = (v) => (DS.Dock && DS.Dock.ready ? DS.Dock.shown(v) : S.view === v);
   S.setTool = function (t) {
     S.tool = t;
     S.emit('tool');
