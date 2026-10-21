@@ -355,6 +355,25 @@ Documents/DayZStudio/Keys (back up the .biprivatekey - new versions of the mod m
 folder and keep verifySignatures = 2 (INSTALL.txt says so). The local server test has "check signatures" to try
 exactly that (verified: signed mod joins with verifySignatures = 2, no kick).
 
+## Publish to the Steam Workshop
+
+Conversations, the quest tracker, the HUD and faction standings run on the players' PCs, so players need your mod.
+**File ▸ ☁ Publish to Steam Workshop…** (also a button after Build installable mod) puts it on the Workshop so
+they get it automatically:
+
+* Fill in a title, description (Steam formatting works and Studio writes a first draft from what your project
+  contains), mod type tags and visibility. Pick your own preview image or use the one Studio makes from the title.
+* **☁ Publish** builds the mod, checks the scripts and uploads the PBO, its signature, your public `.bikey` and a
+  `mod.cpp` (the name and description the DayZ launcher shows). Your private key never leaves your PC, and the
+  quests themselves stay on your server (profile/DZStudioQuests).
+* It uploads through the Steam client you are logged in with - no password is asked for. DayZ must be installed
+  (Studio uses its Steam library). While it uploads, Steam shows you as "playing DayZ" for a moment.
+* Studio remembers the Workshop item in the project: publishing again updates the same item, with change notes.
+  Start with **Private**, subscribe and test it, then switch to **Public** and publish again.
+* The first time anyone publishes to the Workshop, Steam asks them to accept its Workshop legal agreement; Studio
+  links to it if that's needed.
+* Once a mod has a Workshop item, the INSTALL.txt and mod.cpp of every build link to the Workshop page.
+
 ## Sharing DayZ Studio
 
     python tools/make_dist.py      ->  dist/DayZStudio_<date>.zip  (~0.4 MB)

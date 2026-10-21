@@ -712,6 +712,19 @@ def sign_pbo(env, pbo, mod_dir, key_name):
         return {'signed': False, 'why': str(e)}
 
 
+def mod_cpp(nm, body):
+    """mod.cpp - the name, description and author the DayZ launcher shows for the mod"""
+    q = lambda v: '"%s"' % re.sub(r'[\r\n]+', ' ', str(v or '')).replace('"', '""')
+    title = body.get('title') or nm
+    lines = ['name = %s;' % q(title), 'tooltip = %s;' % q(title),
+             'overview = %s;' % q((body.get('overview') or 'Quests made with DayZ Studio.')[:600]),
+             'author = %s;' % q(body.get('author') or 'DayZ Studio')]
+    wid = re.sub(r'\D', '', str(body.get('workshopId') or ''))
+    if wid:
+        lines.append('action = %s;' % q('https://steamcommunity.com/sharedfiles/filedetails/?id=' + wid))
+    return '\n'.join(lines) + '\n'
+
+
 def factions_file(body):
     """the editor's faction settings -> (validated factions.json text or '', errors or None)"""
     raw = body.get('factions') or ''
@@ -759,6 +772,8 @@ def build_export(body):
     except PermissionError:
         return {'ok': False, 'error': 'The mod file is in use - DayZ or the local DayZ server has @%s open. Close them (or stop the '
                                       'local server) and build again.' % nm}
+    with open(os.path.join(mod_dir, 'mod.cpp'), 'w', encoding='utf-8', newline='\n') as f:
+        f.write(mod_cpp(nm, body))
     sig = sign_pbo(env, pbo, mod_dir, nm) if body.get('sign', True) else {'signed': False, 'why': 'signing turned off'}
     if sig.get('signed'):
         step4 = ('4. The mod is signed. Copy  @%s/keys/%s.bikey  into your server\'s  keys  folder and keep\n'
@@ -776,14 +791,18 @@ def build_export(body):
             f.write(fac_text)
     elif os.path.isfile(fac_path):
         os.remove(fac_path)
+    wid = re.sub(r'\D', '', str(body.get('workshopId') or ''))
+    players = ('   they subscribe to it on the Steam Workshop:\n'
+               '   https://steamcommunity.com/sharedfiles/filedetails/?id=%s\n' % wid) if wid else \
+        '   publish it on the Steam Workshop or hand them the @%s folder.\n' % nm
     install = (
         'DayZ Studio - quest mod "%s"\n\n'
         '1. Copy the folder  @%s  into your DayZ server folder (next to DayZServer_x64.exe).\n'
         '2. Start the server with  -mod=@%s  (add it to your other mods separated by ;).\n'
-        '   The conversation, tracker and journal screens run on the players\' PCs, so players need this mod too:\n'
-        '   publish it on the Steam Workshop or hand them the @%s folder.\n'
+        '   The conversation, tracker and journal screens run on the players\' PCs, so players need this mod too -\n'
+        '%s'
         '3. Copy the folder  profile/DZStudioQuests  into your server PROFILE folder (the one given with -profiles=).\n'
-        '   quests.json in it is your quest data; per-player progress is written next to it (players/ folder).\n' % (nm, nm, nm, nm)
+        '   quests.json in it is your quest data; per-player progress is written next to it (players/ folder).\n' % (nm, nm, nm, players)
         + step4 +
         '5. Restart the server. The script log shows "[DZStudio] Loaded N quest(s)."\n')
     zpath = os.path.join(BUILD_DIR, nm + '_ready.zip')
@@ -1093,6 +1112,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(link_state())
         if u.path == '/api/server/status':
             return self._json(local_server_status())
+        if u.path == '/api/workshop/status':
+            return self._json(WS.workshop_status())
+        if u.path == '/api/workshop/progress':
+            return self._json(WS.workshop_progress())
         if u.path == '/api/prefabs':
             return self._json(prefab_list())
         if u.path == '/api/project/list':
@@ -1151,6 +1174,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(link_send(body))
         if u.path == '/api/mod/build':
             return self._json(build_export(body))
+        if u.path == '/api/workshop/publish':
+            return self._json(WS.workshop_publish(body))
         if u.path == '/api/prefabs/save':
             return self._json(prefab_save(body))
         if u.path == '/api/prefabs/delete':
@@ -1217,6 +1242,8 @@ def open_folder(body):
 
 import server_tools as ST   # noqa: E402  (needs the helpers above)
 import factions             # noqa: E402  (factions.json schema + validation)
+import workshop as WS       # noqa: E402  (Steam Workshop publishing)
+WS.setup(dict(find_env=find_env, BUILD_DIR=BUILD_DIR))
 ST.setup(dict(find_env=find_env, find_server=find_server, pack_pbo=pack_pbo, sign_pbo=sign_pbo, steam_roots=steam_roots,
               DATA=DATA, SRV_WORLDS=SRV_WORLDS, SRV_PROFILE=SRV_PROFILE, PROFILE=PROFILE, LOCAL_DAYZ=LOCAL_DAYZ,
               server_alive=server_alive))

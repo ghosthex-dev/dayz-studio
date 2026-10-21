@@ -826,8 +826,11 @@ Format used: 24-byte header [cells, cells, mapWidth, mapHeight, 32, 0], uint32 u
   X.modPayload = function () {
     const P = S.project;
     const nm = U.safeName(P.meta.modName || 'DZStudioQuests');
+    const ws = P.workshop || {};
     return {
       name: nm,
+      // mod.cpp (what the DayZ launcher shows) + the Workshop link in INSTALL.txt
+      title: ws.title || nm, overview: ws.overview || '', author: P.meta.author || '', workshopId: ws.id || '',
       config: DS.RUNTIME.configCpp(nm, P.meta.author, X.soundConfig(nm)),
       core: DS.RUNTIME.core,
       custom: customScripts(P),

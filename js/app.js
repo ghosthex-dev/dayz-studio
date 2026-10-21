@@ -276,6 +276,7 @@
         '-', { head: 'Quest mod' },
         { label: 'Build installable mod (PBO)…', run: () => A.buildMod() },
         { label: 'Test on a local server (multiplayer)…', run: () => A.serverDialog() },
+        { label: '☁ Publish to Steam Workshop…', run: () => DS.Workshop.open() },
         { label: '📊 Player stats, item requirements & HUD…', run: () => DS.Stats.open() },
         '-', { head: 'Server' },
         { label: '⚙ Server settings (serverDZ.cfg)…', run: () => DS.ServerTools.cfgEditor() },
@@ -352,7 +353,8 @@
           S.setView('game');
           const l = await DS.Link.launch({ exportName: r.name });
         } }, '▶ Test this exact mod in the game'),
-        el('button', { class: 'btn', title: 'Run a real DayZ server on this PC with the mod and join it — tests the multiplayer side', onclick: () => { close(); A.serverDialog(r.name); } }, '🖧 Test on a local server')),
+        el('button', { class: 'btn', title: 'Run a real DayZ server on this PC with the mod and join it — tests the multiplayer side', onclick: () => { close(); A.serverDialog(r.name); } }, '🖧 Test on a local server'),
+        el('button', { class: 'btn', title: 'Upload the mod to the Steam Workshop so players get it automatically', onclick: () => { close(); DS.Workshop.open(); } }, '☁ Publish to Steam Workshop')),
       el('div', { class: 'ins-help' }, 'Folder on disk: ' + r.folder));
   };
 

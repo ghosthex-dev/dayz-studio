@@ -23,5 +23,5 @@ jobs:
         run: node tools/check_scripts.js
       - name: Python tools
         run: |
-          python -m py_compile tools/studio_server.py tools/server_tools.py tools/factions.py
-          python tools/factions.py
+          python -m py_compile tools/studio_server.py tools/server_tools.py tools/factions.py tools/workshop.py
+          python tools/factions.py tools/workshop.py
