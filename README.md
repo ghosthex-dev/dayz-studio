@@ -519,6 +519,19 @@ File ▸ **Server**:
   asset list and their 3D models load from the mod's PBOs like vanilla ones. Unpack other people's mods to learn
   from them - don't re-upload their files without permission. Protected (obfuscated) PBOs can't be read.
 
+## Your workspace
+
+Arrange Studio the way you like to work - it remembers it for next time. The **▦** button (top right) has it all:
+
+* **Resize the side panels** by dragging their inner edge; **double-click** the edge to hide a panel. A hidden panel
+  leaves a slim tab at the edge - click it to bring the panel back. **Ctrl+B** shows / hides the left panel (assets,
+  loot, zones…), **Ctrl+Alt+B** the right panel (inspector).
+* **Swap left and right** if you're used to the inspector on the other side.
+* **Workspaces:** switch between built-in layouts - *Default*, *Mapping* (wide asset panel), *Quest writing* (opens
+  the Quests view with a wide inspector) and *Focus* (no side panels) - or save your own with **Save current layout
+  as…**. A saved workspace also remembers which view (Map, Quests, 3D, Game) it opens.
+* **Interface size** from 80% to 150% in the desktop app (in the browser version use Ctrl + / Ctrl −).
+
 ## Enforce Script tools
 
 * **Code editor** - Custom Script nodes, object init scripts and custom nodes get an editor with Enforce syntax

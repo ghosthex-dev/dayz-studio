@@ -53,6 +53,8 @@
     setTimeout(() => window.addEventListener('mousedown', off, true), 0);
   }
 
+  A.dropdown = dropdown;
+
   /* ---------- project file ops ---------- */
   A.newProject = function () {
     if ((S.project.objects.length || S.project.quests.length) && !confirm('Start a new project? Unsaved changes are lost (use File ▸ Save project first).')) return;
@@ -266,6 +268,7 @@
     document.getElementById('proj-name').addEventListener('change', () => S.commit());
     const act = {
       undo: () => S.undo(), redo: () => S.redo(), validate: () => A.problems(), export: () => A.exportDialog(), help: () => A.help(),
+      workspace: (btn) => DS.Workspace.menu(btn),
       file: (btn) => dropdown(btn, [
         { label: 'New project', run: A.newProject },
         { label: 'Open project / spawner JSON…', run: A.openProject },
@@ -619,6 +622,7 @@
     DS.Terrain.load();
     DS.Bounds.load();
     DS.Inspector.init(document.getElementById('right'));
+    if (DS.Workspace) DS.Workspace.init();
     DS.Browser.init(document.getElementById('left'));
     if (DS.Loot) DS.Loot.load(S.project.meta.world).then(() => S.emit('loot'));
     if (DS.Zones) DS.Zones.load(S.project.meta.world).then(() => DS.MapView.invalidate());

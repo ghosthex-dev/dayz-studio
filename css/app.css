@@ -35,7 +35,14 @@ body { display: grid; grid-template-rows: 46px 1fr 26px; }
 .tb-label { color: var(--muted); font-size: 11px; margin-left: 8px; }
 .proj-name { width: 200px; background: transparent; border-color: transparent; text-align: right; font-weight: 600; }
 .proj-name:hover, .proj-name:focus { background: var(--panel2); border-color: var(--line2); }
-#workspace { display: grid; grid-template-columns: 290px 1fr 330px; min-height: 0; }
+#workspace { display: grid; grid-template-columns: 290px 1fr 330px; grid-template-areas: "left center right"; min-height: 0; position: relative; }
+/* workspace splitters (js/workspace.js): drag to resize a side panel, double-click to hide it; a hidden panel keeps a slim tab */
+.ws-split { position: absolute; top: 0; bottom: 0; width: 8px; cursor: col-resize; z-index: 30; }
+.ws-split:hover, .ws-split.active { background: linear-gradient(90deg, transparent 3px, var(--accent) 3px, var(--accent) 5px, transparent 5px); }
+.ws-split.closed { cursor: pointer; top: 45%; bottom: auto; height: 56px; width: 10px; background: var(--panel2); border: 1px solid var(--line2); border-radius: 4px; }
+.ws-split.closed:hover { background: #164e63; border-color: var(--accent); }
+#workspace.ws-swapped #left { border-right: 0; border-left: 1px solid var(--line); }
+#workspace.ws-swapped #right { border-left: 0; border-right: 1px solid var(--line); }
 .panel { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 #right { border-right: 0; border-left: 1px solid var(--line); overflow-y: auto; }
 #center { position: relative; min-width: 0; min-height: 0; background: var(--bg); }

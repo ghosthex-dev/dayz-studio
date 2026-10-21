@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webFrame } = require('electron');
 
 contextBridge.exposeInMainWorld('studioHost', {
   isDesktop: true,
@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('studioHost', {
   closeGame: () => ipcRenderer.send('host:close-game'),
   status: () => ipcRenderer.invoke('host:status'),
   onGameState: (cb) => ipcRenderer.on('game-state', (_e, s) => cb(s)),
+  // interface size (Workspace menu): real page zoom, so canvases and mouse positions stay in step
+  setZoom: (f) => { const z = Math.min(2, Math.max(0.5, Number(f) || 1)); if (Math.abs(webFrame.getZoomFactor() - z) > 0.001) webFrame.setZoomFactor(z); },
   // updates from GitHub Releases (installed app only; state.state === 'unsupported' when run from the source)
   update: {
     state: () => ipcRenderer.invoke('host:update-state'),
