@@ -479,6 +479,9 @@ class DSBrain
 	DSBNode step;
 	PlayerBase stepWho;
 	float stepT;
+	float hold;           // seconds it stands still for its chain (saying a line, facing someone)
+	PlayerBase holdWho;   // ... facing this player
+	bool emoting;         // Stand at: its emote loops
 	ref array<DSBNode> queue;
 	ref array<PlayerBase> queueWho;
 	// events
@@ -1372,6 +1375,14 @@ class DSQuests
 				PlayerBase pnpc = PlayerBase.Cast(m_NpcObjs.Get(ni));
 				if (pnpc && pnpc.m_DSPatrolCmd)
 					facing = facing + " wants " + Math.Round(pnpc.m_DSPatrolCmd.m_Yaw);
+				if (pnpc && (pnpc.m_DSEmoteCmd > 0 || pnpc.m_DSEmoteOn))
+				{
+					facing = facing + " gesture " + pnpc.m_DSEmoteCmd.ToString() + "/" + pnpc.m_DSEmotePlaying.ToString();
+					if (pnpc.m_DSEmoteOn)
+						facing = facing + " on";
+					if (pnpc.m_DSEmoteCB)
+						facing = facing + " state=" + pnpc.m_DSEmoteCB.GetState().ToString();
+				}
 			}
 			pr.npcs.Insert(m_NpcInfo.Get(ni).name + " " + Math.Round(np[0] * 10) / 10 + " " + Math.Round(np[2] * 10) / 10 + facing);
 		}
@@ -1835,6 +1846,14 @@ class DSQuests
 		}
 		if (n.type == "st_walkto")
 			return Dist2D(br.npc.GetPosition(), n.x, n.z) < 0.8;
+		if (n.type == "st_emote")
+		{
+			br.stepT += dt;
+			if (br.stepT < n.a)
+				return false;
+			br.npc.m_DSEmoteStop = true;
+			return true;
+		}
 		return true;
 	}
 
@@ -1843,6 +1862,11 @@ class DSQuests
 		string t = n.type;
 		if (t.IndexOf("act_") == 0)
 		{
+			if (br.emoting)
+			{
+				br.npc.m_DSEmoteStop = true;
+				br.emoting = false;
+			}
 			br.act = n;
 			br.actWho = who;
 			br.leg = 1;
@@ -1852,11 +1876,17 @@ class DSQuests
 			br.stuck = 0;
 			return;   // an activity runs until another one replaces it (Escort goes on when it arrives)
 		}
-		if (t == "st_walkto" || t == "st_wait")
+		if (t == "st_walkto" || t == "st_wait" || t == "st_emote")
 		{
 			br.step = n;
 			br.stepWho = who;
 			br.stepT = 0;
+			if (t == "st_emote" && n.b > 0)
+			{
+				br.npc.m_DSEmoteCmd = (int)n.b;
+				br.npc.m_DSEmoteFull = n.flag;
+				br.npc.m_DSEmoteStop = false;
+			}
 			return;
 		}
 		if (t == "st_face")
@@ -1865,10 +1895,17 @@ class DSQuests
 			{
 				vector toP = who.GetPosition() - br.npc.GetPosition();
 				br.npc.SetOrientation(Vector(toP.VectorToAngles()[0], 0, 0));
+				br.hold = Math.Max(br.hold, 2);
+				br.holdWho = who;
 			}
 		}
 		else if (t == "st_say")
+		{
 			BrainSay(br, n);
+			br.hold = Math.Max(br.hold, Math.Min(n.b, 6));   // stands still while it talks
+			if (who)
+				br.holdWho = who;
+		}
 		else if (t == "st_give")
 		{
 			if (who)
@@ -1898,8 +1935,6 @@ class DSQuests
 			if (!CondOk(who, data, n.cond))
 				return;
 		}
-		else if (t == "st_emote" && m_Debug)
-			Say(br.npc.GetType() + " would " + n.text + " (emotes come next)");
 		Continue(br, n, who);
 	}
 
@@ -2017,6 +2052,22 @@ class DSQuests
 	{
 		PlayerBase npc = br.npc;
 		vector me = npc.GetPosition();
+		if (npc.m_DSEmoteCmd > 0 || npc.m_DSEmoteOn)
+		{
+			br.last = me;   // a gesture holds the character: no walking, no "stuck"
+			br.stuck = 0;
+			return;
+		}
+		if (br.hold > 0 && !(br.step && br.step.type == "st_walkto"))
+		{
+			br.hold -= dt;
+			if (br.holdWho)
+				Stand(npc, br.holdWho.GetPosition(), true);
+			else
+				Stand(npc, me, false);
+			br.last = me;
+			return;
+		}
 		if (br.step && br.step.type == "st_walkto")
 		{
 			MoveTo(br, Vector(br.step.x, 0, br.step.z), br.step.run, dt);
@@ -2037,7 +2088,36 @@ class DSQuests
 				return;
 			}
 		}
-		if (!a || a.type == "act_guard")
+		if (a && a.type == "act_guard")
+		{
+			PlayerBase foe = null;
+			float fdist = a.a;
+			foreach (Man gm : men)
+			{
+				PlayerBase gp = PlayerBase.Cast(gm);
+				if (!gp || gp == npc || !gp.IsAlive())
+					continue;
+				float gd = vector.Distance(gp.GetPosition(), me);
+				if (gd <= fdist && HostileTo(br, gp))
+				{
+					fdist = gd;
+					foe = gp;
+				}
+			}
+			Stand(npc, me, false);
+			if (foe)
+			{
+				if (Weapon_Base.Cast(npc.GetHumanInventory().GetEntityInHands()))
+					AimGun(npc, foe, GetGame().GetTickTime());   // shoulders the gun (shooting: faction guard settings)
+				else
+				{
+					vector tf = foe.GetPosition() - me;
+					npc.SetOrientation(Vector(tf.VectorToAngles()[0], 0, 0));
+				}
+			}
+			return;
+		}
+		if (!a)
 		{
 			Stand(npc, me, false);
 			return;
@@ -2109,14 +2189,25 @@ class DSQuests
 				npc.SetOrientation(Vector(a.a, 0, 0));   // arrived: face the way it was told
 				br.hasGoal = true;
 			}
+			if (br.emoting && !npc.m_DSEmoteOn && npc.m_DSEmoteCmd == 0)
+				br.emoting = false;   // its emote ended or could not start: again next time
+			if (a.b > 0 && !br.emoting)
+			{
+				npc.m_DSEmoteCmd = (int)a.b;   // and keeps doing its emote (sitting, warming its hands ...)
+				npc.m_DSEmoteFull = a.flag;
+				npc.m_DSEmoteStop = false;
+				br.emoting = true;
+			}
 		}
 		else if (a.type == "act_follow")
 		{
 			PlayerBase who = br.actWho;
 			if (!who || !who.IsAlive() || vector.Distance(me, who.GetPosition()) > a.b)
 			{
-				br.act = null;   // lost them: stands where it is
+				DSBNode lost = a;
+				br.act = null;   // lost them: stands where it is, and the chain goes on ("Hey, wait up!")
 				Stand(npc, me, false);
+				Continue(br, lost, who);
 				return;
 			}
 			float fd = vector.Distance(me, who.GetPosition());
@@ -8010,6 +8101,11 @@ float DSHeadingTo(vector dir)
 	return -yaw * Math.DEG2RAD;
 }
 
+// an NPC's gesture (DSQuests: Emote step, Stand at) - the engine keeps it alive while the gesture plays
+class DSEmoteCB : HumanCommandActionCallback
+{
+}
+
 // A patrolling NPC: walks (or jogs) to the point DSQuests.TickPatrols gives it, steering towards it every frame.
 // Like the guard's command it drives the animation graph itself, because nobody controls the character.
 class DSPatrolCmd extends HumanCommandScript
@@ -8134,6 +8230,129 @@ modded class PlayerBase
 	vector m_DSPatrolTo;
 	DSPatrolCmd m_DSPatrolCmd;   // not ref: the engine owns script commands once they are started
 
+	// ---- NPC gestures (DSQuests: Emote step, Stand at): an upper-body one plays over the normal movement command,
+	// a full-body one (sit, salute, warm hands ...) takes the character over. Most loop until told to end.
+	int m_DSEmoteCmd;          // DayZPlayerConstants.CMD_GESTURE* to start, 0: none
+	bool m_DSEmoteFull;
+	bool m_DSEmoteStop;        // end the one that plays
+	bool m_DSEmoteOn;
+	int m_DSEmotePlaying;      // the gesture that plays now
+	bool m_DSEmoteEnding;      // ending it to play another one
+	float m_DSEmoteT;          // seconds it has played
+	float m_DSEmoteWait;       // seconds it has waited to stand up for an upper-body gesture
+	bool m_DSEmoteSeen;        // its callback left "no state" (it really plays)
+	HumanCommandActionCallback m_DSEmoteCB;   // not ref: the engine owns it
+
+	// true: a gesture has the character this frame
+	bool DSEmoteCommand(float pDt, int pCurrentCommandID, bool pCurrentCommandFinished)
+	{
+		if (m_DSEmoteOn && m_DSEmoteCB)
+		{
+			// a gesture that played and is back to "no state", a finished full-body action, or one stuck for long:
+			// over. (Nobody controls this character, so nothing else would start its next command.)
+			m_DSEmoteT += pDt;
+			int gs = m_DSEmoteCB.GetState();
+			if (gs != HumanCommandActionCallback.STATE_NONE)
+				m_DSEmoteSeen = true;
+			bool over = false;
+			if (m_DSEmoteSeen && gs == HumanCommandActionCallback.STATE_NONE)
+				over = true;
+			if (pCurrentCommandFinished && pCurrentCommandID == DayZPlayerConstants.COMMANDID_ACTION)
+				over = true;
+			if (m_DSEmoteT > 120)
+				over = true;
+			if (over)
+				m_DSEmoteCB = null;
+		}
+		if (m_DSEmoteOn && !m_DSEmoteCB)
+		{
+			m_DSEmoteOn = false;   // it ended (finished by itself, was interrupted, or makes way for another one)
+			if (m_DSEmoteCmd == m_DSEmotePlaying)
+			{
+				m_DSEmoteCmd = 0;
+				m_DSEmoteStop = false;
+			}
+			m_DSEmotePlaying = 0;
+		}
+		if (m_DSEmoteStop)
+		{
+			m_DSEmoteStop = false;
+			if (m_DSEmoteOn && m_DSEmotePlaying != m_DSEmoteCmd && m_DSEmoteCmd > 0)
+			{
+				m_DSEmoteCmd = 0;   // its gesture never got to play (another one was ending): just drop it
+				return true;
+			}
+			m_DSEmoteCmd = 0;
+			if (m_DSEmoteCB)
+			{
+				m_DSEmoteCB.InternalCommand(DayZPlayerConstants.CMD_ACTIONINT_END);
+				return true;   // it plays its way out
+			}
+			m_DSEmoteOn = false;
+			return false;
+		}
+		if (m_DSEmoteOn)
+		{
+			// another gesture asked for (a wave while it sits by the fire): end this one first, then play that
+			if (m_DSEmoteCmd > 0 && m_DSEmoteCmd != m_DSEmotePlaying && m_DSEmoteCB && !m_DSEmoteEnding)
+			{
+				m_DSEmoteCB.InternalCommand(DayZPlayerConstants.CMD_ACTIONINT_END);
+				m_DSEmoteEnding = true;
+			}
+			return true;
+		}
+		m_DSEmoteEnding = false;
+		if (m_DSEmoteCmd <= 0)
+			return false;
+		if (m_DSPatrolCmd)
+		{
+			m_DSPatrolCmd.SetFlagFinished(true);   // the walking command steps aside
+			m_DSPatrolCmd = null;
+		}
+		if (m_DSEmoteFull)
+		{
+			// the stance the game plays it in: sitting ones crouch, salute / dance / SOS stand
+			int stance = DayZPlayerConstants.STANCEMASK_ERECT;
+			if (m_DSEmoteCmd == DayZPlayerConstants.CMD_GESTUREFB_CAMPFIRE || m_DSEmoteCmd == DayZPlayerConstants.CMD_GESTUREFB_SITA || m_DSEmoteCmd == DayZPlayerConstants.CMD_GESTUREFB_SITB)
+				stance = DayZPlayerConstants.STANCEMASK_CROUCH;
+			m_DSEmoteCB = StartCommand_Action(m_DSEmoteCmd, DSEmoteCB, stance);
+		}
+		else
+		{
+			if (pCurrentCommandID != DayZPlayerConstants.COMMANDID_MOVE)
+			{
+				StartCommand_Move();   // upper-body gestures need the normal movement command under them
+				m_DSEmoteWait = 0;
+				return true;
+			}
+			// stand up first (after sitting by the fire it is still crouched) - at most 1.5 s, then play it anyway
+			if (!IsPlayerInStance(DayZPlayerConstants.STANCEMASK_ERECT) && m_DSEmoteWait < 1.5)
+			{
+				HumanCommandMove mv = GetCommand_Move();
+				if (mv)
+					mv.ForceStance(DayZPlayerConstants.STANCEIDX_ERECT);
+				m_DSEmoteWait += pDt;
+				return true;
+			}
+			m_DSEmoteCB = AddCommandModifier_Action(m_DSEmoteCmd, DSEmoteCB);
+		}
+		if (m_DSEmoteCB && DSQuests.Get().m_Debug)
+			Print("[DZStudio] " + GetType() + " gesture " + m_DSEmoteCmd.ToString() + " started");
+		if (m_DSEmoteCB)
+		{
+			m_DSEmoteOn = true;
+			m_DSEmotePlaying = m_DSEmoteCmd;
+			m_DSEmoteT = 0;
+			m_DSEmoteSeen = false;
+		}
+		else
+		{
+			Print("[DZStudio] " + GetType() + " could not start gesture " + m_DSEmoteCmd.ToString());
+			m_DSEmoteCmd = 0;   // it can't do that right now: give up (Stand at tries again)
+		}
+		return true;
+	}
+
 	bool DSPatrolCommand(int pCurrentCommandID)
 	{
 		if (!m_DSPatrolWant)
@@ -8174,6 +8393,8 @@ modded class PlayerBase
 				m_DSGuardCmd.SetFlagFinished(true);   // vanilla starts the normal movement command again
 				m_DSGuardCmd = null;
 			}
+			if (DSEmoteCommand(pDt, pCurrentCommandID, pCurrentCommandFinished))
+				return true;
 			return DSPatrolCommand(pCurrentCommandID);   // a guard that lowered its gun goes back to its patrol
 		}
 		m_DSPatrolCmd = null;   // the guard's command takes over from the patrol

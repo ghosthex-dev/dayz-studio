@@ -107,4 +107,13 @@ Each phase is tested on the local server before the next.
   destination), Give item, Set server variable, Follow, Wander, Stand at, Patrol.
   Built but not yet tried in game: Hostile player seen, Time of day, Condition, Walk to, Wait, Random, Leave.
   Emotes are a no-op until phase 3; Guard just holds position (the faction guard logic does the aiming).
-- Phases 3-5 to do.
+- **Phase 3 - done, tested in game** (2026-10-22): emotes on NPCs. Upper-body gestures
+  (`AddCommandModifier_Action`, over the movement command - the NPC stands up first) and full-body ones
+  (`StartCommand_Action` with the emote's own stance mask: sitting ones crouch). Emote step (plays N seconds), Stand at
+  loops its emote (restarts after another gesture). A gesture is over when its callback went back to "no state" or its
+  action finished - nobody controls the character, so the script must hand it back. Say / Face player hold the NPC
+  still; Follow continues its chain when it gives up; Guard turns to / aims at Hostile players in range.
+  Verified by the owner in game: sit by the fire loop, stands up and waves, salute, follow.
+  Not yet tried in game: Follow giving up, Guard node, Hostile player seen, Time of day, Condition, Walk to, Wait,
+  Random, Leave. Dropped emotes the game has no class for (kneel, lie down) and surrender (needs its own exit).
+- Phases 4-5 to do.

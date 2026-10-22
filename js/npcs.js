@@ -21,9 +21,16 @@
     step: { name: 'Steps', color: '#f59e0b' },
     flow: { name: 'Flow', color: '#a78bfa' },
   };
-  N.EMOTES = [['greet', 'Wave'], ['salute', 'Salute'], ['point', 'Point'], ['thumbup', 'Thumbs up'], ['thumbdown', 'Thumbs down'],
-    ['clap', 'Clap'], ['shrug', 'Shrug'], ['taunt', 'Taunt'], ['heart', 'Heart'], ['sit', 'Sit down'], ['lyingdown', 'Lie down'],
-    ['warmhands', 'Warm hands'], ['dance', 'Dance'], ['surrender', 'Hands up']];
+  // [id, name, the game's gesture command (DayZPlayerConstants.CMD_GESTURE*), full body]: upper-body gestures play while
+  // the NPC stands; full-body ones (sit, salute, warm hands…) take over the whole character
+  N.EMOTE_DEFS = [['greet', 'Wave', 1000, false], ['point', 'Point', 1001, false], ['thumbup', 'Thumbs up', 1002, false],
+    ['thumbdown', 'Thumbs down', 1003, false], ['taunt', 'Taunt', 1005, false], ['heart', 'Heart', 1007, false],
+    ['watching', 'I’m watching you', 1009, false], ['listening', 'Listening', 1011, false], ['come', 'Come here', 1105, false],
+    ['nod', 'Nod', 1109, false], ['shakehead', 'Shake head', 1110, false], ['clap', 'Clap', 1101, false], ['shrug', 'Shrug', 1111, false],
+    ['salute', 'Salute', 1050, true], ['dance', 'Dance', 1109, true], ['sos', 'SOS wave', 1053, true],
+    ['sit', 'Sit down', 1054, true], ['sitb', 'Sit (relaxed)', 1055, true], ['warmhands', 'Sit by the fire (warm hands)', 1051, true]];
+  N.EMOTES = N.EMOTE_DEFS.map((e) => [e[0], e[1]]);
+  N.emoteDef = (id) => N.EMOTE_DEFS.find((e) => e[0] === id) || null;
   const emoteName = (id) => (N.EMOTES.find((e) => e[0] === id) || [id, id || '?'])[1];
   const hh = (h) => String(Math.floor(+h || 0)).padStart(2, '0') + ':' + String(Math.round(((+h || 0) % 1) * 60)).padStart(2, '0');
   const posTxt = (pos) => (pos ? `${Math.round(DS.resolvePos(pos).x)}, ${Math.round(DS.resolvePos(pos).z)}` : 'its position');
@@ -69,7 +76,7 @@
         { k: 'emote', t: 'select', label: 'While standing', def: '', opts: [['', 'Nothing']].concat(N.EMOTES) }],
       sum: (p) => `${posTxt(p.at)}${p.emote ? ' · ' + emoteName(p.emote) : ''}` },
     act_follow: { cat: 'activity', title: 'Follow player', icon: '🐾',
-      desc: 'Follows the player who started this chain (who came near, talked to it…). Gives up when they get too far away.',
+      desc: 'Follows the player who started this chain (who came near, talked to it…). Gives up when they get too far away - then the chain goes on (“Hey, wait up!”).',
       fields: [{ k: 'dist', t: 'num', label: 'Keeps (m) behind', def: 2.5, min: 1, max: 20 }, { k: 'giveup', t: 'num', label: 'Gives up beyond (m)', def: 60, min: 5 }, jog],
       sum: (p) => `${p.dist} m behind` },
     act_escort: { cat: 'activity', title: 'Escort to', icon: '🧭',
@@ -77,7 +84,7 @@
       fields: [{ k: 'to', t: 'pos', label: 'Destination', def: null }, { k: 'wait', t: 'num', label: 'Waits when the player is more than (m) away', def: 10, min: 2 }, jog],
       sum: (p) => `to ${posTxt(p.to)}` },
     act_guard: { cat: 'activity', title: 'Guard', icon: '🛡',
-      desc: 'Holds its position and aims / fires at players its faction sees as Hostile (needs a faction and a gun in hands).',
+      desc: 'Holds its position, turns to Hostile players within range and aims at them (with a gun in hands). Shooting follows its faction’s guard settings. Needs a faction.',
       fields: [{ k: 'radius', t: 'num', label: 'Engage range (m)', def: 40, min: 2, max: 400 }], sum: (p) => `engages within ${p.radius} m` },
     // ---- steps: one after another
     st_walkto: { cat: 'step', title: 'Walk to', icon: '➜', fields: [{ k: 'to', t: 'pos', label: 'Walk to', def: null }, jog],
@@ -90,8 +97,9 @@
       fields: [{ k: 'text', t: 'area', label: 'Says', def: 'Hello there.' }, { k: 'range', t: 'num', label: 'Heard within (m)', def: 20, min: 1, max: 200 },
         { k: 'secs', t: 'num', label: 'Shown for (s)', def: 5, min: 1, max: 60 }],
       sum: (p) => `“${String(p.text || '').slice(0, 40)}”` },
-    st_emote: { cat: 'step', title: 'Emote', icon: '👋', fields: [{ k: 'emote', t: 'select', label: 'Emote', def: 'greet', opts: N.EMOTES }],
-      desc: 'Plays an emote (wave, salute, sit…).', sum: (p) => emoteName(p.emote) },
+    st_emote: { cat: 'step', title: 'Emote', icon: '👋', fields: [{ k: 'emote', t: 'select', label: 'Emote', def: 'greet', opts: N.EMOTES },
+      { k: 'secs', t: 'num', label: 'For (s)', def: 3, min: 1, max: 600 }],
+      desc: 'Plays an emote (wave, salute, sit…) for a while, then the chain goes on.', sum: (p) => `${emoteName(p.emote)} · ${p.secs} s` },
     st_give: { cat: 'step', title: 'Give item', icon: '🎁', fields: [{ k: 'items', t: 'items', label: 'Gives the player', def: [] }],
       desc: 'Gives items to the player who started this chain.', sum: (p) => (p.items || []).map((i) => `${i.n || 1}x ${i.c}`).join(', ') || 'nothing yet' },
     st_setvar: { cat: 'step', title: 'Set server variable', icon: '🔧',
@@ -240,13 +248,13 @@
             case 'ev_cond': case 'fl_if': o.cond = DS.Cond.out(p.cond); break;
             case 'act_patrol': (p.patrol || []).forEach((pt) => o.pts.push(r2(pt.x), r2(pt.z))); o.a = +p.pwait || 0; o.flag = !!p.pback; break;
             case 'act_wander': at(p.around); o.a = +p.radius || 0; o.b = +p.pause || 0; break;
-            case 'act_stand': at(p.at); o.a = +p.yaw || 0; o.text = String(p.emote || ''); break;
+            case 'act_stand': { at(p.at); o.a = +p.yaw || 0; o.text = String(p.emote || ''); const em = N.emoteDef(p.emote); if (em) { o.b = em[2]; o.flag = em[3]; } break; }
             case 'act_follow': o.a = +p.dist || 0; o.b = +p.giveup || 0; break;
             case 'act_escort': at(p.to); o.a = +p.wait || 0; break;
             case 'st_walkto': at(p.to); break;
             case 'st_wait': o.a = +p.seconds || 0; break;
             case 'st_say': o.text = String(p.text || ''); o.a = +p.range || 0; o.b = +p.secs || 0; break;
-            case 'st_emote': o.text = String(p.emote || ''); break;
+            case 'st_emote': { o.text = String(p.emote || ''); o.a = +p.secs || 3; const em = N.emoteDef(p.emote); if (em) { o.b = em[2]; o.flag = em[3]; } break; }
             case 'st_give': o.items = (p.items || []).filter((i) => String(i.c || '').trim()).map((i) => ({ c: String(i.c).trim(), n: Math.max(1, Math.round(+i.n || 1)), chance: 1 })); break;
             case 'st_setvar': o.var = String(p.var || ''); o.op = p.op === 'add' ? 'add' : 'set'; o.a = +p.value || 0; break;
           }
