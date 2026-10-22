@@ -183,6 +183,7 @@
         o.hands = String(p.hands || '').trim();
         o.faction = String(p.faction || '');
         if (p.trader && (((S.project.trade || {}).traders) || []).some((t) => t.id === p.trader)) o.trader = p.trader;
+        o.npcId = String(p.npcId || '');   // its behaviour (NPCs tab) is in quests.json "brains"
         if (Array.isArray(p.patrol) && p.patrol.length) {   // waypoints as x, z pairs
           o.patrol = [];
           p.patrol.forEach((pt) => o.patrol.push(+(+pt.x).toFixed(2), +(+pt.z).toFixed(2)));
@@ -406,6 +407,7 @@
         })),
         // NPCs no quest uses: they spawn on their own and go about their behaviour (NPCs tab)
         npcs: DS.Npcs ? DS.Npcs.standalone().map((npc) => Object.assign(runtimeNode({ links: [] }, DS.Npcs.asNode(npc)), { type: 'npc' })) : [],
+        brains: DS.Npcs ? DS.Npcs.brainDefs() : [],
       },
       null,
       2

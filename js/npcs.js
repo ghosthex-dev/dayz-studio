@@ -39,7 +39,7 @@
       fields: [{ k: 'radius', t: 'num', label: 'Distance (m)', def: 8, min: 1, max: 100 }, { k: 'cooldown', t: 'num', label: 'Again after (s)', def: 120, min: 0 }],
       sum: (p) => `within ${p.radius} m` },
     ev_talk: { cat: 'event', title: 'Talked to', icon: '💬',
-      desc: 'A player looks at the NPC and presses F - when none of the NPC’s quest conversations takes the talk.',
+      desc: 'A player looks at the NPC and presses F. For NPCs no quest uses (a quest’s NPC talks through its quest conversation).',
       fields: [{ k: 'prompt', t: 'text', label: 'Prompt', def: 'Talk' }], sum: (p) => `[F] ${p.prompt || 'Talk'}` },
     ev_hostile: { cat: 'event', title: 'Hostile player seen', icon: '⚠',
       desc: 'A player the NPC’s faction sees as Hostile comes within range and in sight. Needs a faction (NPC settings).',
@@ -220,6 +220,42 @@
   S.on('changed', () => N.sync());
   S.on('structure', () => N.sync());
 
+  /** every NPC's behaviour as the quest mod reads it (DSQuestFile.brains -> DSBrainDef / DSBNode) */
+  N.brainDefs = function () {
+    const r2 = (v) => U.round(+v || 0, 2);
+    return N.list().filter((npc) => npc.graph && npc.graph.nodes.length).map((npc) => {
+      const g = npc.graph;
+      return {
+        npc: npc.id, stops: npc.stops !== false,
+        nodes: g.nodes.filter((n) => DS.NPC_NODE_TYPES[n.type]).map((n) => {
+          const p = n.p;
+          const o = { id: n.id, type: n.type, x: 0, z: 0, a: 0, b: 0, flag: false, run: !!p.prun, text: '', var: '', op: '', pts: [], items: [], cond: null,
+            next: g.links.filter((l) => l.from === n.id).map((l) => l.to) };
+          const at = (pos) => { if (pos) { const r = DS.resolvePos(pos); o.x = r2(r.x); o.z = r2(r.z); } };
+          switch (n.type) {
+            case 'ev_near': o.a = +p.radius || 0; o.b = +p.cooldown || 0; break;
+            case 'ev_talk': o.text = String(p.prompt || ''); break;
+            case 'ev_hostile': case 'act_guard': o.a = +p.radius || 0; break;
+            case 'ev_time': o.a = +p.from || 0; o.b = +p.to || 0; break;
+            case 'ev_cond': case 'fl_if': o.cond = DS.Cond.out(p.cond); break;
+            case 'act_patrol': (p.patrol || []).forEach((pt) => o.pts.push(r2(pt.x), r2(pt.z))); o.a = +p.pwait || 0; o.flag = !!p.pback; break;
+            case 'act_wander': at(p.around); o.a = +p.radius || 0; o.b = +p.pause || 0; break;
+            case 'act_stand': at(p.at); o.a = +p.yaw || 0; o.text = String(p.emote || ''); break;
+            case 'act_follow': o.a = +p.dist || 0; o.b = +p.giveup || 0; break;
+            case 'act_escort': at(p.to); o.a = +p.wait || 0; break;
+            case 'st_walkto': at(p.to); break;
+            case 'st_wait': o.a = +p.seconds || 0; break;
+            case 'st_say': o.text = String(p.text || ''); o.a = +p.range || 0; o.b = +p.secs || 0; break;
+            case 'st_emote': o.text = String(p.emote || ''); break;
+            case 'st_give': o.items = (p.items || []).filter((i) => String(i.c || '').trim()).map((i) => ({ c: String(i.c).trim(), n: Math.max(1, Math.round(+i.n || 1)), chance: 1 })); break;
+            case 'st_setvar': o.var = String(p.var || ''); o.op = p.op === 'add' ? 'add' : 'set'; o.a = +p.value || 0; break;
+          }
+          return o;
+        }),
+      };
+    });
+  };
+
   /** NPCs no quest uses: exported on their own (they spawn and go about their behaviour) */
   N.standalone = () => N.list().filter((npc) => !N.usedBy(npc.id).length);
   /** an NPC as a Talk to NPC node, for the exporter */
@@ -227,7 +263,7 @@
     const p = {};
     N.KEYS.forEach((k) => { p[k] = npc[k]; });
     const pt = N.patrolOf(npc);
-    Object.assign(p, { text: '', dialog: null, patrol: pt ? pt.p.patrol : [], pwait: pt ? pt.p.pwait : 5, pback: pt ? !!pt.p.pback : false, prun: pt ? !!pt.p.prun : false });
+    Object.assign(p, { npcId: npc.id, text: '', dialog: null, patrol: pt ? pt.p.patrol : [], pwait: pt ? pt.p.pwait : 5, pback: pt ? !!pt.p.pback : false, prun: pt ? !!pt.p.prun : false });
     return { id: npc.id, type: 'trg_npc', x: 0, y: 0, p };
   };
 

@@ -35,7 +35,8 @@ const float GUARD_AIM_X = -40;        // side-to-side aim (AimX) of a shouldered
 const int DSQ_RPC_TRADE = 77430014;    // client -> server: trader screen ("open|node", "buy|node|row|qty", "sell|node|row|qty")
 const int DSQ_RPC_TRADEUI = 77430015;  // server -> client: the trader screen (DSTradePacket)
 const int DSQ_RPC_SHOT = 77430013;     // server -> client: a hostile faction NPC fired ("netLow|netHigh|soundset|ammo")
-const int DSQ_RPC_LAST = 77430015;     // the highest id above: PlayerBase.OnRPC hands everything up to it to DSQuests
+const int DSQ_RPC_SAY = 77430016;      // server -> client: an NPC says a line ("lo|hi|x|z|seconds|name|text")
+const int DSQ_RPC_LAST = 77430016;     // the highest id above: PlayerBase.OnRPC hands everything up to it to DSQuests
 
 class DSJObjective
 {
@@ -267,7 +268,8 @@ class DSNpcInfo
 	float radius;
 	int netLow;         // the character's network id: players follow a patrolling NPC with it
 	int netHigh;
-	bool talk;          // a quest's NPC (F talks to it); an NPC no quest uses has no conversation
+	bool talk;          // F talks to it: a quest's NPC, or one with a "Talked to" behaviour
+	string prompt;      // its own talk prompt ("Trade", "Ask about the road") instead of "Talk to"
 }
 
 // where a patrolling NPC is on its route (point 0 = where it spawned, then the waypoints)
@@ -357,6 +359,7 @@ class DSNode
 	string okText;          // trg_object / obj_use: message when it worked
 	bool removeObj;         // trg_object / obj_use: remove the placed object once used
 	string trader;          // trg_npc: id of the trader it runs (trade.json)
+	string npcId;           // trg_npc / npc: the NPC (NPCs tab) - its behaviour is DSQuestFile.brains
 	ref array<float> patrol;   // trg_npc: waypoints x, z, x, z ... it walks from its own position
 	float pwait;            // trg_npc: seconds it waits at each waypoint
 	bool pback;             // trg_npc: walks the route back and forth instead of looping back to the start
@@ -403,17 +406,119 @@ class DSStatDef
 	int color;
 }
 
+
+// ---- NPC behaviour (Studio's NPCs tab): events start chains of steps, activities run until replaced ----
+class DSBNode
+{
+	string id;
+	string type;        // ev_* events, act_* activities, st_* steps, fl_* flow
+	float x;            // a point: wander centre, stand spot, walk-to / escort destination
+	float z;
+	float a;            // numbers by type: radius, seconds, hours, distances, value
+	float b;
+	bool flag;          // patrol: back and forth
+	bool run;           // jogs
+	string text;        // say: the line; talk: the prompt; stand / emote: the emote
+	string var;         // set variable: name
+	string op;          // set variable: set | add
+	ref array<float> pts;   // patrol waypoints x, z, x, z ...
+	ref array<ref DSItem> items;
+	ref DSCond cond;
+	ref array<string> next;
+
+	void DSBNode()
+	{
+		pts = new array<float>;
+		items = new array<ref DSItem>;
+		next = new array<string>;
+	}
+}
+
+class DSBrainDef
+{
+	string npc;         // the NPC's id in Studio (DSNode.npcId)
+	bool stops;         // stops and turns to a player within 3 m
+	ref array<ref DSBNode> nodes;
+
+	void DSBrainDef()
+	{
+		nodes = new array<ref DSBNode>;
+	}
+
+	DSBNode Find(string id)
+	{
+		foreach (DSBNode n : nodes)
+		{
+			if (n.id == id)
+				return n;
+		}
+		return null;
+	}
+}
+
+// what one NPC is doing right now (server)
+class DSBrain
+{
+	DSBrainDef def;
+	PlayerBase npc;
+	string faction;
+	vector home;          // where it spawned (point 0 of a patrol)
+	bool started;
+	// the activity: patrol / wander / stand / follow / escort / guard
+	DSBNode act;
+	PlayerBase actWho;    // the player who started it (follow, escort)
+	int leg = 1;
+	int dir = 1;
+	float wait;
+	bool hasGoal;
+	vector goal;
+	vector lastGoal;
+	float stuck;
+	vector last;
+	// the chain of steps: the one running, and the ones waiting
+	DSBNode step;
+	PlayerBase stepWho;
+	float stepT;
+	ref array<DSBNode> queue;
+	ref array<PlayerBase> queueWho;
+	// events
+	ref map<string, float> fired;   // "node|player" -> when it last fired
+	ref map<string, bool> inside;   // "node|player" -> in range last tick
+	ref map<string, bool> was;      // time windows / conditions: true last tick
+
+	void DSBrain()
+	{
+		queue = new array<DSBNode>;
+		queueWho = new array<PlayerBase>;
+		fired = new map<string, float>;
+		inside = new map<string, bool>;
+		was = new map<string, bool>;
+	}
+}
+
+// a line an NPC says, shown above its head (client)
+class DSSay
+{
+	int lo;
+	int hi;
+	vector at;          // where it was said (when this PC doesn't know the character)
+	float left;
+	TextWidget w;
+}
+
 class DSQuestFile
 {
 	ref array<ref DSQuest> quests;
 	ref array<ref DSStatDef> stats;
 	ref array<ref DSNode> npcs;   // NPCs of the NPCs tab that no quest uses (type "npc", settings like a Talk to NPC node)
+	ref array<ref DSBrainDef> brains;   // the behaviour of every NPC of the NPCs tab
 
 	void DSQuestFile()
 	{
 		quests = new array<ref DSQuest>;
 		stats = new array<ref DSStatDef>;
 		npcs = new array<ref DSNode>;
+		brains = new array<ref DSBrainDef>;
 	}
 }
 
@@ -794,6 +899,9 @@ class DSQuests
 	ref map<string, float> m_GuardWarn;    // "player|npc" -> when a hostile NPC last warned
 	ref map<string, float> m_GuardShot;    // "player|npc" -> when it last fired
 	ref map<Object, ref DSPatrolState> m_Patrols;   // patrolling NPCs: where on their route they are
+	ref map<Object, ref DSBrain> m_Brains;          // NPCs with a behaviour (NPCs tab)
+	ref map<string, bool> m_Left;                   // NPCs whose behaviour made them leave ("quest|node")
+	ref array<ref DSSay> m_Says;                    // client: lines NPCs say, above their heads
 	ref array<Object> m_Raised;             // faction NPCs with their gun up, and when they last aimed
 	ref array<float> m_RaisedT;
 	ref map<string, float> m_MsgT;         // server: last requirement message per player + item (no spam)
@@ -833,6 +941,9 @@ class DSQuests
 		m_GuardShot = new map<string, float>;
 		m_Raised = new array<Object>;
 		m_Patrols = new map<Object, ref DSPatrolState>;
+		m_Brains = new map<Object, ref DSBrain>;
+		m_Left = new map<string, bool>;
+		m_Says = new array<ref DSSay>;
 		m_RaisedT = new array<float>;
 		m_MsgT = new map<string, float>;
 		m_NpcObjs = new array<Object>;
@@ -1038,6 +1149,19 @@ class DSQuests
 								talked = true;
 							}
 						}
+					}
+					// an NPC no quest uses ("Talked to" behaviour)
+					for (int fni = 0; fni < m_NpcInfo.Count() && !talked; fni++)
+					{
+						if (m_NpcInfo.Get(fni).quest != "" || m_NpcInfo.Get(fni).name != gp.Get(1))
+							continue;
+						vector freeAt = NpcPos(fni);
+						vector freeSpot = ClearSpotNear(freeAt[0], freeAt[2], 2.0, 0);
+						p.SetPosition(freeSpot);
+						vector freeLook = Vector(freeAt[0], freeSpot[1], freeAt[2]) - freeSpot;
+						p.SetOrientation(Vector(freeLook.VectorToAngles()[0], 0, 0));
+						BrainTalk(p, m_NpcInfo.Get(fni).node);
+						talked = true;
 					}
 					Say("talk to " + gp.Get(1) + ": " + talked);
 					continue;
@@ -1391,7 +1515,7 @@ class DSQuests
 			if (!npc || !npc.IsAlive())
 				continue;
 			DSNode pn = NpcNode(i);
-			if (!pn || pn.patrol.Count() < 2 || moved.Contains(npc))
+			if (!pn || pn.patrol.Count() < 2 || moved.Contains(npc) || m_Brains.Contains(npc))
 				continue;
 			moved.Set(npc, true);
 			DSPatrolState st;
@@ -1461,6 +1585,638 @@ class DSQuests
 			else
 				st.stuck = 0;
 			st.last = me;
+		}
+	}
+
+	// ================================================================ NPC behaviour (NPCs tab)
+	DSBrainDef BrainDef(string npcId)
+	{
+		if (npcId == "")
+			return null;
+		foreach (DSBrainDef d : m_File.brains)
+		{
+			if (d.npc == npcId)
+				return d;
+		}
+		return null;
+	}
+
+	// a character just spawned (or a quest chain registered it again): its behaviour starts once per character
+	void StartBrain(DSQuest q, DSNode n, Object o)
+	{
+		PlayerBase pb = PlayerBase.Cast(o);
+		if (!pb)
+			return;
+		DSBrainDef d = BrainDef(n.npcId);
+		if (!d)
+			return;
+		// an NPC no quest uses can be talked to when it has a "Talked to" event
+		if (!q && m_NpcInfo.Count() > 0)
+		{
+			DSNpcInfo info = m_NpcInfo.Get(m_NpcInfo.Count() - 1);
+			foreach (DSBNode tn : d.nodes)
+			{
+				if (tn.type == "ev_talk")
+				{
+					info.talk = true;
+					if (tn.text != "" && tn.text != "Talk")
+						info.prompt = tn.text;
+				}
+			}
+		}
+		if (m_Brains.Contains(o) || d.nodes.Count() == 0)
+			return;
+		DSBrain br = new DSBrain();
+		br.def = d;
+		br.npc = pb;
+		br.faction = n.faction;
+		br.home = pb.GetPosition();
+		br.last = br.home;
+		m_Brains.Set(o, br);
+	}
+
+	void TickBrains(float dt, array<Man> men)
+	{
+		array<Object> gone = new array<Object>;
+		for (int i = 0; i < m_Brains.Count(); i++)
+		{
+			Object key = m_Brains.GetKey(i);
+			DSBrain br = m_Brains.GetElement(i);
+			if (!key || !br.npc || !br.npc.IsAlive())
+			{
+				gone.Insert(key);
+				continue;
+			}
+			BrainEvents(br, men);
+			BrainSteps(br, dt);
+			if (br.npc)
+				BrainMove(br, dt, men);
+		}
+		foreach (Object g : gone)
+			m_Brains.Remove(g);
+	}
+
+	static string WhoKey(PlayerBase p)
+	{
+		if (p && p.GetIdentity())
+			return p.GetIdentity().GetId();
+		return "local";
+	}
+
+	static bool TimeIn(float from, float to)
+	{
+		int year, month, day, hour, minute;
+		GetGame().GetWorld().GetDate(year, month, day, hour, minute);
+		float h = hour + minute / 60.0;
+		if (from <= to)
+		{
+			if (h >= from && h < to)
+				return true;
+			return false;
+		}
+		if (h >= from)
+			return true;
+		if (h < to)
+			return true;
+		return false;
+	}
+
+	// events: who comes near, Hostile players in sight, time windows, conditions, the first tick (Spawned)
+	void BrainEvents(DSBrain br, array<Man> men)
+	{
+		float now = GetGame().GetTickTime();
+		vector me = br.npc.GetPosition();
+		foreach (DSBNode e : br.def.nodes)
+		{
+			if (e.type == "ev_spawn")
+			{
+				if (!br.started)
+					Fire(br, e, null);
+			}
+			else if (e.type == "ev_near" || e.type == "ev_hostile")
+			{
+				float cool = e.b;
+				if (e.type == "ev_hostile")
+					cool = 30;
+				foreach (Man m : men)
+				{
+					PlayerBase p = PlayerBase.Cast(m);
+					if (!p || p == br.npc || !p.IsAlive())
+						continue;
+					string key = e.id + "|" + WhoKey(p);
+					bool inRange = vector.Distance(p.GetPosition(), me) <= e.a;
+					if (inRange && e.type == "ev_hostile")
+						inRange = HostileTo(br, p);
+					bool wasIn = false;
+					br.inside.Find(key, wasIn);
+					br.inside.Set(key, inRange);
+					if (!inRange || wasIn)
+						continue;
+					float last = -100000;
+					br.fired.Find(key, last);
+					if (now - last < cool)
+						continue;
+					br.fired.Set(key, now);
+					Fire(br, e, p);
+				}
+			}
+			else if (e.type == "ev_time" || e.type == "ev_cond")
+			{
+				bool on = false;
+				if (e.type == "ev_time")
+					on = TimeIn(e.a, e.b);
+				else
+					on = CondOk(null, null, e.cond);
+				bool before = false;
+				br.was.Find(e.id, before);
+				br.was.Set(e.id, on);
+				if (on && !before)
+					Fire(br, e, null);
+			}
+		}
+		br.started = true;
+	}
+
+	bool HostileTo(DSBrain br, PlayerBase p)
+	{
+		if (br.faction == "")
+			return false;
+		DSPlayerData data = GetData(p);
+		if (!data)
+			return false;
+		DSTier t = TierOf(RepVal(data, br.faction));
+		if (!t || t.stance != "hostile")
+			return false;
+		return LineOfSight(br.npc, p);
+	}
+
+	// a player pressed F on an NPC no quest uses
+	void BrainTalk(PlayerBase p, string npcNode)
+	{
+		for (int i = 0; i < m_NpcInfo.Count() && i < m_NpcObjs.Count(); i++)
+		{
+			if (m_NpcInfo.Get(i).quest != "" || m_NpcInfo.Get(i).node != npcNode)
+				continue;
+			Object o = m_NpcObjs.Get(i);
+			DSBrain br;
+			if (!o || !m_Brains.Find(o, br))
+				return;
+			if (vector.Distance(p.GetPosition(), o.GetPosition()) > m_NpcInfo.Get(i).radius + 4)
+				return;
+			foreach (DSBNode e : br.def.nodes)
+			{
+				if (e.type == "ev_talk")
+					Fire(br, e, p);
+			}
+			return;
+		}
+	}
+
+	void Fire(DSBrain br, DSBNode e, PlayerBase who)
+	{
+		if (m_Debug)
+			Say(br.npc.GetType() + ": " + e.type);
+		Continue(br, e, who);
+	}
+
+	// what comes after a node: every wire, in order (Random: one of them)
+	void Continue(DSBrain br, DSBNode n, PlayerBase who)
+	{
+		if (n.type == "fl_random")
+		{
+			if (n.next.Count() > 0)
+				Enqueue(br, n.next.Get(Math.RandomInt(0, n.next.Count())), who);
+			return;
+		}
+		foreach (string id : n.next)
+			Enqueue(br, id, who);
+	}
+
+	void Enqueue(DSBrain br, string id, PlayerBase who)
+	{
+		DSBNode n = br.def.Find(id);
+		if (!n || br.queue.Count() > 40)
+			return;
+		br.queue.Insert(n);
+		br.queueWho.Insert(who);
+	}
+
+	// the steps: the running one until it is done, then the waiting ones in order
+	void BrainSteps(DSBrain br, float dt)
+	{
+		if (br.step)
+		{
+			if (!StepDone(br, dt))
+				return;
+			DSBNode doneStep = br.step;
+			PlayerBase doneWho = br.stepWho;
+			br.step = null;
+			Continue(br, doneStep, doneWho);
+		}
+		int guard = 0;
+		while (br.queue.Count() > 0 && !br.step && br.npc && guard < 50)
+		{
+			guard++;
+			DSBNode n = br.queue.Get(0);
+			PlayerBase who = br.queueWho.Get(0);
+			br.queue.RemoveOrdered(0);
+			br.queueWho.RemoveOrdered(0);
+			RunStep(br, n, who);
+		}
+	}
+
+	bool StepDone(DSBrain br, float dt)
+	{
+		DSBNode n = br.step;
+		if (n.type == "st_wait")
+		{
+			br.stepT += dt;
+			return br.stepT >= n.a;
+		}
+		if (n.type == "st_walkto")
+			return Dist2D(br.npc.GetPosition(), n.x, n.z) < 0.8;
+		return true;
+	}
+
+	void RunStep(DSBrain br, DSBNode n, PlayerBase who)
+	{
+		string t = n.type;
+		if (t.IndexOf("act_") == 0)
+		{
+			br.act = n;
+			br.actWho = who;
+			br.leg = 1;
+			br.dir = 1;
+			br.wait = 0;
+			br.hasGoal = false;
+			br.stuck = 0;
+			return;   // an activity runs until another one replaces it (Escort goes on when it arrives)
+		}
+		if (t == "st_walkto" || t == "st_wait")
+		{
+			br.step = n;
+			br.stepWho = who;
+			br.stepT = 0;
+			return;
+		}
+		if (t == "st_face")
+		{
+			if (who)
+			{
+				vector toP = who.GetPosition() - br.npc.GetPosition();
+				br.npc.SetOrientation(Vector(toP.VectorToAngles()[0], 0, 0));
+			}
+		}
+		else if (t == "st_say")
+			BrainSay(br, n);
+		else if (t == "st_give")
+		{
+			if (who)
+			{
+				foreach (DSItem it : n.items)
+				{
+					int amount = it.n;
+					if (amount < 1)
+						amount = 1;
+					if (it.c != "")
+						GiveItem(who, it.c, amount);
+				}
+			}
+		}
+		else if (t == "st_setvar")
+			SetVar(n.var, n.op, n.a);
+		else if (t == "st_leave")
+		{
+			BrainLeave(br);
+			return;
+		}
+		else if (t == "fl_if")
+		{
+			DSPlayerData data = null;
+			if (who)
+				data = GetData(who);
+			if (!CondOk(who, data, n.cond))
+				return;
+		}
+		else if (t == "st_emote" && m_Debug)
+			Say(br.npc.GetType() + " would " + n.text + " (emotes come next)");
+		Continue(br, n, who);
+	}
+
+	// the line goes to every player within range; their PC shows it above the NPC's head
+	void BrainSay(DSBrain br, DSBNode n)
+	{
+		if (n.text == "")
+			return;
+		int lo, hi;
+		br.npc.GetNetworkID(lo, hi);
+		vector at = br.npc.GetPosition();
+		string name = br.npc.GetType();
+		for (int i = 0; i < m_NpcObjs.Count() && i < m_NpcInfo.Count(); i++)
+		{
+			if (m_NpcObjs.Get(i) == br.npc)
+				name = m_NpcInfo.Get(i).name;
+		}
+		string pkt = lo.ToString() + "|" + hi.ToString() + "|" + at[0].ToString() + "|" + at[2].ToString() + "|" + n.b.ToString() + "|" + name + "|" + n.text;
+		array<Man> men = new array<Man>;
+		GetGame().GetPlayers(men);
+		if (men.Count() == 0)
+		{
+			PlayerBase solo = PlayerBase.Cast(GetGame().GetPlayer());
+			if (solo)
+				men.Insert(solo);
+		}
+		foreach (Man m : men)
+		{
+			PlayerBase p = PlayerBase.Cast(m);
+			if (p && p != br.npc && vector.Distance(p.GetPosition(), at) <= n.a)
+				SendToClient(p, DSQ_RPC_SAY, pkt);
+		}
+	}
+
+	// the NPC leaves: gone until the server restarts (or its appearance condition was false once)
+	void BrainLeave(DSBrain br)
+	{
+		Object o = br.npc;
+		for (int i = m_NpcObjs.Count() - 1; i >= 0; i--)
+		{
+			if (m_NpcObjs.Get(i) != o)
+				continue;
+			m_Left.Set(m_NpcInfo.Get(i).quest + "|" + m_NpcInfo.Get(i).node, true);
+			m_NpcInfo.Remove(i);
+			m_NpcObjs.Remove(i);
+		}
+		br.npc = null;
+		br.step = null;
+		br.queue.Clear();
+		br.queueWho.Clear();
+		DeleteNpc(o);
+		m_NpcSent.Clear();
+	}
+
+	// ---- moving: the activity (or a Walk to step) sets where the feet go (DSPatrolCmd walks there)
+	void Stand(PlayerBase npc, vector look, bool face)
+	{
+		npc.m_DSPatrolWant = true;
+		npc.m_DSPatrolGo = false;
+		npc.m_DSPatrolFace = face;
+		npc.m_DSPatrolTo = look;
+	}
+
+	void MoveTo(DSBrain br, vector goal, bool run, float dt)
+	{
+		PlayerBase npc = br.npc;
+		vector me = npc.GetPosition();
+		if (Dist2D(goal, br.lastGoal[0], br.lastGoal[2]) > 0.5)
+		{
+			// a new goal: face it first (the engine only turns a character nobody controls within half a circle of
+			// where its orientation was last set)
+			br.lastGoal = goal;
+			vector dir = Vector(goal[0], me[1], goal[2]) - me;
+			npc.SetOrientation(Vector(dir.VectorToAngles()[0], 0, 0));
+		}
+		npc.m_DSPatrolWant = true;
+		npc.m_DSPatrolGo = true;
+		npc.m_DSPatrolFace = false;
+		npc.m_DSPatrolRun = run;
+		npc.m_DSPatrolTo = goal;
+		if (vector.Distance(me, br.last) < 0.2 * dt)
+		{
+			br.stuck += dt;
+			if (br.stuck > 6)
+			{
+				npc.SetPosition(GroundPos(goal[0], 0, goal[2]));   // stuck on a fence or a rock: put it there
+				br.stuck = 0;
+			}
+		}
+		else
+			br.stuck = 0;
+		br.last = me;
+	}
+
+	PlayerBase NearestPlayer(array<Man> men, vector at, float within, PlayerBase not)
+	{
+		PlayerBase best = null;
+		float bd = within;
+		foreach (Man m : men)
+		{
+			PlayerBase p = PlayerBase.Cast(m);
+			if (!p || p == not || !p.IsAlive())
+				continue;
+			float d = vector.Distance(p.GetPosition(), at);
+			if (d < bd)
+			{
+				bd = d;
+				best = p;
+			}
+		}
+		return best;
+	}
+
+	void BrainMove(DSBrain br, float dt, array<Man> men)
+	{
+		PlayerBase npc = br.npc;
+		vector me = npc.GetPosition();
+		if (br.step && br.step.type == "st_walkto")
+		{
+			MoveTo(br, Vector(br.step.x, 0, br.step.z), br.step.run, dt);
+			return;
+		}
+		DSBNode a = br.act;
+		bool follows = false;
+		if (a && (a.type == "act_follow" || a.type == "act_escort"))
+			follows = true;
+		if (br.def.stops && !follows)
+		{
+			PlayerBase near = NearestPlayer(men, me, 3, npc);
+			if (near)
+			{
+				Stand(npc, near.GetPosition(), true);
+				br.last = me;
+				br.stuck = 0;
+				return;
+			}
+		}
+		if (!a || a.type == "act_guard")
+		{
+			Stand(npc, me, false);
+			return;
+		}
+		if (a.type == "act_patrol")
+		{
+			int count = a.pts.Count() / 2 + 1;
+			if (count < 2)
+			{
+				Stand(npc, me, false);
+				return;
+			}
+			vector pt = br.home;
+			if (br.leg > 0)
+				pt = Vector(a.pts.Get((br.leg - 1) * 2), 0, a.pts.Get((br.leg - 1) * 2 + 1));
+			if (Dist2D(me, pt[0], pt[2]) < 0.8)
+			{
+				Stand(npc, me, false);
+				br.wait += dt;
+				if (br.wait < a.a)
+					return;
+				br.wait = 0;
+				if (a.flag)
+				{
+					if (br.leg + br.dir < 0 || br.leg + br.dir >= count)
+						br.dir = -br.dir;
+					br.leg += br.dir;
+				}
+				else
+					br.leg = (br.leg + 1) % count;
+				return;
+			}
+			MoveTo(br, pt, a.run, dt);
+		}
+		else if (a.type == "act_wander")
+		{
+			vector centre = Vector(a.x, 0, a.z);
+			if (a.x == 0 && a.z == 0)
+				centre = br.home;
+			if (!br.hasGoal)
+			{
+				float ang = Math.RandomFloat(0, Math.PI2);
+				float r = Math.Sqrt(Math.RandomFloat(0, 1)) * a.a;
+				br.goal = Vector(centre[0] + Math.Cos(ang) * r, 0, centre[2] + Math.Sin(ang) * r);
+				br.hasGoal = true;
+				br.wait = 0;
+			}
+			if (Dist2D(me, br.goal[0], br.goal[2]) < 0.8)
+			{
+				Stand(npc, me, false);
+				br.wait += dt;
+				if (br.wait >= a.b)
+					br.hasGoal = false;
+				return;
+			}
+			MoveTo(br, br.goal, a.run, dt);
+		}
+		else if (a.type == "act_stand")
+		{
+			if (Dist2D(me, a.x, a.z) > 0.8)
+			{
+				MoveTo(br, Vector(a.x, 0, a.z), false, dt);
+				br.hasGoal = false;
+				return;
+			}
+			Stand(npc, me, false);
+			if (!br.hasGoal)
+			{
+				npc.SetOrientation(Vector(a.a, 0, 0));   // arrived: face the way it was told
+				br.hasGoal = true;
+			}
+		}
+		else if (a.type == "act_follow")
+		{
+			PlayerBase who = br.actWho;
+			if (!who || !who.IsAlive() || vector.Distance(me, who.GetPosition()) > a.b)
+			{
+				br.act = null;   // lost them: stands where it is
+				Stand(npc, me, false);
+				return;
+			}
+			float fd = vector.Distance(me, who.GetPosition());
+			if (fd <= a.a + 0.5)
+			{
+				Stand(npc, who.GetPosition(), true);
+				br.last = me;
+				return;
+			}
+			bool hurry = a.run;
+			if (fd > 8)
+				hurry = true;
+			MoveTo(br, who.GetPosition(), hurry, dt);
+		}
+		else if (a.type == "act_escort")
+		{
+			if (Dist2D(me, a.x, a.z) < 1.0)
+			{
+				DSBNode done = a;
+				PlayerBase escorted = br.actWho;
+				br.act = null;   // arrived: the chain goes on
+				Stand(npc, me, false);
+				Continue(br, done, escorted);
+				return;
+			}
+			if (br.actWho && vector.Distance(me, br.actWho.GetPosition()) > a.a)
+			{
+				Stand(npc, br.actWho.GetPosition(), true);   // waits for them to catch up
+				br.last = me;
+				return;
+			}
+			MoveTo(br, Vector(a.x, 0, a.z), a.run, dt);
+		}
+	}
+
+	// ---- client: lines above NPCs' heads
+	void ClientSay(string pkt)
+	{
+		TStringArray f = new TStringArray;
+		pkt.Split("|", f);
+		if (f.Count() < 7)
+			return;
+		string text = f.Get(6);
+		for (int i = 7; i < f.Count(); i++)
+			text = text + "|" + f.Get(i);
+		DSSay sy = new DSSay();
+		sy.lo = f.Get(0).ToInt();
+		sy.hi = f.Get(1).ToInt();
+		sy.at = Vector(f.Get(2).ToFloat(), 0, f.Get(3).ToFloat());
+		sy.left = f.Get(4).ToFloat();
+		if (sy.left < 1)
+			sy.left = 5;
+		sy.w = DSQText(0, 0, 640, 30, 22, 0xFFFFF2C2, 900);
+		if (sy.w)
+		{
+			sy.w.SetText(f.Get(5) + ":  " + text);
+			sy.w.Show(false);
+		}
+		// one line per NPC at a time
+		for (int k = m_Says.Count() - 1; k >= 0; k--)
+		{
+			if (m_Says.Get(k).lo == sy.lo && m_Says.Get(k).hi == sy.hi)
+			{
+				if (m_Says.Get(k).w)
+					m_Says.Get(k).w.Unlink();
+				m_Says.Remove(k);
+			}
+		}
+		m_Says.Insert(sy);
+	}
+
+	void ClientSays(float dt)
+	{
+		for (int i = m_Says.Count() - 1; i >= 0; i--)
+		{
+			DSSay sy = m_Says.Get(i);
+			sy.left -= dt;
+			if (sy.left <= 0 || !sy.w)
+			{
+				if (sy.w)
+					sy.w.Unlink();
+				m_Says.Remove(i);
+				continue;
+			}
+			vector head = sy.at + Vector(0, GetGame().SurfaceY(sy.at[0], sy.at[2]) + 2.1, 0);
+			Object o = null;
+			if (sy.lo != 0 || sy.hi != 0)
+				o = GetGame().GetObjectByNetworkId(sy.lo, sy.hi);
+			if (o)
+				head = o.GetPosition() + "0 2.1 0";
+			vector sp = GetGame().GetScreenPos(head);
+			PlayerBase me = PlayerBase.Cast(GetGame().GetPlayer());
+			bool show = false;
+			if (sp[2] > 0 && sp[2] < 60)
+				show = true;
+			if (me && vector.Distance(me.GetPosition(), head) > 60)
+				show = false;
+			if (show)
+				sy.w.SetPos(sp[0] - 320, sp[1] - 15, true);
+			sy.w.Show(show);
 		}
 	}
 
@@ -1570,6 +2326,7 @@ class DSQuests
 		if (shared)
 		{
 			RegisterNpc(q, n, shared.GetPosition(), shared);
+			StartBrain(q, n, shared);
 			return;
 		}
 		Object o = GetGame().CreateObject(n.cls, pos);
@@ -1578,6 +2335,7 @@ class DSQuests
 		o.SetPosition(pos);
 		o.SetOrientation(Vector(n.yaw, 0, 0));
 		RegisterNpc(q, n, pos, o);
+		StartBrain(q, n, o);
 		EntityAI e = EntityAI.Cast(o);
 		if (e)
 		{
@@ -1654,7 +2412,9 @@ class DSQuests
 				at = a;
 		}
 		bool want = CondOk(null, null, n.cond);
-		if (want && at < 0)
+		if (!want)
+			m_Left.Remove(qid + "|" + n.id);
+		if (want && at < 0 && !m_Left.Contains(qid + "|" + n.id))
 		{
 			SpawnNpc(q, n);
 			Print("[DZStudio] NPC " + n.title + " appears (" + where + ")");
@@ -1715,6 +2475,7 @@ class DSQuests
 			TickPlayer(pb, step);
 		}
 		TickPatrols(step, men);
+		TickBrains(step, men);
 
 		if (m_Raised.Count() > 0)
 			LowerGuns(GetGame().GetTickTime());
@@ -4110,6 +4871,11 @@ class DSQuests
 	{
 		if (!m_Ready || !p)
 			return;
+		if (questId == "")
+		{
+			BrainTalk(p, nodeId);   // an NPC of the NPCs tab with a "Talked to" behaviour
+			return;
+		}
 		DSPlayerData data = GetData(p);
 		if (!data)
 			return;
@@ -4434,6 +5200,11 @@ class DSQuests
 				m_JUI.Refresh();
 			}
 		}
+		else if (rpc == DSQ_RPC_SAY)
+		{
+			ClientSay(json);
+			return;
+		}
 		else if (rpc == DSQ_RPC_TRADEUI)
 		{
 			DSTradePacket tp = new DSTradePacket();
@@ -4464,7 +5235,7 @@ class DSQuests
 
 	void HandleRPC(PlayerBase p, PlayerIdentity sender, int rpc, ParamsReadContext ctx)
 	{
-		if (rpc == DSQ_RPC_NPCS || rpc == DSQ_RPC_OPEN || rpc == DSQ_RPC_JOURNAL || rpc == DSQ_RPC_FX || rpc == DSQ_RPC_MSG || rpc == DSQ_RPC_REP || rpc == DSQ_RPC_SHOT || rpc == DSQ_RPC_TRADEUI)
+		if (rpc == DSQ_RPC_NPCS || rpc == DSQ_RPC_OPEN || rpc == DSQ_RPC_JOURNAL || rpc == DSQ_RPC_FX || rpc == DSQ_RPC_MSG || rpc == DSQ_RPC_REP || rpc == DSQ_RPC_SHOT || rpc == DSQ_RPC_TRADEUI || rpc == DSQ_RPC_SAY)
 		{
 			// long messages arrive in pieces (see SendToClient): put them back together
 			Param3<int, int, string> a = new Param3<int, int, string>(0, 1, "");
@@ -4528,6 +5299,7 @@ class DSQuests
 			m_TUI = new DSTradeUI();
 		m_UI.Update(dt);
 		m_TUI.Update(dt);
+		ClientSays(dt);
 		bool talking = m_UI.IsOpen();
 		if (m_TUI.IsOpen())
 			talking = true;
@@ -4616,6 +5388,8 @@ class DSQuests
 		else if (best >= 0)
 		{
 			string talkLabel = "[F]  Talk to " + m_NpcInfo.Get(best).name;
+			if (m_NpcInfo.Get(best).prompt != "")
+				talkLabel = "[F]  " + m_NpcInfo.Get(best).prompt + "  (" + m_NpcInfo.Get(best).name + ")";
 			string npcFac = m_NpcInfo.Get(best).faction;
 			if (npcFac != "" && m_Journal)
 			{

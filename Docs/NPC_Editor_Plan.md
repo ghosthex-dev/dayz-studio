@@ -96,3 +96,15 @@ Steps (one after another):
 5. Showcase NPCs, README, release.
 
 Each phase is tested on the local server before the next.
+
+## Status
+
+- **Phase 1 - done** (commit b8b4464), tested in game.
+- **Phase 2 - done, tested in game** (2026-10-22): `DSBrain` per character (quests.json `brains`, linked by
+  `npcId`), events → step queue (every wire runs, in order; Random picks one), activities drive DSPatrolCmd.
+  Verified: Spawned, Player comes near, Talked to (NPCs no quest uses; custom prompt), Only if, Face player,
+  Say (text above the head, RPC 77430016), Escort (waits when the player falls behind, the chain goes on at the
+  destination), Give item, Set server variable, Follow, Wander, Stand at, Patrol.
+  Built but not yet tried in game: Hostile player seen, Time of day, Condition, Walk to, Wait, Random, Leave.
+  Emotes are a no-op until phase 3; Guard just holds position (the faction guard logic does the aiming).
+- Phases 3-5 to do.
