@@ -159,7 +159,8 @@ Because DayZ Studio distributes zero proprietary game files, it builds its local
 New to DayZ Studio? Go to **File ▸ Templates & examples ▸ Showcase: camp, factions & RPG**.
 
 This instantly generates a fully playable survivor outpost at the center of the map featuring:
-* A **Survivor camp** with a talking NPC trader and quest giver.
+* A **Survivor camp** with a talking NPC trader and quest giver who sits by the fire and waves you over.
+* **Vlad**, a sentry who patrols the camp by day and sits by the fire at night, and **Olga**, who walks you to the road if you ask.
 * An interactive **supply container** requiring player XP.
 * A **Bandit checkpoint** guarded by an armed faction NPC.
 * A drivable **car vehicle reward**, reputation adjustments, custom HUD, and custom Enforce nodes.
@@ -230,7 +231,7 @@ flowchart TD
 * **Interactive Dialogue Trees:** Players approach an NPC, see a dynamic `[F] Talk` prompt, and enter a cinematic conversation camera. Text types out with 1–4 reply choices, condition checks, and exit buttons.
 * **Voice-Line Integration:** Attach custom `.ogg` or `.wav` audio files to any dialogue line. Studio automatically writes the sound shaders and sound sets into the exported mod config.
 * **Dynamic Branching & Conditions:** Filter dialogue choices based on held items, player health, bleeding state, time of day (day/night), weather (rain/fog/storm), completed quests, or faction standing.
-* **NPC Outfits & Patrol Routes:** Dress NPCs using 31 survivor models, 13 outfit presets (Survivor, Hunter, Soldier, Police, Bandit, Hazmat, etc.), and randomizers. Draw waypoint patrol paths directly on the map with custom wait times, jog speeds, and hostile guard behavior.
+* **NPC Outfits & Behaviour:** Dress NPCs using 31 survivor models, 13 outfit presets (Survivor, Hunter, Soldier, Police, Bandit, Hazmat, etc.), and randomizers - then give them patrols, routines and reactions in the [NPCs tab](#npc-editor).
 * **In-Game Compass HUD & Journal:** Players can track active objectives on their compass, view distance markers, and press **`J`** to open a full in-game Quest Journal with active/completed checklists and quest abandonment options.
 * **Bonus Objectives & Chains:** Add optional side objectives marked in gold, or link quests into multi-part story chains with automatic prerequisite gating.
 
@@ -239,9 +240,56 @@ flowchart TD
 
 <br>
 
-* **Patrol Routes:** Click **+ Draw a patrol route** and click waypoints. NPCs move smoothly, yield to players within 3 m who initiate dialogue, and resume patrol when finished. Armed faction guards automatically pause patrol to aim at Hostile players.
+* **Patrol Routes:** In the NPCs tab, add a **Patrol** activity, click **+ Draw a patrol route** and click waypoints. NPCs walk straight between them, yield to players within 3 m who initiate dialogue, and resume patrol when finished. Armed faction guards automatically pause patrol to aim at Hostile players.
 * **Audio Voice Lines:** Studio organizes attached audio into `source/<mod>/sounds/` and generates complete `CfgSoundShaders` and `CfgSoundSets` entries in `config.cpp`.
-* **Multi-Quest NPCs:** Multiple Talk-to-NPC nodes within 1.5 m coalesce into a single NPC in-game, automatically prioritizing active quests, followed by newly available quests.
+* **Multi-Quest NPCs:** Several quests can pick the same NPC; in game it is one character that talks about the active quest first, then newly available ones.
+</details>
+
+---
+
+<a id="npc-editor"></a>
+### 🧍 NPC Behaviour Editor
+
+<p align="center">
+  <em>Give every character a life of their own - patrols, routines, reactions and favours - with a node graph.</em>
+</p>
+
+```mermaid
+flowchart LR
+    S["✦ Spawned"] --> A["🧍 Stand at: the camp fire<br><i>sits, warming hands</i>"]
+    N["👣 Player comes near"] --> F["👀 Face player"] --> W["👋 Emote: wave"] --> Y["🗨 Say: 'Welcome to the camp.'"]
+    T["💬 Talked to"] --> E["🧭 Escort to: the road"] --> G["🎁 Give item: apple"] --> B["➜ Walk back"] --> R["🌀 Wander"]
+
+    style S fill:#14171d,stroke:#22c55e,stroke-width:2px,color:#fff
+    style N fill:#14171d,stroke:#22c55e,stroke-width:2px,color:#fff
+    style T fill:#14171d,stroke:#22c55e,stroke-width:2px,color:#fff
+    style A fill:#14171d,stroke:#38bdf8,stroke-width:2px,color:#fff
+    style E fill:#14171d,stroke:#38bdf8,stroke-width:2px,color:#fff
+    style R fill:#14171d,stroke:#38bdf8,stroke-width:2px,color:#fff
+    style F fill:#14171d,stroke:#f59e0b,stroke-width:2px,color:#fff
+    style W fill:#14171d,stroke:#f59e0b,stroke-width:2px,color:#fff
+    style Y fill:#14171d,stroke:#f59e0b,stroke-width:2px,color:#fff
+    style G fill:#14171d,stroke:#f59e0b,stroke-width:2px,color:#fff
+    style B fill:#14171d,stroke:#f59e0b,stroke-width:2px,color:#fff
+```
+
+* **👤 NPCs Tab (`Alt + 5`):** Every NPC is its own character - look, outfit, gear, weapon, position, faction and trader - with its own behaviour graph. Quests pick NPCs from here, so one character can give several quests. NPCs no quest uses still spawn and go about their routine.
+* **Events → Actions:** **Events** start a chain - *Spawned, Player comes near, Talked to, Hostile player seen, Time of day, Condition*. **Activities** run until something replaces them - *Patrol, Wander, Stand at, Follow player, Escort to, Guard*. **Steps** run in order - *Walk to, Wait, Face player, Say, Emote, Give item, Set server variable, Leave*. **Flow** - *Only if, Random*.
+* **Schedules:** Two *Time of day* events give an NPC a routine - patrol the camp by day, sit by the fire at night.
+* **Say & Emotes:** Lines appear above the NPC's head for nearby players. 19 emotes from the game - wave, point, salute, come here, nod, clap, shrug, sit, sit by the fire, dance and more; an NPC stands up before it waves.
+* **Follow & Escort:** An NPC follows the player who talked to it (and calls after them when they run off), or leads them somewhere, waiting when they fall behind.
+* **Always Talkable:** NPCs stop and turn to a player within 3 m; the talk prompt, conversations and the trade screen follow them wherever their routine takes them.
+* **🧩 Custom NPC Nodes:** Write your own steps (`npc`, `player`, settings) and events (checked every second for each player nearby) in Enforce Script - right-click the graph ▸ *Make your own node…*.
+* **On the Map:** Every NPC shows with its name; the open one shows its patrol route, wander area and destinations. Click to select, drag to move, double-click to open its graph.
+
+<details>
+<summary><b>Behaviour Runtime & Upgrading Older Projects</b></summary>
+
+<br>
+
+* **Runtime:** The quest mod keeps one brain per character (`DSBrain`), ticked once a second: an event queue of steps, the current activity, and a script command that walks, turns and plays gestures on characters nobody controls. Behaviour graphs are exported to `quests.json` (`brains`).
+* **Older Projects:** NPCs set up inside quests before the NPCs tab existed are turned into NPCs automatically when a project opens - quest chains sharing one character become one NPC, and an old patrol becomes *Spawned → Patrol*.
+* **Play-Test Trace:** In play-test mode the progress log lists every event and step each NPC runs.
 </details>
 
 ---

@@ -52,14 +52,62 @@
     };
     const chain = (q, ns) => ns.forEach((n, i) => { if (i) q.links.push({ id: U.uid('l'), from: ns[i - 1].id, to: n.id }); });
 
+    // NPCs (NPCs tab): characters with their own behaviour, quests point at them with npcId
+    const npcs = [];
+    const person = (props) => {
+      const n = Object.assign({ id: U.uid('npc'), npc: 'SurvivorM_Mirek', name: '', outfit: '', gear: [], hands: '', pos: at(0, 0), yaw: 0, radius: 4,
+        nomark: false, faction: '', trader: '', cond: null, stops: true, graph: { nodes: [], links: [] } }, props);
+      npcs.push(n);
+      return n;
+    };
+    const step = (who, type, col, row, p) => {
+      const T = (DS.NPC_NODE_TYPES || {})[type];
+      const d = {};
+      if (T) T.fields.forEach((f) => (d[f.k] = JSON.parse(JSON.stringify(f.def === undefined ? '' : f.def))));
+      const n = { id: U.uid('n'), type, x: 40 + col * 290, y: 40 + row * 140, p: Object.assign(d, p || {}) };
+      who.graph.nodes.push(n);
+      return n;
+    };
+    const wire = (who, ns) => ns.forEach((n, i) => { if (i) who.graph.links.push({ id: U.uid('l'), from: ns[i - 1].id, to: n.id }); });
+    const wear = (...cls) => cls.map((c) => ({ c, n: 1, chance: 1 }));
+
+    // Mirek: the camp's quest giver and trader. Sits by the fire; stands up, waves and welcomes players who come near.
+    const mirekNpc = person({ npc: 'SurvivorM_Mirek', name: 'Mirek', faction: 'survivors', trader: 'camp_store', pos: at(4, 4), yaw: 200,
+      gear: wear('Hoodie_Green', 'CargoPants_Green', 'HikingBootsLow_Black') });
+    wire(mirekNpc, [step(mirekNpc, 'ev_spawn', 0, 0), step(mirekNpc, 'act_stand', 1, 0, { at: at(4, 4), yaw: 200, emote: 'warmhands' })]);
+    wire(mirekNpc, [step(mirekNpc, 'ev_near', 0, 1, { radius: 6, cooldown: 120 }), step(mirekNpc, 'st_face', 1, 1), step(mirekNpc, 'st_emote', 2, 1, { emote: 'greet', secs: 3 }),
+      step(mirekNpc, 'st_say', 3, 1, { text: 'Welcome to the camp, survivor. Sit, warm up.', range: 20, secs: 5 })]);
+
+    // the Bandit Boss: guards the checkpoint with his rifle and warns players the Bandits see as Hostile
+    const bossNpc = person({ npc: 'SurvivorM_Boris', name: 'Bandit Boss', faction: 'bandits', hands: 'AKM', pos: at(170, 0), yaw: 270,
+      gear: wear('BomberJacket_Black', 'Jeans_Black', 'MilitaryBoots_Black') });
+    wire(bossNpc, [step(bossNpc, 'ev_spawn', 0, 0), step(bossNpc, 'act_guard', 1, 0, { radius: 60 })]);
+    wire(bossNpc, [step(bossNpc, 'ev_hostile', 0, 1, { radius: 60 }), step(bossNpc, 'st_say', 1, 1, { text: 'You picked the wrong road.', range: 70, secs: 4 })]);
+
+    // Vlad: the camp sentry. A schedule: patrols the camp by day, sits by the fire at night.
+    const vlad = person({ npc: 'SurvivorM_Taiki', name: 'Vlad', faction: 'survivors', hands: 'Mosin9130', pos: at(-20, -20), yaw: 90,
+      gear: wear('GorkaEJacket_Summer', 'GorkaPants_Summer', 'MilitaryBoots_Brown') });
+    wire(vlad, [step(vlad, 'ev_time', 0, 0, { from: 6, to: 20 }),
+      step(vlad, 'act_patrol', 1, 0, { patrol: [{ x: at(22, -20).x, z: at(22, -20).z }, { x: at(22, 24).x, z: at(22, 24).z }, { x: at(-20, 24).x, z: at(-20, 24).z }], pwait: 4 })]);
+    wire(vlad, [step(vlad, 'ev_time', 0, 1, { from: 20, to: 6 }), step(vlad, 'act_stand', 1, 1, { at: at(-3, -20), yaw: 180, emote: 'warmhands' })]);
+    wire(vlad, [step(vlad, 'ev_near', 0, 2, { radius: 5, cooldown: 90 }), step(vlad, 'st_face', 1, 2), step(vlad, 'st_say', 2, 2, { text: 'Keep your weapon lowered in camp.', range: 15, secs: 4 })]);
+
+    // Olga: a scavenger who wanders the camp and walks players to the checkpoint road when they ask
+    const olga = person({ npc: 'SurvivorF_Linda', name: 'Olga', pos: at(-12, 10), yaw: 30, gear: wear('Hoodie_Red', 'Jeans_Black', 'AthleticShoes_Black') });
+    const olgaWander = step(olga, 'act_wander', 1, 0, { around: at(-12, 10), radius: 10, pause: 6 });
+    wire(olga, [step(olga, 'ev_spawn', 0, 0), olgaWander]);
+    wire(olga, [step(olga, 'ev_talk', 0, 1, { prompt: 'Ask Olga for a guide' }), step(olga, 'st_emote', 1, 1, { emote: 'come', secs: 2 }),
+      step(olga, 'st_say', 2, 1, { text: 'Follow me, I know the way to the road.', range: 20, secs: 4 }),
+      step(olga, 'act_escort', 3, 1, { to: at(110, 0), wait: 12 }), step(olga, 'st_say', 4, 1, { text: 'The bandits are past that bend. Good luck.', range: 20, secs: 5 }),
+      step(olga, 'st_give', 5, 1, { items: [{ c: 'Apple', n: 1, chance: 1 }] }), step(olga, 'st_walkto', 6, 1, { to: at(-12, 10) }), step(olga, 'act_wander', 7, 1, { around: at(-12, 10), radius: 10, pause: 6 })]);
+
     // ---- 1. Welcome to the Camp (Mirek, Survivors)
     const q1 = quest('Welcome to the Camp', 'Mirek wants the infected cleared from around the camp.');
     const trade = { text: 'Trade 3 apples for a bandage', next: '', accept: false, give: [{ c: 'BandageDressing', n: 1 }], take: [{ c: 'Apple', n: 3 }] };
     const gift = { text: 'Friends of the camp eat for free.', next: '', accept: false, if: { kind: 'reptier', var: 'survivors', stat: 'friendly' }, give: [{ c: 'Canteen', n: 1 }] };
     const dlg = (text, opts) => ({ start: 'l1', lines: [{ id: 'l1', text, sound: null, next: '', openIf: null, options: opts }] });
     const mirek = node(q1, 'trg_npc', {
-      npc: 'SurvivorM_Mirek', name: 'Mirek', faction: 'survivors', trader: 'camp_store', pos: at(4, 4), yaw: 200, radius: 4,
-      gear: [{ c: 'Hoodie_Green', n: 1, chance: 1 }, { c: 'CargoPants_Green', n: 1, chance: 1 }, { c: 'HikingBootsLow_Black', n: 1, chance: 1 }], hands: '',
+      npcId: mirekNpc.id, npc: 'SurvivorM_Mirek', name: 'Mirek', pos: mirekNpc.pos,   // the rest comes from the NPC (NPCs tab)
       text: 'Infected keep wandering into camp.',
       dialog: {
         offer: dlg('Infected keep wandering into camp. Clear five of them and you are one of us.', [{ text: 'I will do it.', next: '', accept: true }, trade, { text: 'Not now.', next: '' }]),
@@ -101,8 +149,7 @@
     // ---- 4. The Bandit Boss: the armed guard of the checkpoint. He only talks to players the Bandits don't hate.
     const q4 = quest('The Bandit Toll', 'The Bandit Boss lets you use the road - for a price.');
     const boss = node(q4, 'trg_npc', {
-      npc: 'SurvivorM_Boris', name: 'Bandit Boss', faction: 'bandits', hands: 'AKM', pos: at(170, 0), yaw: 270, radius: 4,
-      gear: [{ c: 'BomberJacket_Black', n: 1, chance: 1 }, { c: 'Jeans_Black', n: 1, chance: 1 }, { c: 'MilitaryBoots_Black', n: 1, chance: 1 }],
+      npcId: bossNpc.id, npc: 'SurvivorM_Boris', name: 'Bandit Boss', pos: bossNpc.pos,
       text: 'Toll road. Two cans of food and you can use it.',
       dialog: { offer: dlg('Toll road. Two cans of food and you can use it.', [
         { text: 'Here, two cans.', next: '', accept: true, take: [{ c: 'TunaCan', n: 2 }] },
@@ -114,7 +161,7 @@
     signal.fx.when = { kind: 'quest_done', quest: q1.id, neg: true };   // burns until this player helped the camp
 
     return {
-      objects, quests,
+      objects, quests, npcs,
       stats: [{ id: 'xp', name: 'XP', start: 0, min: 0, max: 1000, color: '#c8a864', resetOnDeath: false, sheet: true }],
       itemReqs: [{ cls: 'M4A1', exact: false, cond: { kind: 'pvar', var: 'xp', op: '>=', value: 300 }, msg: 'You need 300 XP to handle the M4A1.' }],
       hud: [
@@ -179,7 +226,7 @@
     p.meta.name = 'DayZ Studio showcase';
     p.meta.modName = 'DZStudioShowcase';
     const b = build(c);
-    Object.assign(p, { objects: b.objects, quests: b.quests, stats: b.stats, itemReqs: b.itemReqs, hud: b.hud, factions: b.factions, customNodes: b.customNodes, trade: b.trade });
+    Object.assign(p, { objects: b.objects, quests: b.quests, npcs: b.npcs, stats: b.stats, itemReqs: b.itemReqs, hud: b.hud, factions: b.factions, customNodes: b.customNodes, trade: b.trade });
     p.meta.sheetKey = b.sheetKey;
     return p;
   };
@@ -190,6 +237,8 @@
     const b = build(c);
     P.objects.push(...b.objects);
     P.quests.push(...b.quests);
+    if (!P.npcs) P.npcs = [];
+    P.npcs.push(...b.npcs);
     const merge = (key, list, id) => {
       if (!P[key]) P[key] = [];
       list.forEach((x) => { if (!P[key].some((y) => y[id] === x[id])) P[key].push(x); });

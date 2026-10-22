@@ -124,4 +124,4 @@ Each phase is tested on the local server before the next.
   wizard with the quest kinds, and DSCustom always gets `RunNpcNode` / `CheckNpcNode`. Four NPC examples (Heal the
   Player, Drop an Item, Player Holds an Item, Player Is Hurt). Verified: a custom event (player holds an apple) started
   a chain that said a line and ran a custom step on the server. Play-test progress logs every step a brain runs.
-- Phase 5 to do: Showcase NPCs, README, release (0.1.0-alpha.6).
+- **Phase 5 - done** (2026-10-22): the Showcase has four NPCs with behaviours (Mirek sits by the fire and waves players over; the Bandit Boss guards; Vlad patrols by day and sits by the fire at night; Olga escorts players to the road and gives them an apple), README section "NPC Behaviour Editor", version 0.1.0-alpha.6.
