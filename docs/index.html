@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DayZ Studio — Visual Map &amp; Quest IDE for Vanilla DayZ</title>
+  <meta name="description" content="Visual map and quest editor for vanilla DayZ servers. Real terrain, RPG quests with NPC conversations, Central Economy loot, signed mod export, and in-editor testing.">
+  <link rel="icon" type="image/svg+xml" href="assets/banner.svg">
+
+  <style>
+    :root {
+      --bg: #07090e;
+      --bg-alt: #0b0f17;
+      --panel: #0f141f;
+      --card: #131926;
+      --card-hover: #192233;
+      --line: #1e2638;
+      --line-light: #2b374e;
+      --text: #f1f5f9;
+      --text-dim: #94a3b8;
+      --text-muted: #64748b;
+      --accent: #22d3ee;
+      --accent-hover: #38bdf8;
+      --accent-glow: rgba(34, 211, 238, 0.2);
+      --emerald: #10b981;
+      --emerald-glow: rgba(16, 185, 129, 0.2);
+      --amber: #f59e0b;
+      --red: #f87171;
+      --purple: #a855f7;
+      --radius: 10px;
+      --radius-sm: 6px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    a { color: var(--accent); text-decoration: none; transition: color 0.15s ease; }
+    a:hover { color: var(--accent-hover); }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+
+    /* Tactical Background Pattern */
+    .bg-grid {
+      background-image: 
+        linear-gradient(to right, rgba(34, 211, 238, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(34, 211, 238, 0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    /* Container */
+    .container {
+      width: 100%;
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Header & Navigation */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(7, 9, 14, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--line);
+    }
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 68px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 19px;
+      letter-spacing: 0.5px;
+      color: #fff;
+    }
+    .brand-mark {
+      color: var(--accent);
+      font-size: 24px;
+      line-height: 1;
+      text-shadow: 0 0 12px var(--accent-glow);
+    }
+    .badge-alpha {
+      background: rgba(34, 211, 238, 0.12);
+      border: 1px solid rgba(34, 211, 238, 0.35);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 999px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+    }
+    .nav-link {
+      color: var(--text-dim);
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .nav-link:hover {
+      color: #fff;
+    }
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 9px 18px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      border: 1px solid transparent;
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #0284c7, #0ea5e9, #22d3ee);
+      color: #041019;
+      font-weight: 700;
+      box-shadow: 0 4px 18px rgba(34, 211, 238, 0.25);
+    }
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #0ea5e9, #22d3ee, #38bdf8);
+      color: #000;
+      box-shadow: 0 6px 24px rgba(34, 211, 238, 0.45);
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: var(--card);
+      border-color: var(--line-light);
+      color: var(--text);
+    }
+    .btn-secondary:hover {
+      background: var(--card-hover);
+      border-color: var(--accent);
+      color: #fff;
+      transform: translateY(-1px);
+    }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+
+    /* Hero Section */
+    .hero {
+      padding: 80px 0 60px;
+      text-align: center;
+      position: relative;
+    }
+    .hero-glow {
+      position: absolute;
+      top: 10%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 350px;
+      background: radial-gradient(circle, rgba(34, 211, 238, 0.12) 0%, rgba(16, 185, 129, 0.05) 45%, transparent 70%);
+      filter: blur(60px);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .hero-content {
+      position: relative;
+      z-index: 1;
+      max-width: 880px;
+      margin: 0 auto;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: rgba(15, 20, 31, 0.85);
+      border: 1px solid var(--line-light);
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-bottom: 24px;
+    }
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      background: var(--emerald);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--emerald);
+    }
+    .hero h1 {
+      font-size: clamp(36px, 5.5vw, 62px);
+      font-weight: 900;
+      line-height: 1.1;
+      letter-spacing: -0.8px;
+      color: #fff;
+      margin-bottom: 20px;
+    }
+    .hero h1 .gradient-text {
+      background: linear-gradient(135deg, #22d3ee 20%, #38bdf8 50%, #34d399 90%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero-lead {
+      font-size: clamp(16px, 2.2vw, 20px);
+      color: var(--text-dim);
+      max-width: 780px;
+      margin: 0 auto 36px;
+      line-height: 1.5;
+    }
+    .hero-buttons {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 48px;
+    }
+    .hero-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      max-width: 980px;
+      margin: 0 auto;
+    }
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      text-align: center;
+    }
+    .stat-val {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+    .stat-lbl {
+      font-size: 12px;
+      color: var(--text-dim);
+      font-weight: 500;
+    }
+
+    /* Interactive IDE Simulator */
+    .simulator-section {
+      padding: 40px 0 80px;
+    }
+    .ide-window {
+      background: var(--panel);
+      border: 1px solid var(--line-light);
+      border-radius: var(--radius);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+      overflow: hidden;
+    }
+    .ide-titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: #090c12;
+      border-bottom: 1px solid var(--line);
+    }
+    .ide-controls {
+      display: flex;
+      gap: 6px;
+    }
+    .ide-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--line-light);
+    }
+    .ide-dot.close { background: #f87171; }
+    .ide-dot.min { background: #fbbf24; }
+    .ide-dot.max { background: #34d399; }
+    .ide-tabs {
+      display: flex;
+      background: #0c1017;
+      border-bottom: 1px solid var(--line);
+      overflow-x: auto;
+    }
+    .ide-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-dim);
+      background: transparent;
+      border: none;
+      border-right: 1px solid var(--line);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .ide-tab:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .ide-tab.active {
+      color: #fff;
+      background: var(--panel);
+      box-shadow: inset 0 -2px 0 var(--accent);
+    }
+    .ide-body {
+      min-height: 440px;
+      display: flex;
+      flex-direction: column;
+    }
+    .ide-view-panel {
+      display: none;
+      padding: 24px;
+      flex: 1;
+    }
+    .ide-view-panel.active {
+      display: block;
+    }
+
+    /* Simulation Panels */
+    .sim-canvas {
+      height: 380px;
+      background: #06080d;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .sim-canvas-grid {
+      position: absolute;
+      inset: 0;
+      background-image: 
+        radial-gradient(circle, rgba(34, 211, 238, 0.15) 1px, transparent 1px),
+        linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+      background-size: 20px 20px, 80px 80px, 80px 80px;
+    }
+    .hud-overlay {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      display: flex;
+      gap: 8px;
+      z-index: 2;
+    }
+    .hud-badge {
+      background: rgba(15, 20, 31, 0.9);
+      border: 1px solid var(--line-light);
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-family: monospace;
+      color: var(--accent);
+    }
+    .node-graph-demo {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      position: relative;
+      z-index: 2;
+      flex-wrap: wrap;
+      justify-content: center;
+      padding: 20px;
+    }
+    .demo-node {
+      background: var(--card);
+      border: 1px solid var(--line-light);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      min-width: 170px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      position: relative;
+      cursor: pointer;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+    .demo-node:hover {
+      transform: translateY(-2px);
+      border-color: var(--accent);
+    }
+    .node-header {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .node-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+    }
+    .node-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    .node-arrow {
+      color: var(--accent);
+      font-size: 20px;
+      font-weight: 900;
+    }
+
+    /* Comparison Section */
+    .compare-section {
+      padding: 60px 0;
+      border-top: 1px solid var(--line);
+    }
+    .section-title {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    .section-title h2 {
+      font-size: 32px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 12px;
+    }
+    .section-title p {
+      font-size: 16px;
+      color: var(--text-dim);
+      max-width: 640px;
+      margin: 0 auto;
+    }
+    .table-wrapper {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow-x: auto;
+    }
+    table.compare-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+    table.compare-table th, table.compare-table td {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--line);
+      font-size: 14px;
+    }
+    table.compare-table th {
+      background: #0d121c;
+      font-weight: 700;
+      color: #fff;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    table.compare-table tr:last-child td {
+      border-bottom: none;
+    }
+    .tag-bad {
+      color: var(--red);
+      font-weight: 500;
+    }
+    .tag-good {
+      color: var(--emerald);
+      font-weight: 600;
+    }
+
+    /* Feature Pillars */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 24px;
+      margin-bottom: 60px;
+    }
+    .feature-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 28px;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .feature-card:hover {
+      border-color: var(--accent);
+      background: var(--card-hover);
+      transform: translateY(-3px);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+    }
+    .feature-icon {
+      font-size: 28px;
+      margin-bottom: 16px;
+      display: inline-block;
+    }
+    .feature-card h3 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+    .feature-card p {
+      font-size: 14px;
+      color: var(--text-dim);
+      line-height: 1.55;
+    }
+    .feature-list {
+      margin-top: 14px;
+      list-style: none;
+    }
+    .feature-list li {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .feature-list li::before {
+      content: "▹";
+      color: var(--accent);
+      font-weight: bold;
+    }
+
+    /* Interactive Shortcut Filter */
+    .shortcuts-section {
+      padding: 60px 0;
+      border-top: 1px solid var(--line);
+    }
+    .filter-bar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      max-width: 480px;
+    }
+    .search-input {
+      flex: 1;
+      background: var(--panel);
+      border: 1px solid var(--line-light);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      color: #fff;
+      font-size: 14px;
+    }
+    .search-input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .shortcuts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 14px;
+    }
+    .shortcut-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .shortcut-card.hidden { display: none; }
+    .kbd-badge {
+      background: #090c12;
+      border: 1px solid var(--line-light);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .shortcut-desc {
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+
+    /* Quickstart Steps */
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+      margin-bottom: 60px;
+    }
+    .step-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 24px;
+      position: relative;
+    }
+    .step-number {
+      width: 32px;
+      height: 32px;
+      background: rgba(34, 211, 238, 0.15);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+    .step-card h3 {
+      font-size: 17px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+    .step-card p {
+      font-size: 13.5px;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+
+    /* FAQ Accordion */
+    .faq-item {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    .faq-question {
+      padding: 16px 20px;
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-weight: 600;
+      font-size: 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+    .faq-answer {
+      padding: 0 20px 16px;
+      color: var(--text-dim);
+      font-size: 14px;
+      line-height: 1.55;
+      display: none;
+    }
+    .faq-item.open .faq-answer {
+      display: block;
+    }
+    .faq-icon {
+      transition: transform 0.2s ease;
+    }
+    .faq-item.open .faq-icon {
+      transform: rotate(180deg);
+    }
+
+    /* Note on AI Banner */
+    .personal-note {
+      background: linear-gradient(135deg, rgba(15, 20, 31, 0.95), rgba(19, 25, 38, 0.95));
+      border: 1px solid var(--line-light);
+      border-left: 4px solid var(--accent);
+      border-radius: var(--radius-sm);
+      padding: 24px;
+      margin: 60px 0;
+    }
+    .personal-note h4 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+    .personal-note p {
+      font-size: 14px;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--line);
+      padding: 40px 0;
+      background: #05070a;
+      text-align: center;
+    }
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .footer-disclaimer {
+      font-size: 12px;
+      color: var(--text-muted);
+      max-width: 680px;
+      margin: 0 auto 12px;
+    }
+
+    @media (max-width: 768px) {
+      .hero-stats { grid-template-columns: repeat(2, 1fr); }
+      .nav-links { display: none; }
+      .features-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body class="bg-grid">
+
+  <!-- Navigation -->
+  <header>
+    <div class="container nav-inner">
+      <div class="brand">
+        <span class="brand-mark">◈</span>
+        <span>DayZ Studio</span>
+        <span class="badge-alpha">Alpha 5</span>
+      </div>
+      <nav class="nav-links">
+        <a href="#features" class="nav-link">Features</a>
+        <a href="#simulator" class="nav-link">IDE Preview</a>
+        <a href="#comparison" class="nav-link">Why Studio?</a>
+        <a href="#shortcuts" class="nav-link">Shortcuts</a>
+        <a href="#quickstart" class="nav-link">Setup</a>
+        <a href="#faq" class="nav-link">FAQ</a>
+      </nav>
+      <div class="nav-actions">
+        <a href="https://github.com/ghosthex-dev/dayz-studio" target="_blank" class="btn btn-secondary btn-sm">
+          ⭐ Star on GitHub
+        </a>
+        <a href="https://github.com/ghosthex-dev/dayz-studio/releases/latest" class="btn btn-primary btn-sm">
+          ⬇ Download .exe
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-glow"></div>
+    <div class="container hero-content">
+      <div class="status-pill">
+        <span class="status-dot"></span>
+        <span>LATEST: v0.1.0-ALPHA.5 • 100% VANILLA SERVER COMPATIBLE</span>
+      </div>
+      <h1>
+        The Visual Map &amp; Quest IDE for <span class="gradient-text">Vanilla DayZ</span>
+      </h1>
+      <p class="hero-lead">
+        Build living servers on real terrain: Skyrim-style branching NPC dialogue trees, visual quest flows, custom loot economies, and 1-click cryptographically signed mod exports. <strong>Zero mod dependencies. No CF. No DayZ Expansion required.</strong>
+      </p>
+      <div class="hero-buttons">
+        <a href="https://github.com/ghosthex-dev/dayz-studio/releases/latest" class="btn btn-primary">
+          ⬇ Download Setup (.exe)
+        </a>
+        <a href="https://github.com/ghosthex-dev/dayz-studio" target="_blank" class="btn btn-secondary">
+          Explore Repository on GitHub
+        </a>
+        <a href="#quickstart" class="btn btn-secondary">
+          ⚡ 3-Step Setup Guide
+        </a>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card">
+          <div class="stat-val">100%</div>
+          <div class="stat-lbl">Vanilla Server Safe</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val">&lt; 10s</div>
+          <div class="stat-lbl">In-Editor Game Viewport</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val">1-Click</div>
+          <div class="stat-lbl">Signed PBO &amp; Keys</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val">~5,000</div>
+          <div class="stat-lbl">Auto-Discovered Classes</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive IDE Simulator -->
+  <section class="simulator-section" id="simulator">
+    <div class="container">
+      <div class="section-title">
+        <h2>Interactive Studio Preview</h2>
+        <p>Switch between Studio views to see how the visual map editor, node quest graph, and live game viewport work together.</p>
+      </div>
+
+      <div class="ide-window">
+        <div class="ide-titlebar">
+          <div class="ide-controls">
+            <span class="ide-dot close"></span>
+            <span class="ide-dot min"></span>
+            <span class="ide-dot max"></span>
+          </div>
+          <div style="font-size: 12px; color: var(--text-dim); font-family: monospace;">DayZ Studio — Project: Chernarus_Survival_Camp.dzstudio</div>
+          <div style="font-size: 11px; color: var(--emerald); font-weight: bold;">● SERVER CONNECTED</div>
+        </div>
+
+        <div class="ide-tabs">
+          <button class="ide-tab active" onclick="switchSimTab('quests', this)">⎇ Quests &amp; Dialogue</button>
+          <button class="ide-tab" onclick="switchSimTab('map', this)">🗺️ 2D/3D Map &amp; Eraser</button>
+          <button class="ide-tab" onclick="switchSimTab('game', this)">🎮 In-Editor Game View</button>
+          <button class="ide-tab" onclick="switchSimTab('traders', this)">🛒 Economy &amp; Traders</button>
+          <button class="ide-tab" onclick="switchSimTab('code', this)">💻 Enforce Linter &amp; Console</button>
+        </div>
+
+        <div class="ide-body">
+          <!-- Quests Tab -->
+          <div id="sim-quests" class="ide-view-panel active">
+            <div class="sim-canvas">
+              <div class="sim-canvas-grid"></div>
+              <div class="hud-overlay">
+                <span class="hud-badge">VIEW: QUEST FLOW GRAPH</span>
+                <span class="hud-badge" style="color: var(--emerald)">STATUS: 3 NODES ACTIVE</span>
+              </div>
+              <div class="node-graph-demo">
+                <div class="demo-node" style="border-top: 3px solid var(--accent)">
+                  <div class="node-header"><span style="color:var(--accent)">Trigger</span> <span>#01</span></div>
+                  <div class="node-title">🎯 Military Base Entry</div>
+                  <div class="node-sub">Area: 45m Radius</div>
+                </div>
+                <div class="node-arrow">➔</div>
+                <div class="demo-node" style="border-top: 3px solid var(--amber)">
+                  <div class="node-header"><span style="color:var(--amber)">Condition</span> <span>#02</span></div>
+                  <div class="node-title">🔍 Check: Bleeding?</div>
+                  <div class="node-sub">Player Health State</div>
+                </div>
+                <div class="node-arrow">➔</div>
+                <div class="demo-node" style="border-top: 3px solid #38bdf8">
+                  <div class="node-header"><span style="color:#38bdf8">Dialogue NPC</span> <span>#03</span></div>
+                  <div class="node-title">💬 Medic Alexei</div>
+                  <div class="node-sub">Voice line: medic_intro.ogg</div>
+                </div>
+                <div class="node-arrow">➔</div>
+                <div class="demo-node" style="border-top: 3px solid var(--emerald)">
+                  <div class="node-header"><span style="color:var(--emerald)">Reward</span> <span>#04</span></div>
+                  <div class="node-title">🎁 Morphine + $100 Cash</div>
+                  <div class="node-sub">+250 XP &amp; Standing</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Map Tab -->
+          <div id="sim-map" class="ide-view-panel">
+            <div class="sim-canvas">
+              <div class="sim-canvas-grid"></div>
+              <div class="hud-overlay">
+                <span class="hud-badge">MAP: CHERNARUS+ SATELLITE (512px LOD)</span>
+                <span class="hud-badge" style="color: var(--amber)">SURFACE SNAP: ON [O]</span>
+                <span class="hud-badge" style="color: var(--red)">VANILLA OBJECTS ERASED: 4</span>
+              </div>
+              <div style="text-align: center; z-index: 2;">
+                <div style="font-size: 40px; margin-bottom: 8px;">🗺️</div>
+                <div style="font-weight: 700; font-size: 18px; color: #fff;">To-Scale Terrain &amp; 3D ODOL Building Engine</div>
+                <div style="font-size: 13px; color: var(--text-dim); margin-top: 4px;">Click any vanilla wall, tree, or building to erase. Seamless surface snapping and prefab brushes.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Game View Tab -->
+          <div id="sim-game" class="ide-view-panel">
+            <div class="sim-canvas">
+              <div class="sim-canvas-grid"></div>
+              <div class="hud-overlay">
+                <span class="hud-badge">VIEWPORT: DOCKED DAYZ CLIENT</span>
+                <span class="hud-badge" style="color: var(--emerald)">🎒 CENTRAL ECONOMY: ACTIVE</span>
+                <span class="hud-badge">ZOMBIES: SPAWNED</span>
+              </div>
+              <div style="text-align: center; z-index: 2;">
+                <div style="font-size: 40px; margin-bottom: 8px;">🎮</div>
+                <div style="font-weight: 700; font-size: 18px; color: #fff;">Embedded DayZ Game Viewport</div>
+                <div style="font-size: 13px; color: var(--text-dim); margin-top: 4px;">Test your map, quests, and loot spawns with live infected and animals in under 10 seconds.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Traders Tab -->
+          <div id="sim-traders" class="ide-view-panel">
+            <div class="sim-canvas">
+              <div class="sim-canvas-grid"></div>
+              <div class="hud-overlay">
+                <span class="hud-badge">STORE: MIREK'S SURVIVOR STORE</span>
+                <span class="hud-badge" style="color: var(--emerald)">CURRENCY: DOLLAR BILLS ($1-$100)</span>
+              </div>
+              <div style="text-align: center; z-index: 2;">
+                <div style="font-size: 40px; margin-bottom: 8px;">🛒</div>
+                <div style="font-weight: 700; font-size: 18px; color: #fff;">Dynamic Stores &amp; Paper Currency</div>
+                <div style="font-size: 13px; color: var(--text-dim); margin-top: 4px;">Two-column buy/sell lists with condition locks (e.g. Friendly Faction only) and stock limits.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Code Tab -->
+          <div id="sim-code" class="ide-view-panel">
+            <div class="sim-canvas" style="align-items: flex-start; justify-content: flex-start; padding: 24px;">
+              <div class="sim-canvas-grid"></div>
+              <div style="z-index: 2; font-family: monospace; font-size: 13px; color: #cbd5e1; line-height: 1.8;">
+                <div><span style="color: #f87171;">class</span> <span style="color: #38bdf8;">DSQ_QuestMedic</span> : <span style="color: #fbbf24;">DSQ_QuestBase</span> {</div>
+                <div style="padding-left: 20px;"><span style="color: #a855f7;">override void</span> <span style="color: #34d399;">OnTrigger</span>(PlayerBase player) {</div>
+                <div style="padding-left: 40px;"><span style="color: #22d3ee;">if</span> (player.GetBleedingBits() &gt; 0) {</div>
+                <div style="padding-left: 60px;">StartConversation(<span style="color: #f59e0b;">"Medic_Help"</span>);</div>
+                <div style="padding-left: 40px;">}</div>
+                <div style="padding-left: 20px;">}</div>
+                <div>}</div>
+                <div style="margin-top: 16px; color: var(--emerald); font-weight: bold;">✔ Pre-build checks passed: 0 syntax errors, 0 undefined class names</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comparison Section -->
+  <section class="compare-section" id="comparison">
+    <div class="container">
+      <div class="section-title">
+        <h2>Why DayZ Studio?</h2>
+        <p>A true paradigm shift for DayZ server owners, scripters, and world builders.</p>
+      </div>
+
+      <div class="table-wrapper">
+        <table class="compare-table">
+          <thead>
+            <tr>
+              <th>Modding Capability</th>
+              <th>Traditional Workflow</th>
+              <th>With DayZ Studio ◈</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Server Dependencies</strong></td>
+              <td class="tag-bad">Requires CF, Dabs Framework, Expansion, or heavy mods</td>
+              <td class="tag-good">100% Vanilla Server Compatible (Zero Mod Dependencies)</td>
+            </tr>
+            <tr>
+              <td><strong>Terrain &amp; Map Editing</strong></td>
+              <td class="tag-bad">Flat 2D image coords or desynced 3D tool heights</td>
+              <td class="tag-good">Real In-Game Terrain (Satellite imagery &amp; ODOL meshes)</td>
+            </tr>
+            <tr>
+              <td><strong>Object Eraser</strong></td>
+              <td class="tag-bad">Manual coordinates in init.c or tedious delete files</td>
+              <td class="tag-good">1-Click Visual Eraser (Removes trees, walls, props)</td>
+            </tr>
+            <tr>
+              <td><strong>Quest Creation</strong></td>
+              <td class="tag-bad">Hand-scripting RPCs, configs, and JSON triggers</td>
+              <td class="tag-good">Visual Node Graph (Skyrim dialogue trees &amp; voice lines)</td>
+            </tr>
+            <tr>
+              <td><strong>Testing Iteration Loop</strong></td>
+              <td class="tag-bad">PBO repack ➔ Sign key ➔ Restart server (5–10 min loop)</td>
+              <td class="tag-good">Docked Game Viewport with live Central Economy (&lt;10s)</td>
+            </tr>
+            <tr>
+              <td><strong>Mod Signing &amp; Workshop</strong></td>
+              <td class="tag-bad">Manual command-line DSUtils / batch scripts</td>
+              <td class="tag-good">1-Click Crypto Signing &amp; Direct Steam Workshop Uploader</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Grid -->
+  <section class="features-section" id="features" style="padding: 60px 0;">
+    <div class="container">
+      <div class="section-title">
+        <h2>Engineered for Deep Survival Worlds</h2>
+        <p>Everything you need to craft custom RPG servers, trade outposts, and combat encounters.</p>
+      </div>
+
+      <div class="features-grid">
+        <!-- Feature 1 -->
+        <div class="feature-card">
+          <span class="feature-icon">🗺️</span>
+          <h3>World &amp; Map Engineering</h3>
+          <p>Extract to-scale satellite imagery and 3D ODOL building meshes directly from your local DayZ installation.</p>
+          <ul class="feature-list">
+            <li>Chernarus+, Livonia, Sakhal, Nasdara, and custom terrains</li>
+            <li>1-Click Vanilla Object Eraser for world clutter</li>
+            <li>3D transform gizmos, surface snapping, and prefab stamps</li>
+            <li>Real-time performance heatmaps (150m network radius)</li>
+          </ul>
+        </div>
+
+        <!-- Feature 2 -->
+        <div class="feature-card">
+          <span class="feature-icon">📜</span>
+          <h3>Skyrim-Style RPG Quests</h3>
+          <p>Build branching dialogue trees with cinematic cameras, voice-line audio, and conditional dialogue choices.</p>
+          <ul class="feature-list">
+            <li>Interactive [F] Talk prompts and multi-choice dialogue trees</li>
+            <li>Attach custom .ogg/.wav voice lines with auto-config</li>
+            <li>In-game Compass HUD Tracker and Quest Journal [J]</li>
+            <li>Bonus objectives, quest chains, and dynamic NPC patrol routes</li>
+          </ul>
+        </div>
+
+        <!-- Feature 3 -->
+        <div class="feature-card">
+          <span class="feature-icon">🎮</span>
+          <h3>Docked Game Viewport</h3>
+          <p>The desktop app launches a docked, borderless DayZ client straight inside your workspace.</p>
+          <ul class="feature-list">
+            <li>Central Economy active: live loot, infected, and animals</li>
+            <li>Bidirectional camera and object selection sync</li>
+            <li>Real-time quest node progress visualization in 3D</li>
+            <li>Test helpers: simulate kill, spawn infected, teleport</li>
+          </ul>
+        </div>
+
+        <!-- Feature 4 -->
+        <div class="feature-card">
+          <span class="feature-icon">🎒</span>
+          <h3>Economy &amp; Faction Reputation</h3>
+          <p>Introduce cash economies, customizable traders, faction standings, and gated progression.</p>
+          <ul class="feature-list">
+            <li>Stackable Dollar Bills ($1–$100) with custom art support</li>
+            <li>Two-column trading stores with condition locks and stock limits</li>
+            <li>Factions (-1000 to +1000) with dynamic kill rules &amp; discounts</li>
+            <li>Persistent player XP, bounties, and usable objects [F]</li>
+          </ul>
+        </div>
+
+        <!-- Feature 5 -->
+        <div class="feature-card">
+          <span class="feature-icon">🧩</span>
+          <h3>Enforce Script IDE &amp; Console</h3>
+          <p>Write Enforce script logic with an in-editor syntax highlighter, real-time error linter, and live console.</p>
+          <ul class="feature-list">
+            <li>Explains DayZ compile mistakes as you type</li>
+            <li>Live floating script console following script.log / RPT</li>
+            <li>Custom Node Maker: turn snippets into reusable blocks</li>
+            <li>Pre-build checks prevent broken server launches</li>
+          </ul>
+        </div>
+
+        <!-- Feature 6 -->
+        <div class="feature-card">
+          <span class="feature-icon">📦</span>
+          <h3>1-Click Signed PBO &amp; Workshop</h3>
+          <p>Package complete mods, sign them cryptographically, and deploy to players in seconds.</p>
+          <ul class="feature-list">
+            <li>Automated .biprivatekey and .bikey generation</li>
+            <li>Direct Steam Workshop uploader (no passwords needed)</li>
+            <li>Built-in 1-Click local multiplayer test server (BattlEye safe)</li>
+            <li>Ready-to-deploy ZIP package with server INSTALL.txt</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Keyboard Shortcuts Filter -->
+  <section class="shortcuts-section" id="shortcuts">
+    <div class="container">
+      <div class="section-title">
+        <h2>Keyboard &amp; Navigation Cheat Sheet</h2>
+        <p>Fast-track your visual workflow with DayZ Studio's built-in shortcuts.</p>
+      </div>
+
+      <div class="filter-bar">
+        <input type="text" id="shortcut-search" class="search-input" placeholder="Search shortcuts (e.g. gizmo, journal, snap, camera)..." oninput="filterShortcuts()">
+      </div>
+
+      <div class="shortcuts-grid" id="shortcuts-container">
+        <div class="shortcut-card" data-tags="views map game 3d quests npcs"><span class="shortcut-desc">Switch Views (1..5)</span><span class="kbd-badge">Alt + 1..5</span></div>
+        <div class="shortcut-card" data-tags="console script terminal"><span class="shortcut-desc">Toggle Script Console</span><span class="kbd-badge">Ctrl + `</span></div>
+        <div class="shortcut-card" data-tags="workspace layout profile"><span class="shortcut-desc">Workspace Profiles</span><span class="kbd-badge">Ctrl + Shift + W</span></div>
+        <div class="shortcut-card" data-tags="help shortcut dialog"><span class="shortcut-desc">Help &amp; Shortcuts</span><span class="kbd-badge">F1</span></div>
+        <div class="shortcut-card" data-tags="gizmo translate rotate scale 3d"><span class="shortcut-desc">Gizmo Mode (Translate/Rotate/Scale)</span><span class="kbd-badge">1 / 2 / 3</span></div>
+        <div class="shortcut-card" data-tags="coordinate world local space"><span class="shortcut-desc">Toggle World/Local Space</span><span class="kbd-badge">X</span></div>
+        <div class="shortcut-card" data-tags="snap surface roof wall terrain"><span class="shortcut-desc">Toggle Snap to Surfaces</span><span class="kbd-badge">O</span></div>
+        <div class="shortcut-card" data-tags="ground drop bottom"><span class="shortcut-desc">Drop Object to Ground</span><span class="kbd-badge">End</span></div>
+        <div class="shortcut-card" data-tags="slope angle terrain align"><span class="shortcut-desc">Align to Terrain Slope</span><span class="kbd-badge">N</span></div>
+        <div class="shortcut-card" data-tags="camera fly selection focus"><span class="shortcut-desc">Fly Camera to Selection</span><span class="kbd-badge">F</span></div>
+        <div class="shortcut-card" data-tags="grid snap cycle"><span class="shortcut-desc">Cycle Grid Snap (1m..50m)</span><span class="kbd-badge">G</span></div>
+        <div class="shortcut-card" data-tags="select move tool"><span class="shortcut-desc">Select Tool</span><span class="kbd-badge">V</span></div>
+        <div class="shortcut-card" data-tags="pan hand tool"><span class="shortcut-desc">Pan Tool</span><span class="kbd-badge">H / Space</span></div>
+        <div class="shortcut-card" data-tags="measure ruler distance"><span class="shortcut-desc">Measure Distance</span><span class="kbd-badge">M</span></div>
+        <div class="shortcut-card" data-tags="game journal quest"><span class="shortcut-desc">In-Game Quest Journal</span><span class="kbd-badge">J</span></div>
+        <div class="shortcut-card" data-tags="track quest journal"><span class="shortcut-desc">Track / Untrack Quest</span><span class="kbd-badge">T / Enter</span></div>
+        <div class="shortcut-card" data-tags="character sheet stats xp"><span class="shortcut-desc">In-Game Character Sheet</span><span class="kbd-badge">K</span></div>
+        <div class="shortcut-card" data-tags="duplicate object copy"><span class="shortcut-desc">Duplicate Selection</span><span class="kbd-badge">Ctrl + D</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Quickstart Setup -->
+  <section class="quickstart-section" id="quickstart" style="padding: 60px 0; border-top: 1px solid var(--line);">
+    <div class="container">
+      <div class="section-title">
+        <h2>Get Started in 3 Steps</h2>
+        <p>DayZ Studio runs locally and builds its data safely from your existing Steam install.</p>
+      </div>
+
+      <div class="steps-grid">
+        <div class="step-card">
+          <div class="step-number">1</div>
+          <h3>Prerequisites on Steam</h3>
+          <p>Ensure you have <strong>DayZ</strong> and the free <strong>DayZ Tools</strong> installed in Steam. Studio uses DayZ Tools to binarize and cryptographically sign your mods.</p>
+        </div>
+
+        <div class="step-card">
+          <div class="step-number">2</div>
+          <h3>Download DayZ Studio</h3>
+          <p>Download <code>DayZStudio-Setup-*.exe</code> from the <a href="https://github.com/ghosthex-dev/dayz-studio/releases/latest">latest release</a>. Runs per-user with no admin rights required. All Python and Electron dependencies are included.</p>
+        </div>
+
+        <div class="step-card">
+          <div class="step-number">3</div>
+          <h3>10-Min First-Time Capture</h3>
+          <p>Open Studio, pick your map (Chernarus, Sakhal, etc.), and click <strong>Extract Imagery</strong> and <strong>Capture from Game</strong>. Studio safely reads heights and meshes once per map.</p>
+        </div>
+      </div>
+
+      <!-- Creator Note -->
+      <div class="personal-note">
+        <h4>✍️ A Personal Note on Development &amp; AI</h4>
+        <p>While I utilized Claude to streamline aspects of development, DayZ Studio is by no means an automated AI creation. Countless hours of my own intense effort, problem-solving, architectural planning, and personal dedication went into building and refining this project. Far from being generic "AI slop," this is the result of genuine work and creative passion. I ask that you please respect the time and effort that went into bringing this project to life.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ Section -->
+  <section class="faq-section" id="faq" style="padding: 60px 0; border-top: 1px solid var(--line);">
+    <div class="container" style="max-width: 860px;">
+      <div class="section-title">
+        <h2>Frequently Asked Questions</h2>
+        <p>Clear answers to common questions about safety, mod signing, and server compatibility.</p>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFaq(this)">
+          <span>Why does Windows SmartScreen show "Windows protected your PC"?</span>
+          <span class="faq-icon">▾</span>
+        </button>
+        <div class="faq-answer">
+          DayZ Studio is an independent alpha release without an expensive EV code-signing certificate. Click <strong>More info</strong> and select <strong>Run anyway</strong>. The application is open source and can be inspected directly on GitHub.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFaq(this)">
+          <span>Do players on my server need to install Community Framework or DayZ Expansion?</span>
+          <span class="faq-icon">▾</span>
+        </button>
+        <div class="faq-answer">
+          <strong>No!</strong> DayZ Studio is designed specifically for pure vanilla DayZ servers. The exported mod contains its own lightweight, standalone Enforce Script framework. Players need zero third-party frameworks.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFaq(this)">
+          <span>Are any copyrighted Bohemia Interactive game files distributed with DayZ Studio?</span>
+          <span class="faq-icon">▾</span>
+        </button>
+        <div class="faq-answer">
+          <strong>None.</strong> The repository and installer contain zero proprietary game files. DayZ Studio extracts terrain tiles, collision models, and economy definitions locally from your own legally owned Steam installation on first run.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFaq(this)">
+          <span>Can I publish my exported quest mod directly to the Steam Workshop?</span>
+          <span class="faq-icon">▾</span>
+        </button>
+        <div class="faq-answer">
+          Yes! Go to <strong>File ▸ ☁ Publish to Steam Workshop…</strong>. DayZ Studio automatically signs the PBO, packages the public .bikey, and uploads the mod directly through your local Steam client.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="footer-links">
+        <a href="https://github.com/ghosthex-dev/dayz-studio">GitHub Repository</a>
+        <a href="https://github.com/ghosthex-dev/dayz-studio/releases/latest">Download Latest Release</a>
+        <a href="https://github.com/ghosthex-dev/dayz-studio/issues">Report Issue / Feedback</a>
+        <a href="https://github.com/ghosthex-dev/dayz-studio/blob/main/LICENSE">License</a>
+      </div>
+      <p class="footer-disclaimer">
+        DayZ Studio is an independent, fan-made open-source tool and is not affiliated with, endorsed by, or sponsored by Bohemia Interactive. All game assets remain the property of Bohemia Interactive or their respective creators.
+      </p>
+      <p style="font-size: 13px; color: var(--text-dim);">
+        &copy; 2026 DayZ Studio. Built with dedication for the DayZ modding community.
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    function switchSimTab(tabName, btn) {
+      document.querySelectorAll('.ide-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.ide-view-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      const panel = document.getElementById('sim-' + tabName);
+      if (panel) panel.classList.add('active');
+    }
+
+    function toggleFaq(btn) {
+      const item = btn.parentElement;
+      item.classList.toggle('open');
+    }
+
+    function filterShortcuts() {
+      const query = document.getElementById('shortcut-search').value.toLowerCase().trim();
+      const cards = document.querySelectorAll('.shortcut-card');
+      cards.forEach(card => {
+        const text = card.textContent.toLowerCase();
+        const tags = (card.getAttribute('data-tags') || '').toLowerCase();
+        if (!query || text.includes(query) || tags.includes(query)) {
+          card.classList.remove('hidden');
+        } else {
+          card.classList.add('hidden');
+        }
+      });
+    }
+  </script>
+</body>
+</html>

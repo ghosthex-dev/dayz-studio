@@ -1,0 +1,152 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" width="100%" height="100%">
+  <defs>
+    <!-- Gradients -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#080a0f"/>
+      <stop offset="40%" stop-color="#0d1118"/>
+      <stop offset="100%" stop-color="#05070a"/>
+    </linearGradient>
+    <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+    <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#34d399"/>
+    </linearGradient>
+    <linearGradient id="accentLine" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0"/>
+      <stop offset="25%" stop-color="#22d3ee" stop-opacity="0.8"/>
+      <stop offset="50%" stop-color="#38bdf8" stop-opacity="1"/>
+      <stop offset="75%" stop-color="#10b981" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Filters -->
+    <filter id="cyanGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Pattern -->
+    <pattern id="gridPattern" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#22d3ee" stroke-opacity="0.04" stroke-width="1"/>
+    </pattern>
+    <pattern id="dotsPattern" width="20" height="20" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1" fill="#e2e8f0" fill-opacity="0.03"/>
+    </pattern>
+  </defs>
+
+  <style>
+    .title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-weight: 900; font-size: 64px; fill: #ffffff; letter-spacing: 4px; }
+    .subtitle { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-weight: 700; font-size: 19px; fill: #22d3ee; letter-spacing: 6px; text-transform: uppercase; }
+    .desc { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-weight: 400; font-size: 16px; fill: #94a3b8; }
+    .badge-txt { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; font-weight: 600; fill: #cbd5e1; }
+    .tag-border { stroke: #334155; stroke-width: 1; fill: #111722; rx: 6px; }
+    .brand-mark { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 68px; font-weight: 900; fill: url(#cyanGrad); filter: url(#cyanGlow); }
+  </style>
+
+  <!-- Background Base -->
+  <rect width="100%" height="100%" fill="url(#bgGrad)"/>
+  <rect width="100%" height="100%" fill="url(#gridPattern)"/>
+  <rect width="100%" height="100%" fill="url(#dotsPattern)"/>
+
+  <!-- Tactical Radar & Coordinate Elements -->
+  <g opacity="0.25">
+    <circle cx="1060" cy="180" r="140" fill="none" stroke="#22d3ee" stroke-width="1" stroke-dasharray="4 6"/>
+    <circle cx="1060" cy="180" r="90" fill="none" stroke="#22d3ee" stroke-width="1"/>
+    <circle cx="1060" cy="180" r="40" fill="none" stroke="#38bdf8" stroke-width="1" stroke-dasharray="2 4"/>
+    <line x1="1060" y1="20" x2="1060" y2="340" stroke="#22d3ee" stroke-width="1" stroke-dasharray="2 6"/>
+    <line x1="900" y1="180" x2="1200" y2="180" stroke="#22d3ee" stroke-width="1" stroke-dasharray="2 6"/>
+  </g>
+
+  <!-- Corner Brackets -->
+  <g stroke="#22d3ee" stroke-opacity="0.35" stroke-width="2" fill="none">
+    <path d="M 25 45 L 25 25 L 45 25"/>
+    <path d="M 1175 45 L 1175 25 L 1155 25"/>
+    <path d="M 25 375 L 25 395 L 45 395"/>
+    <path d="M 1175 375 L 1175 395 L 1155 395"/>
+  </g>
+
+  <!-- Coordinate readout labels -->
+  <text x="50" y="42" font-family="monospace" font-size="11" fill="#475569" letter-spacing="1">GRID 064 // 128 CHERNARUS+</text>
+  <text x="1000" y="42" font-family="monospace" font-size="11" fill="#475569" letter-spacing="1">BUILD v0.1.0-ALPHA</text>
+
+  <!-- Glowing Accent Divider Top -->
+  <rect x="150" y="65" width="900" height="1.5" fill="url(#accentLine)"/>
+
+  <!-- Main Hero Content -->
+  <g transform="translate(100, 110)">
+    <!-- Logo Icon -->
+    <g transform="translate(0, 50)">
+      <rect x="0" y="0" width="86" height="86" rx="18" fill="#141a24" stroke="#22d3ee" stroke-width="2" stroke-opacity="0.6"/>
+      <circle cx="43" cy="43" r="30" fill="none" stroke="#22d3ee" stroke-opacity="0.2" stroke-dasharray="4 4"/>
+      <!-- Reticle / Diamond Icon -->
+      <path d="M 43 18 L 68 43 L 43 68 L 18 43 Z" fill="none" stroke="url(#cyanGrad)" stroke-width="3" filter="url(#softGlow)"/>
+      <circle cx="43" cy="43" r="5" fill="#38bdf8"/>
+    </g>
+
+    <!-- Header Text -->
+    <g transform="translate(110, 30)">
+      <text x="0" y="25" class="subtitle">VISUAL MAP &amp; QUEST EDITOR</text>
+      <text x="0" y="85" class="title">DAYZ STUDIO</text>
+      <text x="0" y="122" class="desc">Build RPG quests, conversations, custom loot &amp; signed mods for <tspan fill="#e2e8f0" font-weight="600">vanilla DayZ servers</tspan>.</text>
+      <text x="0" y="145" class="desc">No Community Framework. No Expansion required. In-editor game viewport.</text>
+    </g>
+  </g>
+
+  <!-- Feature Pills / Badges Row -->
+  <g transform="translate(100, 315)">
+    <!-- Pill 1: Map Editor -->
+    <g transform="translate(0, 0)">
+      <rect width="180" height="38" class="tag-border"/>
+      <circle cx="20" cy="19" r="4" fill="#22d3ee"/>
+      <text x="35" y="24" class="badge-txt">🗺️ Real 3D Terrain</text>
+    </g>
+
+    <!-- Pill 2: RPG Quests -->
+    <g transform="translate(195, 0)">
+      <rect width="185" height="38" class="tag-border"/>
+      <circle cx="20" cy="19" r="4" fill="#fbbf24"/>
+      <text x="35" y="24" class="badge-txt">📜 Skyrim Dialogues</text>
+    </g>
+
+    <!-- Pill 3: Embedded Viewport -->
+    <g transform="translate(395, 0)">
+      <rect width="195" height="38" class="tag-border"/>
+      <circle cx="20" cy="19" r="4" fill="#34d399"/>
+      <text x="35" y="24" class="badge-txt">🎮 Docked Game View</text>
+    </g>
+
+    <!-- Pill 4: Economy & Loot -->
+    <g transform="translate(605, 0)">
+      <rect width="190" height="38" class="tag-border"/>
+      <circle cx="20" cy="19" r="4" fill="#38bdf8"/>
+      <text x="35" y="24" class="badge-txt">🎒 Central Economy</text>
+    </g>
+
+    <!-- Pill 5: 1-Click Signed Mod -->
+    <g transform="translate(810, 0)">
+      <rect width="190" height="38" class="tag-border"/>
+      <circle cx="20" cy="19" r="4" fill="#a855f7"/>
+      <text x="35" y="24" class="badge-txt">📦 1-Click Signed PBO</text>
+    </g>
+  </g>
+
+  <!-- Accent Divider Bottom -->
+  <rect x="150" y="380" width="900" height="1.5" fill="url(#accentLine)"/>
+</svg>
