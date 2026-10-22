@@ -116,4 +116,12 @@ Each phase is tested on the local server before the next.
   Verified by the owner in game: sit by the fire loop, stands up and waves, salute, follow.
   Not yet tried in game: Follow giving up, Guard node, Hostile player seen, Time of day, Condition, Walk to, Wait,
   Random, Leave. Dropped emotes the game has no class for (kneel, lie down) and surrender (needs its own exit).
-- Phases 4-5 to do.
+- **Phase 4 - done, tested in game** (2026-10-22): custom NPC script nodes. The custom-node system has two more
+  kinds: **NPC action** (`cnb_*`, `static void CNB_X(PlayerBase npc, PlayerBase player, array<string> args)`, a step;
+  `player` can be null) and **NPC event** (`cne_*`, `static bool CNE_X(PlayerBase npc, PlayerBase player, …)`, checked
+  every second for each player within the node's range, fires once per player with a cooldown). They register into
+  the NPC node table, show in the NPC graph's add menu ("Make your own node…"), share the library / project copies /
+  wizard with the quest kinds, and DSCustom always gets `RunNpcNode` / `CheckNpcNode`. Four NPC examples (Heal the
+  Player, Drop an Item, Player Holds an Item, Player Is Hurt). Verified: a custom event (player holds an apple) started
+  a chain that said a line and ran a custom step on the server. Play-test progress logs every step a brain runs.
+- Phase 5 to do: Showcase NPCs, README, release (0.1.0-alpha.6).

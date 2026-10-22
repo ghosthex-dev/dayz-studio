@@ -36,7 +36,8 @@
   const posTxt = (pos) => (pos ? `${Math.round(DS.resolvePos(pos).x)}, ${Math.round(DS.resolvePos(pos).z)}` : 'its position');
   const jog = { k: 'prun', t: 'bool', label: 'Jog instead of walking', def: false };
 
-  DS.NPC_NODE_TYPES = {
+  // (custom NPC nodes - js/customnodes.js - may have registered themselves already: keep them)
+  DS.NPC_NODE_TYPES = Object.assign(DS.NPC_NODE_TYPES || {}, {
     // ---- events: start a chain
     ev_spawn: { cat: 'event', title: 'Spawned', icon: '✦', fields: [],
       desc: 'When the NPC appears: at server start, or when its “Only appears while” condition comes true. Start its everyday routine here (patrol, wander, stand guard…).',
@@ -111,7 +112,7 @@
     fl_if: { cat: 'flow', title: 'Only if', icon: '⑂', fields: [{ k: 'cond', t: 'cond', label: 'Only continues if', def: null }],
       desc: 'The chain only goes on when the condition holds (for the player who started it).', sum: (p) => (DS.Cond ? DS.Cond.text(p.cond) : '') },
     fl_random: { cat: 'flow', title: 'Random', icon: '🎲', fields: [], desc: 'Goes on along ONE of its wires, picked at random - for variety (different lines, different routes).', sum: () => 'one wire at random' },
-  };
+  });
 
   /* ================================================================ store */
   N.list = () => S.project.npcs || (S.project.npcs = []);
@@ -258,6 +259,11 @@
             case 'st_give': o.items = (p.items || []).filter((i) => String(i.c || '').trim()).map((i) => ({ c: String(i.c).trim(), n: Math.max(1, Math.round(+i.n || 1)), chance: 1 })); break;
             case 'st_setvar': o.var = String(p.var || ''); o.op = p.op === 'add' ? 'add' : 'set'; o.a = +p.value || 0; break;
           }
+          if (DS.CustomNodes && DS.CustomNodes.isCustom(n.type)) {
+            const def = DS.CustomNodes.def(n.type);
+            o.args = def ? DS.CustomNodes.args(def, p) : [];
+            if (n.type.startsWith('cne_')) { o.a = +p.radius || 30; o.b = +p.cooldown || 0; }
+          }
           return o;
         }),
       };
@@ -284,6 +290,7 @@
       const T = DS.NPC_NODE_TYPES[n.type];
       if (!T) return;
       if (T.cat !== 'event' && !incoming.has(n.id)) add(n.id, 'warn', 'Nothing leads here - connect an event (e.g. Spawned) to it, or it never runs.');
+      if (T.missing) add(n.id, 'error', 'This custom node’s definition is missing (' + n.type + '). Import its .json (🧩 Custom nodes) or delete the node.');
       if (n.type === 'act_patrol' && !(n.p.patrol || []).length) add(n.id, 'error', 'No waypoints yet - draw the route.');
       if (n.type === 'st_say' && !String(n.p.text || '').trim()) add(n.id, 'warn', 'Nothing to say.');
       if (n.type === 'st_give' && !(n.p.items || []).some((i) => String(i.c || '').trim())) add(n.id, 'warn', 'No items listed.');
@@ -354,7 +361,12 @@
         el('button', { class: 'btn primary', onclick: () => { N.create(); S.commit(); } }, 'Create your first NPC')),
       validate: (g) => N.validateGraph(g),
       newGraph: () => N.create().graph,
+      addMenuExtra: (m, close) => m.append(el('div', { class: 'ctx-sep' }), el('div', { class: 'ctx-item', title: 'Write a little Enforce Script and use it as an NPC step or event', onclick: () => {
+        close();
+        DS.CustomNodes.wizard({ id: '', title: '', icon: '⚙', kind: 'npcaction', desc: '', params: [], code: '' });
+      } }, el('span', { class: 'ctx-ic' }, '🧩'), 'Make your own node…')),
       onAdd: (n) => {
+        if (DS.CustomNodes && DS.CustomNodes.isCustom(n.type)) DS.CustomNodes.embed(n.type);   // the project keeps its own copy
         // points of a new activity start at the NPC (a wander area, a spot to stand)
         const npc = N.active();
         if (!npc) return;
@@ -404,9 +416,10 @@
     function draw() {
       box.innerHTML = '';
       const cat = DS.NPC_NODE_CATS[T.cat];
-      box.append(
+      box.append(...[
         el('div', { class: 'ins-head', style: { borderLeft: '4px solid ' + cat.color } }, el('span', { class: 'ne-icon' }, T.icon), el('div', null, el('div', { class: 'ins-title' }, T.title), el('div', { class: 'ins-sub' }, cat.name))),
-        el('p', { class: 'ins-desc' }, T.desc));
+        el('p', { class: 'ins-desc' }, T.desc),
+        T.custom && !T.missing ? el('div', { class: 'btn-row pad' }, el('button', { class: 'btn sm', onclick: () => DS.CustomNodes.wizard(n.type) }, '✎ Edit this node type'), el('button', { class: 'btn sm', onclick: () => DS.Console.open() }, '⌨ Console')) : null].filter(Boolean));
       const fs = el('div', { class: 'ins-sec' });
       T.fields.forEach((f) => { if (!f.show || f.show(n.p)) fs.append(I().fieldWidget(f, n, draw)); });
       if (!T.fields.length) fs.append(el('div', { class: 'muted' }, 'No settings.'));

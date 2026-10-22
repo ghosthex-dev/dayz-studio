@@ -424,12 +424,14 @@ class DSBNode
 	ref array<float> pts;   // patrol waypoints x, z, x, z ...
 	ref array<ref DSItem> items;
 	ref DSCond cond;
+	ref array<string> args;   // custom NPC nodes (cnb_* / cne_*): their settings, in order
 	ref array<string> next;
 
 	void DSBNode()
 	{
 		pts = new array<float>;
 		items = new array<ref DSItem>;
+		args = new array<string>;
 		next = new array<string>;
 	}
 }
@@ -1704,7 +1706,7 @@ class DSQuests
 				if (!br.started)
 					Fire(br, e, null);
 			}
-			else if (e.type == "ev_near" || e.type == "ev_hostile")
+			else if (e.type == "ev_near" || e.type == "ev_hostile" || e.type.IndexOf("cne_") == 0)
 			{
 				float cool = e.b;
 				if (e.type == "ev_hostile")
@@ -1718,6 +1720,8 @@ class DSQuests
 					bool inRange = vector.Distance(p.GetPosition(), me) <= e.a;
 					if (inRange && e.type == "ev_hostile")
 						inRange = HostileTo(br, p);
+					if (inRange && e.type.IndexOf("cne_") == 0)
+						inRange = DSCustom.CheckNpcNode(e.type, br.npc, p, e.args);   // the project's own Enforce Script event
 					bool wasIn = false;
 					br.inside.Find(key, wasIn);
 					br.inside.Set(key, inRange);
@@ -1860,6 +1864,8 @@ class DSQuests
 	void RunStep(DSBrain br, DSBNode n, PlayerBase who)
 	{
 		string t = n.type;
+		if (m_Debug)
+			Say(br.npc.GetType() + " > " + t);
 		if (t.IndexOf("act_") == 0)
 		{
 			if (br.emoting)
@@ -1922,6 +1928,8 @@ class DSQuests
 		}
 		else if (t == "st_setvar")
 			SetVar(n.var, n.op, n.a);
+		else if (t.IndexOf("cnb_") == 0)
+			DSCustom.RunNpcNode(t, br.npc, who, n.args);   // the project's own Enforce Script step
 		else if (t == "st_leave")
 		{
 			BrainLeave(br);

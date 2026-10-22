@@ -450,6 +450,7 @@
     if (DS.CustomNodes) {
       const types = new Set();
       P.quests.forEach((q) => q.nodes.forEach((n) => { if (DS.CustomNodes.isCustom(n.type)) types.add(n.type); }));
+      (P.npcs || []).forEach((npc) => ((npc.graph && npc.graph.nodes) || []).forEach((n) => { if (DS.CustomNodes.isCustom(n.type)) types.add(n.type); }));
       const used = [...types].map((t) => DS.CustomNodes.def(t)).filter(Boolean);
       const g = DS.CustomNodes.generate(used);
       const base = L.length;

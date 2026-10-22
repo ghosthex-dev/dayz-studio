@@ -1,5 +1,6 @@
 /* DayZ Studio - custom node blocks made from Enforce Script snippets.
-   def = { id: 'cna_xxx' (action) | 'cno_xxx' (check = objective), title, icon, desc, kind: 'action' | 'check',
+   def = { id: 'cna_xxx' (action) | 'cno_xxx' (check = objective) | 'cnb_xxx' (NPC action) | 'cne_xxx' (NPC event), title, icon,
+           desc, kind: 'action' | 'check' | 'npcaction' | 'npcevent',
            objText: 'Reach {height} m', params: [{ k, label, t: num|int|text|cls|bool|pos, def }], code }
    Definitions live in a library (Documents/DayZStudio/Nodes, shared by every project) and a copy goes into the
    project as soon as one of its nodes is used (project.customNodes), so the project builds on any PC.
@@ -23,8 +24,21 @@
     node.replaceChildren();
     kids.flat(Infinity).forEach((k) => { if (k != null && k !== false) node.append(k.nodeType ? k : String(k)); });
   };
-  const isCustom = (type) => /^cn[ao]_/.test(type || '');
+  const isCustom = (type) => /^cn[aobe]_/.test(type || '');
   N.isCustom = isCustom;
+  // the four kinds: quest action / quest objective / NPC behaviour step / NPC behaviour event
+  N.KINDS = {
+    action: { prefix: 'cna_', label: 'Action - runs once in a quest (a reward / outcome)', where: 'Quests ▸ Rewards & Outcomes', ret: 'void',
+      sig: '(PlayerBase player, vector pos, …)', vars: [['player', 'PlayerBase', 'the player the quest runs for'], ['pos', 'vector', 'the node’s first map position (or 0 0 0)']] },
+    check: { prefix: 'cno_', label: 'Check - a quest objective, done when the code returns true', where: 'Quests ▸ Objectives', ret: 'bool',
+      sig: '(PlayerBase player, vector pos, …)', vars: [['player', 'PlayerBase', 'the player the quest runs for'], ['pos', 'vector', 'the node’s first map position (or 0 0 0)']] },
+    npcaction: { prefix: 'cnb_', label: 'NPC action - a step in an NPC’s behaviour (NPCs tab)', where: 'NPCs ▸ Steps', ret: 'void', npc: true,
+      sig: '(PlayerBase npc, PlayerBase player, …)', vars: [['npc', 'PlayerBase', 'the NPC'], ['player', 'PlayerBase', 'the player who started the chain - can be null (Spawned, Time of day…)']] },
+    npcevent: { prefix: 'cne_', label: 'NPC event - starts an NPC’s chain when the code returns true (checked every second for each player nearby)', where: 'NPCs ▸ Events', ret: 'bool', npc: true,
+      sig: '(PlayerBase npc, PlayerBase player, …)', vars: [['npc', 'PlayerBase', 'the NPC'], ['player', 'PlayerBase', 'a player within the event’s range']] },
+  };
+  const kindOf = (d) => N.KINDS[d && d.kind] || N.KINDS.action;
+  N.isNpcType = (type) => /^cn[be]_/.test(type || '');
 
   N.EXAMPLES = [
     { title: 'Set Player Health', icon: '❤', kind: 'action', desc: 'Sets the player’s health (0–100).', params: [{ k: 'amount', label: 'Health', t: 'num', def: 100 }],
@@ -41,6 +55,14 @@
     { title: 'Climb Above', icon: '⛰', kind: 'check', desc: 'Done when the player is higher than a height above sea level.', objText: 'Climb above {height} m',
       params: [{ k: 'height', label: 'Height (m)', t: 'num', def: 300 }],
       code: 'if (player.GetPosition()[1] >= height)\n\treturn true;\nreturn false;' },
+    { title: 'Heal the Player', icon: '✚', kind: 'npcaction', desc: 'The NPC patches up the player who started the chain.', params: [{ k: 'amount', label: 'Health', t: 'num', def: 100 }],
+      code: 'if (!player)\n\treturn;\nplayer.SetHealth("", "", amount);' },
+    { title: 'Drop an Item', icon: '📦', kind: 'npcaction', desc: 'The NPC drops an item at its feet.', params: [{ k: 'cls', label: 'Item class', t: 'cls', def: 'Roadflare' }],
+      code: 'GetGame().CreateObjectEx(cls, npc.GetPosition(), ECE_PLACE_ON_SURFACE);' },
+    { title: 'Player Holds an Item', icon: '✋', kind: 'npcevent', desc: 'A player near the NPC holds an item of a class in their hands.', params: [{ k: 'cls', label: 'Item class', t: 'cls', def: 'Rag' }],
+      code: 'EntityAI inHands = player.GetHumanInventory().GetEntityInHands();\nif (!inHands)\n\treturn false;\nif (inHands.IsKindOf(cls))\n\treturn true;\nreturn false;' },
+    { title: 'Player Is Hurt', icon: '🩸', kind: 'npcevent', desc: 'A player near the NPC has less health than a value.', params: [{ k: 'below', label: 'Health below', t: 'num', def: 50 }],
+      code: 'if (player.GetHealth("", "") < below)\n\treturn true;\nreturn false;' },
   ];
 
   /* ---------------- registering definitions as node types ---------------- */
@@ -60,6 +82,20 @@
       return f;
     });
     if (check) fields.push({ k: 'text', t: 'text', label: 'Objective text (tracker)', def: '' });
+    if (def.kind === 'npcaction' || def.kind === 'npcevent') {
+      if (def.kind === 'npcevent') {
+        fields.push({ k: 'radius', t: 'num', label: 'Players within (m)', def: 30, min: 1, max: 400 });
+        fields.push({ k: 'cooldown', t: 'num', label: 'Again for the same player after (s)', def: 60, min: 0 });
+      }
+      const NT = DS.NPC_NODE_TYPES || (DS.NPC_NODE_TYPES = {});
+      NT[def.id] = {
+        cat: def.kind === 'npcevent' ? 'event' : 'step', title: def.title || def.id, icon: def.icon || '⚙', custom: true, def,
+        desc: (def.desc || '') + ' (custom node - your own Enforce Script)',
+        fields,
+        sum: (p) => (def.params || []).filter((x) => x.t !== 'pos').map((x) => `${x.label || x.k}: ${p[x.k]}`).join(', ') || def.title,
+      };
+      return;
+    }
     DS.NODE_TYPES[def.id] = {
       cat: check ? 'objective' : 'reward', title: def.title || def.id, icon: def.icon || (check ? '✪' : '⚙'), custom: true, def,
       desc: (def.desc || '') + ' (custom node - your own Enforce Script)',
@@ -74,6 +110,13 @@
       if (isCustom(n.type) && !DS.NODE_TYPES[n.type]) {
         DS.NODE_TYPES[n.type] = { cat: n.type.startsWith('cno_') ? 'objective' : 'reward', title: 'Missing custom node', icon: '?', custom: true, missing: true,
           desc: 'This project uses a custom node whose definition is missing (' + n.type + ').', fields: [], sum: () => n.type };
+      }
+    }));
+    const NT = DS.NPC_NODE_TYPES || (DS.NPC_NODE_TYPES = {});
+    (P.npcs || []).forEach((npc) => ((npc.graph && npc.graph.nodes) || []).forEach((n) => {
+      if (isCustom(n.type) && !NT[n.type]) {
+        NT[n.type] = { cat: n.type.startsWith('cne_') ? 'event' : 'step', title: 'Missing custom node', icon: '?', custom: true, missing: true,
+          desc: 'This NPC uses a custom node whose definition is missing (' + n.type + ').', fields: [], sum: () => n.type };
       }
     }));
   };
@@ -95,7 +138,7 @@
   };
 
   /* ---------------- generated Enforce code (used by the exporter) ---------------- */
-  const fnName = (id) => id.toUpperCase().replace(/^CN([AO])_/, 'CN$1_');
+  const fnName = (id) => id.toUpperCase().replace(/^CN([AOBE])_/, 'CN$1_');
   /** -> { lines: [...], map: [{ from, to, label, target, codeFrom }] } relative to the first returned line (0-based) */
   N.generate = function (defs) {
     const L = [], map = [];
@@ -107,10 +150,11 @@
     L.push('\tstatic vector ArgV(array<string> a, int i)', '\t{', '\t\tif (!a || i >= a.Count())', '\t\t\treturn vector.Zero;', '\t\tvector v = a.Get(i).ToVector();',
       '\t\tif (v[1] == 0)', '\t\t\tv[1] = GetGame().SurfaceY(v[0], v[2]);', '\t\treturn v;', '\t}');
     defs.forEach((d) => {
-      const check = d.kind === 'check';
+      const check = kindOf(d).ret === 'bool';
+      const npc = !!kindOf(d).npc;
       const start = L.length;
       L.push(`\t// custom node "${String(d.title || d.id).replace(/[\r\n]/g, ' ')}"`);
-      L.push(`\tstatic ${check ? 'bool' : 'void'} ${fnName(d.id)}(PlayerBase player, vector pos, array<string> args)`);
+      L.push(`\tstatic ${check ? 'bool' : 'void'} ${fnName(d.id)}(${npc ? 'PlayerBase npc, PlayerBase player' : 'PlayerBase player, vector pos'}, array<string> args)`);
       L.push('\t{');
       (d.params || []).forEach((p, i) => {
         const f = { num: 'ArgF', int: 'ArgI', text: 'ArgS', cls: 'ArgS', bool: 'ArgB', pos: 'ArgV' }[p.t] || 'ArgS';
@@ -123,10 +167,17 @@
       map.push({ from: start, to: L.length - 1, codeFrom, label: `custom node “${d.title || d.id}”`, target: { kind: 'custom', id: d.id } });
     });
     L.push('\tstatic void RunNode(string type, PlayerBase player, vector pos, array<string> args)', '\t{');
-    defs.filter((d) => d.kind !== 'check').forEach((d) => L.push(`\t\tif (type == "${d.id}")`, '\t\t{', `\t\t\t${fnName(d.id)}(player, pos, args);`, '\t\t\treturn;', '\t\t}'));
+    defs.filter((d) => (d.kind || 'action') === 'action').forEach((d) => L.push(`\t\tif (type == "${d.id}")`, '\t\t{', `\t\t\t${fnName(d.id)}(player, pos, args);`, '\t\t\treturn;', '\t\t}'));
     L.push('\t}');
     L.push('\tstatic bool CheckNode(string type, PlayerBase player, vector pos, array<string> args)', '\t{');
     defs.filter((d) => d.kind === 'check').forEach((d) => L.push(`\t\tif (type == "${d.id}")`, `\t\t\treturn ${fnName(d.id)}(player, pos, args);`));
+    L.push('\t\treturn false;', '\t}');
+    // NPC behaviour (NPCs tab): steps and events made in Enforce Script
+    L.push('\tstatic void RunNpcNode(string type, PlayerBase npc, PlayerBase player, array<string> args)', '\t{');
+    defs.filter((d) => d.kind === 'npcaction').forEach((d) => L.push(`\t\tif (type == "${d.id}")`, '\t\t{', `\t\t\t${fnName(d.id)}(npc, player, args);`, '\t\t\treturn;', '\t\t}'));
+    L.push('\t}');
+    L.push('\tstatic bool CheckNpcNode(string type, PlayerBase npc, PlayerBase player, array<string> args)', '\t{');
+    defs.filter((d) => d.kind === 'npcevent').forEach((d) => L.push(`\t\tif (type == "${d.id}")`, `\t\t\treturn ${fnName(d.id)}(npc, player, args);`));
     L.push('\t\treturn false;', '\t}');
     return { lines: L, map };
   };
@@ -148,19 +199,18 @@
     const src = typeof idOrDef === 'string' ? N.def(idOrDef) : idOrDef;
     const d = JSON.parse(JSON.stringify(src || { id: '', title: '', icon: '⚙', kind: 'action', desc: '', objText: '', params: [], code: '' }));
     const editing = !!(src && src.id);
-    const used = editing ? S.project.quests.reduce((a, q) => a + q.nodes.filter((n) => n.type === d.id).length, 0) : 0;
+    const used = editing ? S.project.quests.reduce((a, q) => a + q.nodes.filter((n) => n.type === d.id).length, 0)
+      + (S.project.npcs || []).reduce((a, npc) => a + ((npc.graph && npc.graph.nodes) || []).filter((n) => n.type === d.id).length, 0) : 0;
     const body = el('div', {});
     let ed = null;
-    const vars = () => [['player', 'PlayerBase', 'the player the quest runs for'], ['pos', 'vector', 'the node’s first map position (or 0 0 0)'],
-      ...d.params.map((p) => [p.k, etype(p.t), p.label || p.k])];
+    const vars = () => [...kindOf(d).vars, ...d.params.map((p) => [p.k, etype(p.t), p.label || p.k])];
     const txt = (v, on, ph, w) => { const i = el('input', { class: 'inp', type: 'text', value: v || '', placeholder: ph || '', style: w ? { flex: '0 1 ' + w } : {} }); i.addEventListener('input', () => on(i.value)); return i; };
 
     function draw() {
       const code = d.code;
       const kindSel = el('select', { class: 'inp', disabled: used > 0 },
-        el('option', { value: 'action', selected: d.kind !== 'check' }, 'Action - runs once (a reward / outcome)'),
-        el('option', { value: 'check', selected: d.kind === 'check' }, 'Check - an objective, done when the code returns true'));
-      kindSel.addEventListener('change', () => { d.kind = kindSel.value; if (!d.code.trim()) d.code = d.kind === 'check' ? 'if (player.GetHealth("", "") > 50)\n\treturn true;\nreturn false;' : ''; draw(); });
+        Object.keys(N.KINDS).map((k) => el('option', { value: k, selected: (d.kind || 'action') === k }, N.KINDS[k].label)));
+      kindSel.addEventListener('change', () => { d.kind = kindSel.value; if (!d.code.trim()) d.code = kindOf(d).ret === 'bool' ? 'if (player.GetHealth("", "") > 50)\n\treturn true;\nreturn false;' : ''; draw(); });
       const params = el('div', {}, d.params.map((p, i) => {
         const t = el('select', { class: 'inp' }, N.PTYPES.map(([k, l]) => el('option', { value: k, selected: k === p.t }, l)));
         t.addEventListener('change', () => { p.t = t.value; p.def = p.t === 'pos' ? null : p.t === 'bool' ? false : (p.t === 'num' || p.t === 'int') ? 0 : ''; draw(); });
@@ -173,10 +223,10 @@
           el('button', { class: 'btn icon', title: 'Remove', onclick: () => { d.params.splice(i, 1); draw(); } }, '🗑'));
       }),
       el('button', { class: 'btn sm', onclick: () => { let k = 'value', n = 2; while (d.params.some((x) => x.k === k)) k = 'value' + n++; d.params.push({ k, label: 'Value', t: 'num', def: 0 }); draw(); } }, '+ Setting'));
-      ed = DS.Code.editor({ value: code, rows: 14, mode: d.kind === 'check' ? 'check' : 'action', vars: vars(), params: d.params.map((p) => p.k), onInput: (v) => { d.code = v; } });
-      const sig = el('div', { class: 'code-vars' }, el('code', {}, `static ${d.kind === 'check' ? 'bool' : 'void'} ${fnName(d.id || (d.kind === 'check' ? 'cno_' : 'cna_') + slug(d.title))}(PlayerBase player, vector pos, …)`));
+      ed = DS.Code.editor({ value: code, rows: 14, mode: kindOf(d).ret === 'bool' ? 'check' : 'action', vars: vars(), params: d.params.map((p) => p.k), onInput: (v) => { d.code = v; } });
+      const sig = el('div', { class: 'code-vars' }, el('code', {}, `static ${kindOf(d).ret} ${fnName(d.id || kindOf(d).prefix + slug(d.title))}${kindOf(d).sig}`));
       fill(body, 
-        el('div', { class: 'hint-box' }, 'Write a little Enforce Script once and use it as a block in any quest. Settings become fields in the inspector and variables in your code. ',
+        el('div', { class: 'hint-box' }, 'Write a little Enforce Script once and use it as a block in any quest or NPC behaviour. Settings become fields in the inspector and variables in your code. ',
           el('b', {}, 'An error here stops every quest script from loading'), ' - test with ▶ Compile on local server before using it on a live server.'),
         editing ? null : el('div', { class: 'btn-row st-row' }, el('span', { class: 'ins-help' }, 'Start from an example:'),
           N.EXAMPLES.map((x) => el('button', { class: 'btn sm', onclick: () => { Object.assign(d, JSON.parse(JSON.stringify(x))); draw(); } }, x.icon + ' ' + x.title))),
@@ -207,8 +257,9 @@
       const pr = problems();
       if (pr.length) { DS.toast(pr[0], 'error', 6000); return false; }
       if (!d.id) {
-        let id = (d.kind === 'check' ? 'cno_' : 'cna_') + slug(d.title), n = 2;
-        while (DS.NODE_TYPES[id] && !(src && src.id === id)) id = (d.kind === 'check' ? 'cno_' : 'cna_') + slug(d.title) + '_' + n++;
+        const taken = (x) => (DS.NODE_TYPES[x] || (DS.NPC_NODE_TYPES || {})[x]) && !(src && src.id === x);
+        let id = kindOf(d).prefix + slug(d.title), n = 2;
+        while (taken(id)) id = kindOf(d).prefix + slug(d.title) + '_' + n++;
         d.id = id;
       }
       d.code = ed.getValue();
@@ -225,7 +276,7 @@
       S.changed('quests');
       S.commit();
       S.emit('structure');
-      DS.toast('“' + d.title + '” saved - find it in the node menu under ' + (d.kind === 'check' ? 'Objectives' : 'Rewards & Outcomes'), 'ok', 3500);
+      DS.toast('“' + d.title + '” saved - find it in the node menu: ' + kindOf(d).where, 'ok', 3500);
       if (close) close();
       return true;
     }
@@ -250,10 +301,10 @@
         el('div', { class: 'hint-box' }, 'Your own node blocks. The library is shared by all projects (Documents/DayZStudio/Nodes - send the .json files to others); a project keeps a copy of every custom node it uses.'),
         ...[...all.values()].map(({ d, lib, proj }) => el('div', { class: 'btn-row st-row', style: { borderBottom: '1px solid var(--line)', padding: '4px 0' } },
           el('span', { style: { width: '24px' } }, d.icon || '⚙'), el('b', { style: { flex: '1 1 160px' } }, d.title || d.id),
-          el('span', { class: 'ins-help' }, (d.kind === 'check' ? 'check' : 'action') + (lib ? ' · library' : '') + (proj ? ' · in this project' : '')),
+          el('span', { class: 'ins-help' }, ({ check: 'check', npcaction: 'NPC action', npcevent: 'NPC event' }[d.kind] || 'action') + (lib ? ' · library' : '') + (proj ? ' · in this project' : '')),
           el('button', { class: 'btn sm', onclick: () => N.wizard(d.id) }, '✎ Edit'),
           el('button', { class: 'btn sm', title: 'Download the definition as .json', onclick: () => { const a = el('a', { href: URL.createObjectURL(new Blob([JSON.stringify(d, null, 1)], { type: 'application/json' })), download: d.id + '.json' }); a.click(); } }, '⇩'),
-          lib ? el('button', { class: 'btn sm', title: 'Remove from the library (projects keep their copy)', onclick: async () => { if (!confirm('Remove “' + (d.title || d.id) + '” from the library? Projects that use it keep their own copy.')) return; await api('/api/nodes/delete', { id: d.id }); N.lib = N.lib.filter((x) => x.id !== d.id); if (!(S.project.customNodes || []).some((x) => x.id === d.id)) delete DS.NODE_TYPES[d.id]; draw(); } }, '🗑') : null)),
+          lib ? el('button', { class: 'btn sm', title: 'Remove from the library (projects keep their copy)', onclick: async () => { if (!confirm('Remove “' + (d.title || d.id) + '” from the library? Projects that use it keep their own copy.')) return; await api('/api/nodes/delete', { id: d.id }); N.lib = N.lib.filter((x) => x.id !== d.id); if (!(S.project.customNodes || []).some((x) => x.id === d.id)) { delete DS.NODE_TYPES[d.id]; if (DS.NPC_NODE_TYPES) delete DS.NPC_NODE_TYPES[d.id]; } draw(); } }, '🗑') : null)),
         all.size ? null : el('div', { class: 'ins-help' }, 'No custom nodes yet.'),
         el('div', { class: 'btn-row st-row pad' },
           el('button', { class: 'btn primary', onclick: () => N.wizard() }, '+ New custom node'),
