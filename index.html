@@ -19,6 +19,7 @@
     <button class="btn seg-btn" data-view="game" title="The real game with the DayZ Editor, linked to this project">🎮 Game</button>
     <button class="btn seg-btn" data-view="view3d" title="Quick 3D preview">🧊 3D</button>
     <button class="btn seg-btn" data-view="quests" title="Quest flow editor (Tab)">⎇ Quests</button>
+    <button class="btn seg-btn" data-view="npcs" title="NPCs: characters with their own behaviour (Alt+5)">👤 NPCs</button>
   </div>
   <div class="tb-group" id="tool-group">
     <button class="btn icon" data-tool="select" title="Select / move (V)">⌖</button>
@@ -49,6 +50,7 @@
     <div id="tool-hint" class="tool-hint"></div>
   </div>
   <div id="quest-wrap" class="hidden"></div>
+  <div id="npc-wrap" class="hidden"></div>
   <div id="view3d-wrap" class="hidden"></div>
   <div id="game-wrap" class="hidden"></div>
   <aside id="right" class="panel"></aside>
@@ -83,9 +85,11 @@
 <script src="js/runtime.js"></script>
 <script src="js/exporters.js"></script>
 <script src="js/mapview.js"></script>
+<script src="js/grapheditor.js"></script>
 <script src="js/nodeeditor.js"></script>
 <script src="js/conditions.js"></script>
 <script src="js/inspector.js"></script>
+<script src="js/npcs.js"></script>
 <script src="js/dialog.js"></script>
 <script src="js/importers.js"></script>
 <script src="js/disk.js"></script>

@@ -215,6 +215,8 @@
       const m = markers[i];
       if (Math.hypot(m.sx - sx, m.sy - sy) <= 10) return { kind: 'node', id: m.node.id, marker: m };
     }
+    const npcId = DS.Npcs ? DS.Npcs.hit(sx, sy) : null;
+    if (npcId) return { kind: 'npc', id: npcId };
     const objs = S.project.objects;
     let best = null;
     let bd = 1e9;
@@ -258,7 +260,8 @@
       const h = hit(sx, sy);
       const o = h && h.kind === 'object' ? S.obj(h.id) : null;
       const p = picking;
-      M.cancelPick();
+      if (!p.opts.multi) M.cancelPick();   // multi: every click adds one (e.g. patrol waypoints) until Esc
+      else dirty = true;
       if (o && p.opts.allowRef) p.cb({ x: o.x, y: o.y, z: o.z, ref: o.id });
       else p.cb({ x: U.round(snapV(wx), 2), y: 0, z: U.round(snapV(wz), 2), ref: null });
       return;
@@ -342,6 +345,15 @@
           const o = S.obj(l.ref);
           if (!items.some((i) => i.o === o)) items.push({ o, x: o.x, z: o.z });
         } else items.push({ l, x: l.x, z: l.z });
+      });
+    } else if (S.sel.kind === 'npc' && DS.Npcs) {
+      S.sel.ids.forEach((id) => {
+        const npc = DS.Npcs.get(id);
+        if (!npc) return;
+        if (npc.pos.ref && S.obj(npc.pos.ref)) {
+          const o = S.obj(npc.pos.ref);
+          if (!items.some((i) => i.o === o)) items.push({ o, x: o.x, z: o.z });
+        } else items.push({ p: npc.pos, x: npc.pos.x, z: npc.pos.z });
       });
     } else if (S.sel.kind === 'node') {
       const q = S.activeQuestObj();
@@ -467,7 +479,7 @@
     const h = hit(e.clientX - r.left, e.clientY - r.top);
     if (h && h.kind === 'node') {
       S.setView('quests');
-    }
+    } else if (h && h.kind === 'npc') DS.Npcs.open(h.id);
   }
 
   function placeAt(x, z) {
@@ -693,6 +705,9 @@
     if (DS.Zones) DS.Zones.drawShapes(ctx, { w2s, s: view.s });
     if (DS.Link) DS.Link.drawCamera(ctx, w2s, view.s);
 
+    // NPCs (NPCs tab): every character with its name, the open / selected one with its routes
+    if (DS.Npcs) DS.Npcs.drawMap(ctx, w2s, view.s);
+
     // quest overlay
     markers = [];
     if (q) drawQuestOverlay(q);
@@ -757,6 +772,32 @@
 
   const CAT_COLOR = { trigger: '#22c55e', objective: '#3b82f6', reward: '#f59e0b', logic: '#a78bfa' };
 
+  // an NPC's patrol: from its position through the numbered waypoints, then back to the start (or the same way back)
+  function drawPatrol(n, home, color) {
+    const pts = [{ x: home.x, z: home.z }].concat(n.p.patrol);
+    if (!n.p.pback) pts.push(pts[0]);
+    ctx.strokeStyle = color + 'cc';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([7, 5]);
+    ctx.beginPath();
+    pts.forEach((pt, i) => { const [x, y] = w2s(pt.x, pt.z); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineWidth = 1;
+    ctx.font = 'bold 10px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    n.p.patrol.forEach((pt, i) => {
+      const [x, y] = w2s(pt.x, pt.z);
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fill();
+      ctx.fillStyle = '#0b0d10';
+      ctx.fillText(String(i + 1), x, y + 0.5);
+    });
+    ctx.textAlign = 'start';
+    ctx.textBaseline = 'alphabetic';
+  }
+
   function drawQuestOverlay(q) {
     const posNodes = [];
     q.nodes.forEach((n) => {
@@ -786,6 +827,7 @@
           ctx.strokeStyle = 'rgba(250,204,21,.7)';
           ctx.beginPath(); ctx.arc(sx, sy, 13, 0, 7); ctx.stroke();
         }
+        if (field.k === 'pos' && Array.isArray(n.p.patrol) && n.p.patrol.length) drawPatrol(n, r, color);
       });
     });
     // flow lines between positional nodes (through non-positional ones)

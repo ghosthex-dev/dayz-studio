@@ -329,6 +329,22 @@ clothing list and **Item in hands** (weapon or tool, no ammo). The character fie
 survivor faces. All preset class names were checked against DayZ 1.30. In game, Esc now closes the conversation
 or journal without also opening the pause menu.
 
+## Patrolling NPCs
+
+An NPC doesn't have to stand still. In a **Talk to NPC** node, press **+ Draw a patrol route** and click the map
+once for each waypoint, in walking order (Esc when done). The NPC walks from its own position through the waypoints
+and back again, and the route is drawn on the map as a dashed line with numbered stops.
+
+* **Wait at each waypoint** - seconds it stands at each stop before walking on.
+* **Back and forth** - walks the route out and back the same way, instead of looping back to its start.
+* **Jog** - jogs instead of walking.
+* **Players can always talk to it** - it stops and turns to a player who comes within 3 m, and walks on when they
+  leave. The talk prompt, conversation and trade screen follow the NPC wherever it is.
+* **Guards** - a faction NPC with a gun stops its patrol to aim at Hostile players, and goes back to it afterwards.
+
+NPCs walk in straight lines between waypoints and don't path around walls, so put a waypoint at every corner. One
+that gets stuck for a few seconds (a fence, a rock) is moved on to its next waypoint so the patrol never stops.
+
 ## Quest markers
 
 * The vanilla in-game map shows quest markers whenever it opens (map item or the server's no-map-needed setting):

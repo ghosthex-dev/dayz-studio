@@ -200,12 +200,13 @@
       syncToolbar();
       DS.toast('Snap: ' + (S.project.meta.snap || 'off'), 'info', 900);
     });
-    R('focus', 'Frame the selection', 'Views', ['F'], () => { if (S.view === 'map') DS.MapView.focusSelection(); else if (S.view === 'quests') DS.NodeEditor.fit(); else if (S.view === 'game') DS.Link.focusSelection(); });
-    R('nextView', 'Next view', 'Views', ['Tab'], () => S.setView(({ map: 'game', game: 'view3d', view3d: 'quests', quests: 'map' })[S.view] || 'map'));
+    R('focus', 'Frame the selection', 'Views', ['F'], () => { if (S.view === 'map') DS.MapView.focusSelection(); else if (S.view === 'quests') DS.NodeEditor.fit(); else if (S.view === 'npcs') DS.Npcs.fit(); else if (S.view === 'game') DS.Link.focusSelection(); });
+    R('nextView', 'Next view', 'Views', ['Tab'], () => S.setView(({ map: 'game', game: 'view3d', view3d: 'quests', quests: 'npcs', npcs: 'map' })[S.view] || 'map'));
     R('viewMap', 'Go to the Map', 'Views', ['Alt+1'], () => S.setView('map'));
     R('viewGame', 'Go to the Game', 'Views', ['Alt+2'], () => S.setView('game'));
     R('view3d', 'Go to the 3D view', 'Views', ['Alt+3'], () => S.setView('view3d'));
     R('viewQuests', 'Go to Quests', 'Views', ['Alt+4'], () => S.setView('quests'));
+    R('viewNpcs', 'Go to NPCs', 'Views', ['Alt+5'], () => S.setView('npcs'));
     R('maximize', 'Maximize / restore the focused area', 'Workspace', ['Ctrl+Shift+F'], () => DS.Dock.toggleMax());
     R('sideLeft', 'Collapse / expand the left side', 'Workspace', ['Ctrl+B'], () => DS.Dock.toggleSide('left'));
     R('sideRight', 'Collapse / expand the right side', 'Workspace', ['Ctrl+Alt+B'], () => DS.Dock.toggleSide('right'));
@@ -326,6 +327,7 @@
         if (i.target.kind === 'object') { S.setView('map'); S.select('object', [i.target.id]); const o = S.obj(i.target.id); if (o) DS.MapView.centerOn(o.x, o.z, 0.5); }
         else if (i.target.kind === 'node') { S.activeQuest = i.target.quest; S.setView('quests'); S.structure(); S.select('node', [i.target.id]); }
         else if (i.target.kind === 'quest') { S.activeQuest = i.target.id; S.setView('quests'); S.select(null, []); S.structure(); }
+        else if ((i.target.kind === 'npc' || i.target.kind === 'bnode') && DS.Npcs) DS.Npcs.show(i.target);
         else if (i.target.kind === 'stats') DS.Stats.open(i.target.tab);
         else if (i.target.kind === 'custom') DS.CustomNodes.wizard(i.target.id);
       } }, el('span', { class: 'p-ic' }, { error: '✖', warn: '⚠', info: 'ℹ' }[i.level]), i.msg))
@@ -636,6 +638,7 @@
     if (DS.Workspace) DS.Workspace.init();
     DS.MapView.init(document.getElementById('map'));
     DS.NodeEditor.init(document.getElementById('quest-wrap'));
+    DS.Npcs.init(document.getElementById('npc-wrap'));
     DS.View3D.init(document.getElementById('view3d-wrap'));
     DS.Link.initView(document.getElementById('game-wrap'));
     DS.Terrain.load();

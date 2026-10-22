@@ -13,8 +13,8 @@
   const KEY_SAVED = 'dzstudio.workspaces';
   const SCALES = [0.8, 0.9, 1, 1.1, 1.25, 1.5];
   const host = window.studioHost;
-  const LEFT = ['assets', 'loot', 'zones', 'gamedata', 'scene', 'outline'];
-  const VIEWS = ['map', 'game', 'view3d', 'quests'];
+  const LEFT = ['assets', 'loot', 'zones', 'gamedata', 'scene', 'outline', 'npclist'];
+  const VIEWS = ['map', 'game', 'view3d', 'quests', 'npcs'];
 
   const read = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v && typeof v === 'object' ? v : d; } catch (e) { return d; } };
   const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage off: lasts this session */ } };
@@ -29,6 +29,8 @@
     D.register('game', { title: 'Game', icon: '🎮', kind: 'view', home: 'center', float: false, make: wrap('game-wrap') });
     D.register('view3d', { title: '3D', icon: '🧊', kind: 'view', home: 'center', float: false, make: wrap('view3d-wrap'), onShow: () => DS.View3D && DS.View3D.show() });
     D.register('quests', { title: 'Quests', icon: '⎇', kind: 'view', home: 'center', float: false, make: wrap('quest-wrap') });
+    D.register('npcs', { title: 'NPCs', icon: '👤', kind: 'view', home: 'center', float: false, make: wrap('npc-wrap') });
+    D.register('npclist', { title: 'NPC list', icon: '👥', home: 'left', make: () => DS.Npcs.listPanel() });
     D.register('inspector', { title: 'Inspector', icon: '☰', home: 'right', make: wrap('right') });
     [['assets', 'Assets', '▤'], ['loot', 'Loot', '🎁'], ['zones', 'Zones', '⬡'], ['gamedata', 'Game setup', '⚙', 'game'], ['scene', 'Scene', '≣'], ['outline', 'Quest list', '☷', 'quests']]
       .forEach(([id, title, icon, tab]) => D.register(id, { title, icon, home: 'left', make: () => DS.Browser.mount(tab || id) }));
@@ -46,6 +48,7 @@
     Mapping: () => ({ root: row([fixed(G(LEFT), 340), grow(G(VIEWS, 'map')), fixed(G(['inspector']), 300)]), view: 'map' }),
     'Quest writing': () => ({ root: row([fixed(G(LEFT, 'outline'), 260, true), grow(G(VIEWS, 'quests')), fixed(G(['inspector']), 420)]), view: 'quests' }),
     'Map + Quests side by side': () => ({ root: row([fixed(G(LEFT), 250), grow(G(['map', 'game', 'view3d'], 'map')), fixed(G(['quests']), 560), fixed(G(['inspector']), 320)]), view: 'map' }),
+    'NPC design': () => ({ root: row([fixed(G(LEFT, 'npclist'), 260, true), grow(G(VIEWS, 'npcs')), fixed(G(['inspector']), 420)]), view: 'npcs' }),
     Scripting: () => ({ root: row([fixed(G(LEFT), 270), grow(col([grow(G(VIEWS, 'quests')), fixed(G(['console']), 240)])), fixed(G(['inspector']), 340)]), view: 'quests' }),
     Focus: () => ({ root: row([fixed(G(LEFT), 290, true), grow(G(VIEWS, 'map')), fixed(G(['inspector']), 330, true)]) }),
   };

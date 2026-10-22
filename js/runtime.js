@@ -265,6 +265,19 @@ class DSNpcInfo
 	float y;
 	float z;
 	float radius;
+	int netLow;         // the character's network id: players follow a patrolling NPC with it
+	int netHigh;
+	bool talk;          // a quest's NPC (F talks to it); an NPC no quest uses has no conversation
+}
+
+// where a patrolling NPC is on its route (point 0 = where it spawned, then the waypoints)
+class DSPatrolState
+{
+	int leg = 1;        // the point it walks to
+	int dir = 1;        // back-and-forth routes: 1 outwards, -1 on the way back
+	float wait;         // seconds waited at the point it reached
+	float stuck;        // seconds without getting anywhere
+	vector last;
 }
 
 // a placed object the player can use (F) for a "Use Object" trigger or objective
@@ -344,9 +357,14 @@ class DSNode
 	string okText;          // trg_object / obj_use: message when it worked
 	bool removeObj;         // trg_object / obj_use: remove the placed object once used
 	string trader;          // trg_npc: id of the trader it runs (trade.json)
+	ref array<float> patrol;   // trg_npc: waypoints x, z, x, z ... it walks from its own position
+	float pwait;            // trg_npc: seconds it waits at each waypoint
+	bool pback;             // trg_npc: walks the route back and forth instead of looping back to the start
+	bool prun;              // trg_npc: jogs instead of walking
 
 	void DSNode()
 	{
+		patrol = new array<float>;
 		classes = new array<string>;
 		items = new array<ref DSItem>;
 		next = new array<string>;
@@ -389,11 +407,13 @@ class DSQuestFile
 {
 	ref array<ref DSQuest> quests;
 	ref array<ref DSStatDef> stats;
+	ref array<ref DSNode> npcs;   // NPCs of the NPCs tab that no quest uses (type "npc", settings like a Talk to NPC node)
 
 	void DSQuestFile()
 	{
 		quests = new array<ref DSQuest>;
 		stats = new array<ref DSStatDef>;
+		npcs = new array<ref DSNode>;
 	}
 }
 
@@ -737,9 +757,11 @@ class DSProgress
 	ref array<ref DSProgressQuest> quests;
 	ref array<string> log;
 	ref array<string> vars;   // server variables "name = value"
+	ref array<string> npcs;   // "name x z" - where each NPC stands now (patrols move)
 
 	void DSProgress()
 	{
+		npcs = new array<string>;
 		quests = new array<ref DSProgressQuest>;
 		log = new array<string>;
 		vars = new array<string>;
@@ -771,6 +793,7 @@ class DSQuests
 	ref map<string, ref array<int>> m_Stock;       // trader id -> purchases left per item (since the restart)               // factions, tiers, relations (server)
 	ref map<string, float> m_GuardWarn;    // "player|npc" -> when a hostile NPC last warned
 	ref map<string, float> m_GuardShot;    // "player|npc" -> when it last fired
+	ref map<Object, ref DSPatrolState> m_Patrols;   // patrolling NPCs: where on their route they are
 	ref array<Object> m_Raised;             // faction NPCs with their gun up, and when they last aimed
 	ref array<float> m_RaisedT;
 	ref map<string, float> m_MsgT;         // server: last requirement message per player + item (no spam)
@@ -809,6 +832,7 @@ class DSQuests
 		m_GuardWarn = new map<string, float>;
 		m_GuardShot = new map<string, float>;
 		m_Raised = new array<Object>;
+		m_Patrols = new map<Object, ref DSPatrolState>;
 		m_RaisedT = new array<float>;
 		m_MsgT = new map<string, float>;
 		m_NpcObjs = new array<Object>;
@@ -952,9 +976,10 @@ class DSQuests
 				float npcYaw = 0;
 				if (which < m_NpcObjs.Count() && m_NpcObjs.Get(which))
 					npcYaw = m_NpcObjs.Get(which).GetOrientation()[0];
-				vector spot = ClearSpotNear(ti.x, ti.z, 2.5, npcYaw);
+				vector npcAt = NpcPos(which);   // where it stands now (a patrol moves it)
+				vector spot = ClearSpotNear(npcAt[0], npcAt[2], 2.5, npcYaw);
 				p.SetPosition(spot);
-				vector look = Vector(ti.x, spot[1], ti.z) - spot;
+				vector look = Vector(npcAt[0], spot[1], npcAt[2]) - spot;
 				p.SetOrientation(Vector(look.VectorToAngles()[0], 0, 0));
 				ServerTalk(p, ti.quest, ti.node);
 			}
@@ -998,6 +1023,17 @@ class DSQuests
 							DSNode tn = tq.nodes.Get(tni);
 							if (tn.type == "trg_npc" && tn.title == gp.Get(1))
 							{
+								// stand next to it first (wherever its patrol took it), facing it
+								for (int tii = 0; tii < m_NpcInfo.Count(); tii++)
+								{
+									if (m_NpcInfo.Get(tii).quest != tq.id || m_NpcInfo.Get(tii).node != tn.id)
+										continue;
+									vector talkAt = NpcPos(tii);
+									vector talkSpot = ClearSpotNear(talkAt[0], talkAt[2], 2.0, 0);
+									p.SetPosition(talkSpot);
+									vector talkLook = Vector(talkAt[0], talkSpot[1], talkAt[2]) - talkSpot;
+									p.SetOrientation(Vector(talkLook.VectorToAngles()[0], 0, 0));
+								}
 								ServerTalk(p, tq.id, tn.id);
 								talked = true;
 							}
@@ -1202,6 +1238,19 @@ class DSQuests
 			pr.log.Insert(m_LogLines.Get(k));
 		for (int gv = 0; gv < m_Globals.Count(); gv++)
 			pr.vars.Insert(m_Globals.GetKey(gv) + " = " + m_Globals.GetElement(gv));
+		for (int ni = 0; ni < m_NpcInfo.Count(); ni++)
+		{
+			vector np = NpcPos(ni);
+			string facing = "";
+			if (ni < m_NpcObjs.Count() && m_NpcObjs.Get(ni))
+			{
+				facing = " " + Math.Round(m_NpcObjs.Get(ni).GetOrientation()[0]);
+				PlayerBase pnpc = PlayerBase.Cast(m_NpcObjs.Get(ni));
+				if (pnpc && pnpc.m_DSPatrolCmd)
+					facing = facing + " wants " + Math.Round(pnpc.m_DSPatrolCmd.m_Yaw);
+			}
+			pr.npcs.Insert(m_NpcInfo.Get(ni).name + " " + Math.Round(np[0] * 10) / 10 + " " + Math.Round(np[2] * 10) / 10 + facing);
+		}
 		JsonFileLoader<DSProgress>.JsonSaveFile(ROOT + "/progress.json", pr);
 	}
 
@@ -1316,11 +1365,133 @@ class DSQuests
 		m_FxSent.Remove(id);
 	}
 
+	// where NPC i stands now (a patrolling NPC moves): its character when this machine knows it, else its spawn point
+	vector NpcPos(int i)
+	{
+		DSNpcInfo info = m_NpcInfo.Get(i);
+		Object o = null;
+		if (i < m_NpcObjs.Count())
+			o = m_NpcObjs.Get(i);
+		if (!o && (info.netLow != 0 || info.netHigh != 0))
+			o = GetGame().GetObjectByNetworkId(info.netLow, info.netHigh);
+		if (o)
+			return o.GetPosition();
+		return Vector(info.x, info.y, info.z);
+	}
+
+	// once a second: patrolling NPCs walk their route and wait at each waypoint. One stops and turns to a player who
+	// comes within 3 m (so players can always talk to it) and walks on when they leave; one that gets stuck for a
+	// few seconds (a wall, a fence) is put at its waypoint so the patrol never ends.
+	void TickPatrols(float step, array<Man> men)
+	{
+		map<Object, bool> moved = new map<Object, bool>;   // a quest chain shares one NPC: the first route moves it
+		for (int i = 0; i < m_NpcInfo.Count() && i < m_NpcObjs.Count(); i++)
+		{
+			PlayerBase npc = PlayerBase.Cast(m_NpcObjs.Get(i));
+			if (!npc || !npc.IsAlive())
+				continue;
+			DSNode pn = NpcNode(i);
+			if (!pn || pn.patrol.Count() < 2 || moved.Contains(npc))
+				continue;
+			moved.Set(npc, true);
+			DSPatrolState st;
+			if (!m_Patrols.Find(npc, st))
+			{
+				st = new DSPatrolState();
+				st.last = npc.GetPosition();
+				m_Patrols.Set(npc, st);
+			}
+			int count = pn.patrol.Count() / 2 + 1;   // its spawn point + the waypoints
+			vector me = npc.GetPosition();
+			// a player next to it: stop and turn to them
+			PlayerBase near = null;
+			for (int m = 0; m < men.Count(); m++)
+			{
+				PlayerBase who = PlayerBase.Cast(men.Get(m));
+				if (who && who != npc && who.IsAlive() && vector.Distance(who.GetPosition(), me) < 3)
+					near = who;
+			}
+			npc.m_DSPatrolWant = true;
+			npc.m_DSPatrolRun = pn.prun;
+			if (near)
+			{
+				npc.m_DSPatrolGo = false;
+				npc.m_DSPatrolFace = true;
+				npc.m_DSPatrolTo = near.GetPosition();
+				st.last = me;
+				st.stuck = 0;
+				continue;
+			}
+			vector to = PatrolPoint(pn, st.leg);
+			npc.m_DSPatrolFace = false;
+			if (Dist2D(me, to[0], to[2]) < 0.8)
+			{
+				npc.m_DSPatrolGo = false;
+				st.wait += step;
+				if (st.wait < pn.pwait)
+					continue;
+				st.wait = 0;
+				if (pn.pback)
+				{
+					if (st.leg + st.dir < 0 || st.leg + st.dir >= count)
+						st.dir = -st.dir;
+					st.leg += st.dir;
+				}
+				else
+					st.leg = (st.leg + 1) % count;
+				to = PatrolPoint(pn, st.leg);
+				// face the next leg before setting off: the engine turns a character nobody controls only within half
+				// a circle of where its orientation was last set, so steering alone can't make every turn
+				vector nextDir = Vector(to[0], me[1], to[2]) - me;
+				npc.SetOrientation(Vector(nextDir.VectorToAngles()[0], 0, 0));
+			}
+			npc.m_DSPatrolGo = true;
+			npc.m_DSPatrolTo = to;
+			if (vector.Distance(me, st.last) < 0.2 * step)
+			{
+				st.stuck += step;
+				if (st.stuck > 6)
+				{
+					npc.SetPosition(GroundPos(to[0], 0, to[2]));
+					st.stuck = 0;
+					if (m_Debug)
+						Say(npc.GetType() + " was stuck on its patrol - moved to its next waypoint");
+				}
+			}
+			else
+				st.stuck = 0;
+			st.last = me;
+		}
+	}
+
+	// point k of an NPC's patrol: 0 = where it spawned, then its waypoints
+	vector PatrolPoint(DSNode n, int k)
+	{
+		if (k <= 0)
+			return Vector(n.x, n.y, n.z);
+		return Vector(n.patrol.Get((k - 1) * 2), 0, n.patrol.Get((k - 1) * 2 + 1));
+	}
+
+	// server: is the player close enough to talk to / trade with this NPC (wherever its patrol took it)?
+	bool NearNpc(PlayerBase p, DSQuest q, DSNode n, float extra)
+	{
+		vector at = Vector(n.x, n.y, n.z);
+		for (int i = 0; i < m_NpcInfo.Count(); i++)
+		{
+			if (m_NpcInfo.Get(i).quest == q.id && m_NpcInfo.Get(i).node == n.id)
+				at = NpcPos(i);
+		}
+		return Dist2D(p.GetPosition(), at[0], at[2]) <= n.radius + extra;
+	}
+
 	// ---------------- NPC spawn ----------------
 	void RegisterNpc(DSQuest q, DSNode n, vector pos, Object o)
 	{
 		DSNpcInfo info = new DSNpcInfo();
-		info.quest = q.id;
+		info.quest = "";
+		if (q)
+			info.quest = q.id;   // no quest: an NPC of the NPCs tab on its own
+		info.talk = q != null;
 		info.node = n.id;
 		info.name = n.title;
 		if (info.name == "")
@@ -1330,6 +1501,8 @@ class DSQuests
 		info.z = pos[2];
 		info.radius = n.radius;
 		info.faction = n.faction;
+		if (o)
+			o.GetNetworkID(info.netLow, info.netHigh);
 		if (info.radius < 2.5)
 			info.radius = 2.5;
 		if (info.radius > 12)
@@ -1353,6 +1526,34 @@ class DSQuests
 				SpawnNpc(q, n);
 			}
 		}
+		for (int f = 0; f < m_File.npcs.Count(); f++)
+		{
+			DSNode fn = m_File.npcs.Get(f);
+			if (fn.cls == "")
+				continue;
+			if (fn.cond && fn.cond.kind != "" && !CondOk(null, null, fn.cond))
+				continue;
+			SpawnNpc(null, fn);
+		}
+	}
+
+	// the node behind NPC i: its quest's Talk to NPC node, or the NPC itself when no quest uses it
+	DSNode NpcNode(int i)
+	{
+		DSNpcInfo info = m_NpcInfo.Get(i);
+		if (info.quest == "")
+		{
+			for (int f = 0; f < m_File.npcs.Count(); f++)
+			{
+				if (m_File.npcs.Get(f).id == info.node)
+					return m_File.npcs.Get(f);
+			}
+			return null;
+		}
+		DSQuest q = FindQuestById(info.quest);
+		if (!q)
+			return null;
+		return FindNode(q, info.node);
 	}
 
 	void SpawnNpc(DSQuest q, DSNode n)
@@ -1421,39 +1622,58 @@ class DSQuests
 			DSQuest q = m_File.quests.Get(i);
 			for (int j = 0; j < q.nodes.Count(); j++)
 			{
-				DSNode n = q.nodes.Get(j);
-				if (n.type != "trg_npc" || n.cls == "" || !n.cond || n.cond.kind == "")
-					continue;
-				int at = -1;
-				for (int a = 0; a < m_NpcInfo.Count(); a++)
-				{
-					if (m_NpcInfo.Get(a).quest == q.id && m_NpcInfo.Get(a).node == n.id)
-						at = a;
-				}
-				bool want = CondOk(null, null, n.cond);
-				if (want && at < 0)
-				{
-					SpawnNpc(q, n);
-					Print("[DZStudio] NPC " + n.title + " appears (" + q.name + ")");
+				if (q.nodes.Get(j).type == "trg_npc" && UpdateNpc(q, q.nodes.Get(j)))
 					changed = true;
-				}
-				else if (!want && at >= 0)
-				{
-					Object gone = null;
-					if (at < m_NpcObjs.Count())
-						gone = m_NpcObjs.Get(at);
-					m_NpcInfo.Remove(at);
-					if (at < m_NpcObjs.Count())
-						m_NpcObjs.Remove(at);
-					if (gone && m_NpcObjs.Find(gone) < 0)
-						DeleteNpc(gone);
-					Print("[DZStudio] NPC " + n.title + " leaves (" + q.name + ")");
-					changed = true;
-				}
 			}
+		}
+		for (int f = 0; f < m_File.npcs.Count(); f++)
+		{
+			if (UpdateNpc(null, m_File.npcs.Get(f)))
+				changed = true;
 		}
 		if (changed)
 			m_NpcSent.Clear();   // every player gets the new NPC list on the next tick
+	}
+
+	// one NPC with an appearance condition: spawn it or let it leave. true when something changed
+	bool UpdateNpc(DSQuest q, DSNode n)
+	{
+		if (n.cls == "" || !n.cond || n.cond.kind == "")
+			return false;
+		string qid = "";
+		string where = "NPCs tab";
+		if (q)
+		{
+			qid = q.id;
+			where = q.name;
+		}
+		int at = -1;
+		for (int a = 0; a < m_NpcInfo.Count(); a++)
+		{
+			if (m_NpcInfo.Get(a).quest == qid && m_NpcInfo.Get(a).node == n.id)
+				at = a;
+		}
+		bool want = CondOk(null, null, n.cond);
+		if (want && at < 0)
+		{
+			SpawnNpc(q, n);
+			Print("[DZStudio] NPC " + n.title + " appears (" + where + ")");
+			return true;
+		}
+		if (!want && at >= 0)
+		{
+			Object gone = null;
+			if (at < m_NpcObjs.Count())
+				gone = m_NpcObjs.Get(at);
+			m_NpcInfo.Remove(at);
+			if (at < m_NpcObjs.Count())
+				m_NpcObjs.Remove(at);
+			if (gone && m_NpcObjs.Find(gone) < 0)
+				DeleteNpc(gone);
+			Print("[DZStudio] NPC " + n.title + " leaves (" + where + ")");
+			return true;
+		}
+		return false;
 	}
 
 	// ---------------- main tick ----------------
@@ -1494,6 +1714,7 @@ class DSQuests
 				first = pb;
 			TickPlayer(pb, step);
 		}
+		TickPatrols(step, men);
 
 		if (m_Raised.Count() > 0)
 			LowerGuns(GetGame().GetTickTime());
@@ -2233,10 +2454,7 @@ class DSQuests
 			}
 			if (gd > gf.guard.attack)
 				continue;
-			DSQuest gq = FindQuestById(gi.quest);
-			if (!gq)
-				continue;
-			DSNode gn = FindNode(gq, gi.node);
+			DSNode gn = NpcNode(i);
 			if (!gn || gn.ammo == "")
 				continue;   // no weapon in hand: warnings only
 			float lastShot = -1000;
@@ -2321,7 +2539,7 @@ class DSQuests
 		float flat = vector.Distance(Vector(eye[0], 0, eye[2]), Vector(chest[0], 0, chest[2]));
 		npc.m_DSGuardAimY = Math.Atan2(chest[1] - eye[1], flat) * Math.RAD2DEG;
 		vector toT = target.GetPosition() - npc.GetPosition();
-		npc.m_DSGuardHeading = -toT.VectorToAngles()[0] * Math.DEG2RAD;   // a character's heading is minus its yaw, in radians
+		npc.m_DSGuardHeading = DSHeadingTo(toT);
 		npc.m_DSGuardWant = true;
 		int at = m_Raised.Find(npc);
 		if (at < 0)
@@ -3568,7 +3786,7 @@ class DSQuests
 		if (!q)
 			return;
 		DSNode n = FindNode(q, parts.Get(1));
-		if (!n || n.trader == "" || Dist2D(p.GetPosition(), n.x, n.z) > n.radius + 6)
+		if (!n || n.trader == "" || !NearNpc(p, q, n, 6))
 			return;
 		DSTier tier = NpcTier(data, n);
 		if (tier && tier.stance == "hostile")
@@ -3952,7 +4170,7 @@ class DSQuests
 		}
 		if (!n || n.type != "trg_npc")
 			return;
-		if (Dist2D(p.GetPosition(), n.x, n.z) > n.radius + 4)
+		if (!NearNpc(p, q, n, 4))
 			return;
 		// a faction NPC that sees this player as hostile won't talk
 		DSTier talkTier = NpcTier(data, n);
@@ -4059,7 +4277,7 @@ class DSQuests
 		DSNode n = FindNode(q, nodeId);
 		if (!n || n.type != "trg_npc")
 			return;
-		if (Dist2D(p.GetPosition(), n.x, n.z) > n.radius + 6)
+		if (!NearNpc(p, q, n, 6))
 			return;
 		DSPlayerData data = GetData(p);
 		if (!data)
@@ -4093,7 +4311,7 @@ class DSQuests
 		if (!q)
 			return;
 		DSNode n = FindNode(q, nodeId);
-		if (!n || Dist2D(p.GetPosition(), n.x, n.z) > n.radius + 6)
+		if (!n || !NearNpc(p, q, n, 6))
 			return;
 		DSDlgLine line = DialogFor(q, n, state).Find(lineId);
 		if (!line || idx < 0 || idx >= line.options.Count())
@@ -4343,7 +4561,9 @@ class DSQuests
 			for (int i = 0; i < m_NpcInfo.Count(); i++)
 			{
 				DSNpcInfo info = m_NpcInfo.Get(i);
-				vector head = Vector(info.x, info.y + 1.5, info.z);
+				if (!info.talk)
+					continue;
+				vector head = NpcPos(i) + "0 1.5 0";
 				vector to = head - cp;
 				float dist = to.Length();
 				if (dist > info.radius + 1.5 || dist < 0.2)
@@ -7006,8 +7226,162 @@ class DSGuardCmd extends HumanCommandScript
 	}
 }
 
+// a character's heading for a direction: minus its yaw, in radians, kept within +-180 degrees so that it turns the
+// short way round (a 0..360 yaw made characters spin almost a full circle for anything west of north)
+float DSHeadingTo(vector dir)
+{
+	float yaw = dir.VectorToAngles()[0];
+	if (yaw > 180)
+		yaw -= 360;
+	return -yaw * Math.DEG2RAD;
+}
+
+// A patrolling NPC: walks (or jogs) to the point DSQuests.TickPatrols gives it, steering towards it every frame.
+// Like the guard's command it drives the animation graph itself, because nobody controls the character.
+class DSPatrolCmd extends HumanCommandScript
+{
+	PlayerBase m_P;
+	int m_VRaised;
+	int m_VStance;
+	int m_VSpeed;
+	int m_VAimX;
+	int m_VAimY;
+	vector m_To;      // where it walks, or (m_Go false, m_Face true) whom it turns to
+	bool m_Go;
+	bool m_Face;
+	bool m_Run;
+	bool m_Turning;   // facing well away from where it goes: turns on the spot first
+	float m_Yaw;      // the yaw (degrees) it wants to face
+	float m_Turn;     // degrees it turns this frame (applied as the physics step's rotation)
+
+	void DSPatrolCmd(Human pHuman)
+	{
+		m_P = PlayerBase.Cast(pHuman);
+		HumanAnimInterface hai = pHuman.GetAnimInterface();
+		m_VRaised = hai.BindVariableBool("Raised");
+		m_VStance = hai.BindVariableInt("Stance");
+		m_VSpeed = hai.BindVariableFloat("MovementSpeed");
+		m_VAimX = hai.BindVariableFloat("AimX");
+		m_VAimY = hai.BindVariableFloat("AimY");
+		m_Yaw = m_P.GetOrientation()[0];
+	}
+
+	// the target at the character's own height: waypoints are stored at y 0, and a point hundreds of metres below
+	// it would leak into x / z through any tilt of the body when turned into model space
+	vector Target()
+	{
+		return Vector(m_To[0], m_P.GetPosition()[1], m_To[2]);
+	}
+
+	bool Walking()
+	{
+		if (!m_Go)
+			return false;
+		vector left = Target() - m_P.GetPosition();
+		left[1] = 0;
+		return left.Length() > 0.3;
+	}
+
+	override void PreAnimUpdate(float pDt)
+	{
+		bool walking = Walking();
+		m_Turning = false;
+		m_Turn = 0;
+		if (walking || m_Face)
+		{
+			// turn the body from where it really faces, the short way round, at most 240 degrees a second; walk once
+			// it roughly faces the target. (Neither SetHeading nor a post-physics rotation turned it reliably.)
+			vector dir = Target() - m_P.GetPosition();
+			m_Yaw = dir.VectorToAngles()[0];
+			float diff = m_Yaw - m_P.GetOrientation()[0];
+			while (diff > 180)
+				diff -= 360;
+			while (diff < -180)
+				diff += 360;
+			m_Turning = Math.AbsFloat(diff) > 40;
+			float turn = 240 * pDt;
+			m_Turn = Math.Clamp(diff, -turn, turn);
+		}
+		float speed = 0;
+		if (walking && !m_Turning)
+		{
+			speed = 1;
+			if (m_Run)
+				speed = 2;
+		}
+		PreAnim_SetBool(m_VRaised, false);
+		PreAnim_SetInt(m_VStance, 0);
+		PreAnim_SetFloat(m_VSpeed, speed);
+		PreAnim_SetFloat(m_VAimX, GUARD_AIM_X);   // head and upper body look where it walks (0 is not straight ahead in this graph)
+		PreAnim_SetFloat(m_VAimY, 0);
+	}
+
+	override void PrePhysUpdate(float pDt)
+	{
+		// this frame's turn as the physics step's rotation (and none of the animation's own)
+		vector mat[3];
+		float q[4];
+		Math3D.YawPitchRollMatrix(Vector(m_Turn, 0, 0), mat);
+		Math3D.MatrixToQuat(mat, q);
+		PrePhys_SetRotation(q);
+		if (!Walking() || m_Turning)
+		{
+			PrePhys_SetTranslation(vector.Zero);
+			return;
+		}
+		// straight at the waypoint at walking / jogging pace, stopping right on it. (The walk animation's own step
+		// drifts sideways while the character turns, so it would miss the point and overshoot.)
+		vector rel = m_P.WorldToModel(Target());
+		rel[1] = 0;
+		float left = rel.Length();
+		float pace = 1.4;
+		if (m_Run)
+			pace = 3.0;
+		float stride = pace * pDt;
+		if (stride > left)
+			stride = left;
+		rel.Normalize();
+		PrePhys_SetTranslation(rel * stride);
+	}
+
+	override bool PostPhysUpdate(float pDt)
+	{
+		return true;
+	}
+}
+
 modded class PlayerBase
 {
+	// ---- patrolling NPCs (DSQuests.TickPatrols sets these)
+	bool m_DSPatrolWant;
+	bool m_DSPatrolGo;
+	bool m_DSPatrolFace;
+	bool m_DSPatrolRun;
+	vector m_DSPatrolTo;
+	DSPatrolCmd m_DSPatrolCmd;   // not ref: the engine owns script commands once they are started
+
+	bool DSPatrolCommand(int pCurrentCommandID)
+	{
+		if (!m_DSPatrolWant)
+		{
+			if (m_DSPatrolCmd)
+			{
+				m_DSPatrolCmd.SetFlagFinished(true);
+				m_DSPatrolCmd = null;
+			}
+			return false;
+		}
+		if (!m_DSPatrolCmd || pCurrentCommandID != DayZPlayerConstants.COMMANDID_SCRIPT)
+			m_DSPatrolCmd = DSPatrolCmd.Cast(StartCommand_ScriptInst(DSPatrolCmd));
+		if (!m_DSPatrolCmd)
+			return false;
+		m_DSPatrolCmd.m_To = m_DSPatrolTo;
+		m_DSPatrolCmd.m_Go = m_DSPatrolGo;
+		m_DSPatrolCmd.m_Face = m_DSPatrolFace;
+		m_DSPatrolCmd.m_Run = m_DSPatrolRun;
+		return true;
+	}
+
 	// ---- faction NPC guards (DSQuests.TickGuards sets these; the command runs in the character's own frame)
 	bool m_DSGuardWant;
 	bool m_DSGuardFire;
@@ -7026,8 +7400,9 @@ modded class PlayerBase
 				m_DSGuardCmd.SetFlagFinished(true);   // vanilla starts the normal movement command again
 				m_DSGuardCmd = null;
 			}
-			return false;
+			return DSPatrolCommand(pCurrentCommandID);   // a guard that lowered its gun goes back to its patrol
 		}
+		m_DSPatrolCmd = null;   // the guard's command takes over from the patrol
 		if (!m_DSGuardCmd || pCurrentCommandID != DayZPlayerConstants.COMMANDID_SCRIPT)
 			m_DSGuardCmd = DSGuardCmd.Cast(StartCommand_ScriptInst(DSGuardCmd));
 		if (!m_DSGuardCmd)

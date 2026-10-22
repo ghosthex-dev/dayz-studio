@@ -15,6 +15,7 @@
       meta: { name: 'Untitled Project', author: '', world: 'chernarusplus', mapSize: 15360, modName: 'DZStudioQuests', snap: 5 },
       objects: [],
       quests: [],
+      npcs: [],   // characters with their own behaviour (js/npcs.js), used by quests too
       bg: null,
       loot: { removed: [], moved: {}, added: [], protos: {} },
       zones: [],
@@ -91,6 +92,9 @@
   S.nodePosFields = function (n) {
     const T = DS.NODE_TYPES[n.type];
     if (!T) return [];
+    // a quest's NPC stands where its NPC (NPCs tab) stands - the same position object, so dragging it moves the NPC
+    const npc = n.type === 'trg_npc' && n.p.npcId && DS.Npcs ? DS.Npcs.get(n.p.npcId) : null;
+    if (npc) return [{ field: T.fields.find((f) => f.k === 'pos'), pos: npc.pos }];
     return T.fields.filter((f) => f.t === 'pos' && (!f.show || f.show(n.p))).map((f) => ({ field: f, pos: n.p[f.k] }));
   };
 
@@ -173,6 +177,7 @@
     S.project = JSON.parse(past[idx]);
     S.sel = { kind: null, ids: [] };
     if (!S.quest(S.activeQuest)) S.activeQuest = S.project.quests[0] ? S.project.quests[0].id : null;
+    if (DS.Npcs && !DS.Npcs.get(S.activeNpc)) S.activeNpc = null;
     S.structure();
     S.emit('selection');
     S.emit('history');
@@ -217,6 +222,8 @@
     });
     S.sel = { kind: null, ids: [] };
     S.activeQuest = S.project.quests[0] ? S.project.quests[0].id : null;
+    S.activeNpc = null;
+    if (DS.Npcs) DS.Npcs.sync();   // NPCs made inside quests (older projects) become NPCs of the NPCs tab
     S.resetHistory();
     S.structure();
     S.emit('selection');
@@ -331,6 +338,18 @@
         S.select(null, []);
         S.commit();
       }
+    } else if (S.sel.kind === 'bnode' && DS.Npcs) {
+      DS.Npcs.deleteNodes(S.sel.ids);
+      S.select(null, []);
+      S.commit();
+    } else if (S.sel.kind === 'blink' && DS.Npcs && DS.Npcs.active()) {
+      const g = DS.Npcs.active().graph;
+      g.links = g.links.filter((l) => !S.sel.ids.includes(l.id));
+      S.select(null, []);
+      S.structure();
+      S.commit();
+    } else if (S.sel.kind === 'npc' && DS.Npcs) {
+      DS.Npcs.remove(S.sel.ids[0]);
     } else if (S.sel.kind === 'link') {
       const q = S.activeQuestObj();
       if (q) {
@@ -430,6 +449,7 @@
   };
   A.selectAll = function () {
     if (S.view === 'map') S.select('object', S.project.objects.filter((o) => !o.hidden).map((o) => o.id));
+    else if (S.view === 'npcs' && DS.Npcs) DS.Npcs.selectAll();
     else {
       const q = S.activeQuestObj();
       if (q) S.select('node', q.nodes.map((n) => n.id));

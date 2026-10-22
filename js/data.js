@@ -28,6 +28,9 @@
     ],
   };
 
+  // a Talk to NPC node that sets up its own NPC (older projects, before the NPCs tab): its character fields show
+  const OWN = (p) => !p.npcId;
+
   /* ---- entity kinds (drives colour, shape, export behaviour) ---- */
   DS.KINDS = {
     building: { name: 'Building / Structure', color: '#60a5fa', shape: 'rect', isStatic: true },
@@ -247,18 +250,24 @@
         { k: 'text', t: 'area', label: 'Message shown on entry', def: '' }],
       sum: (p) => `Within ${p.radius}m of ${posText(p.pos)}` },
     trg_npc: { cat: 'trigger', title: 'Talk to NPC', icon: '☺',
-      desc: 'Spawns a quest-giver survivor. The player walks up, looks at them and presses the interact key (F) to start a conversation; accepting starts the quest.',
-      fields: [{ k: 'npc', t: 'cls', label: 'NPC character (face / body)', def: 'SurvivorM_Mirek', list: 'dz-npcs' },
-        { k: 'name', t: 'text', label: 'NPC display name', def: 'Mirek' },
-        { k: 'outfit', t: 'outfit', label: 'Outfit', def: '' },
-        { k: 'gear', t: 'items', label: 'Clothing and gear (worn / carried)', def: [] },
-        { k: 'hands', t: 'cls', label: 'Item in hands (weapon or tool)', def: '', list: 'dz-hands' },
-        POS('pos', 'NPC position'), { k: 'yaw', t: 'num', label: 'Facing (deg)', def: 0, min: 0, max: 360 },
-        { k: 'radius', t: 'num', label: 'Interaction distance (m)', def: 4, min: 1 },
-        { k: 'nomark', t: 'bool', label: 'Hide from the map (players must find this NPC themselves)', def: false },
-        { k: 'faction', t: 'factionpick', label: 'Faction', def: '', help: 'The NPC acts on the player’s standing with this faction: Hostile players get warned, refused and - with a gun in the NPC’s hands - shot at; trade replies get the tier’s discount.' },
-        { k: 'trader', t: 'traderpick', label: 'Trader', def: '', help: 'The NPC sells and buys from this price list: its conversation offers “Let’s trade.”, which opens a buy / sell screen in game.' },
-        { k: 'cond', t: 'cond', label: 'Only appears while', def: null, kinds: 'world', help: 'Leave on “Always” for an NPC that is always there. Otherwise the NPC shows up and leaves on its own, e.g. a faction leader once a server variable is set, or a night trader.' },
+      desc: 'The player walks up to an NPC, looks at them and presses the interact key (F) to start a conversation; accepting starts the quest. The NPC itself (look, position, behaviour) is made in the NPCs tab.',
+      fields: [{ k: 'npcId', t: 'npcpick', label: 'NPC', def: '' },
+        // the NPC's own settings: edited in the NPCs tab and mirrored here (DS.Npcs.sync), shown only for a node without one
+        { k: 'npc', t: 'cls', label: 'NPC character (face / body)', def: 'SurvivorM_Mirek', list: 'dz-npcs', show: OWN },
+        { k: 'name', t: 'text', label: 'NPC display name', def: 'Mirek', show: OWN },
+        { k: 'outfit', t: 'outfit', label: 'Outfit', def: '', show: OWN },
+        { k: 'gear', t: 'items', label: 'Clothing and gear (worn / carried)', def: [], show: OWN },
+        { k: 'hands', t: 'cls', label: 'Item in hands (weapon or tool)', def: '', list: 'dz-hands', show: OWN },
+        Object.assign(POS('pos', 'NPC position'), { show: OWN }), { k: 'yaw', t: 'num', label: 'Facing (deg)', def: 0, min: 0, max: 360, show: OWN },
+        { k: 'radius', t: 'num', label: 'Interaction distance (m)', def: 4, min: 1, show: OWN },
+        { k: 'patrol', t: 'patrol', label: 'Patrol route', def: [], show: OWN, help: 'Waypoints the NPC walks between, starting from its position. It stops while a player stands next to it, so players can always talk to it.' },
+        { k: 'pwait', t: 'num', label: 'Wait at each waypoint (s)', def: 5, min: 0, max: 600, show: (p) => OWN(p) && p.patrol && p.patrol.length },
+        { k: 'pback', t: 'bool', label: 'Walk the route back and forth (instead of a loop back to the start)', def: false, show: (p) => OWN(p) && p.patrol && p.patrol.length },
+        { k: 'prun', t: 'bool', label: 'Jog instead of walking', def: false, show: (p) => OWN(p) && p.patrol && p.patrol.length },
+        { k: 'nomark', t: 'bool', label: 'Hide from the map (players must find this NPC themselves)', def: false, show: OWN },
+        { k: 'faction', t: 'factionpick', label: 'Faction', def: '', show: OWN, help: 'The NPC acts on the player’s standing with this faction: Hostile players get warned, refused and - with a gun in the NPC’s hands - shot at; trade replies get the tier’s discount.' },
+        { k: 'trader', t: 'traderpick', label: 'Trader', def: '', show: OWN, help: 'The NPC sells and buys from this price list: its conversation offers “Let’s trade.”, which opens a buy / sell screen in game.' },
+        { k: 'cond', t: 'cond', label: 'Only appears while', def: null, kinds: 'world', show: OWN, help: 'Leave on “Always” for an NPC that is always there. Otherwise the NPC shows up and leaves on its own, e.g. a faction leader once a server variable is set, or a night trader.' },
         { k: 'dialog', t: 'dialog', label: 'Conversation', def: null },
         { k: 'text', t: 'area', label: 'Quick greeting (used when no conversation is written)', def: 'Hey, survivor. I need a favour...' }],
       sum: (p) => `${p.name || p.npc} @ ${posText(p.pos)}` },

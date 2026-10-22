@@ -183,6 +183,13 @@
         o.hands = String(p.hands || '').trim();
         o.faction = String(p.faction || '');
         if (p.trader && (((S.project.trade || {}).traders) || []).some((t) => t.id === p.trader)) o.trader = p.trader;
+        if (Array.isArray(p.patrol) && p.patrol.length) {   // waypoints as x, z pairs
+          o.patrol = [];
+          p.patrol.forEach((pt) => o.patrol.push(+(+pt.x).toFixed(2), +(+pt.z).toFixed(2)));
+          o.pwait = Math.max(0, +p.pwait || 0);
+          if (p.pback) o.pback = true;
+          if (p.prun) o.prun = true;
+        }
         { const g = guardGun(o.hands); if (o.faction && g) { o.ammo = g[1]; o.shot = shotSet(g); } }
         if (p.dialog) ['offer', 'active', 'done', 'locked'].forEach((k) => { const d = dlgOut(p.dialog[k]); if (d) o[k] = d; });
         break;
@@ -258,6 +265,10 @@
       const g = guardGun(String(n.p.hands || '').trim());
       if (g) used.set(g[2], g);
     }));
+    (S.project.npcs || []).forEach((npc) => {   // NPCs of the NPCs tab (also the ones no quest uses)
+      const g = npc.faction ? guardGun(String(npc.hands || '').trim()) : null;
+      if (g) used.set(g[2], g);
+    });
     return [...used.values()];
   };
   const guardGun = (cls) => (cls ? GUARD_GUNS.find((g) => g[0].test(cls)) || null : null);
@@ -379,6 +390,7 @@
   };
 
   function questsJson(P) {
+    if (DS.Npcs) DS.Npcs.sync();   // quest NPCs carry their NPC's latest settings
     return JSON.stringify(
       {
         stats: (P.stats || []).filter((st) => st.id).map((st) => ({
@@ -392,6 +404,8 @@
           avail: DS.Cond.out(q.avail),
           nodes: q.nodes.map((n) => runtimeNode(q, n)),
         })),
+        // NPCs no quest uses: they spawn on their own and go about their behaviour (NPCs tab)
+        npcs: DS.Npcs ? DS.Npcs.standalone().map((npc) => Object.assign(runtimeNode({ links: [] }, DS.Npcs.asNode(npc)), { type: 'npc' })) : [],
       },
       null,
       2

@@ -90,7 +90,7 @@ body.dk-float-body > .dk-panel { position: absolute; inset: 0; }
 .key-rec { position: sticky; top: 0; z-index: 1; padding: 8px 10px; background: #164e63; border: 1px solid var(--accent); border-radius: 6px; margin-bottom: 6px; }
 .panel { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 #right { border-right: 0; border-left: 1px solid var(--line); overflow-y: auto; }
-#map-wrap, #quest-wrap { position: absolute; inset: 0; }
+#map-wrap, #quest-wrap, #npc-wrap { position: absolute; inset: 0; }
 #map { display: block; outline: none; }
 #statusbar { display: flex; align-items: center; gap: 4px; padding: 0 12px; background: var(--panel); border-top: 1px solid var(--line); color: var(--muted); font-size: 11.5px; }
 
@@ -158,6 +158,16 @@ select.inp { cursor: pointer; }
 .pal-btn.cat-objective, .ne-node.cat-objective { --c: #3b82f6; }
 .pal-btn.cat-reward, .ne-node.cat-reward { --c: #f59e0b; }
 .pal-btn.cat-logic, .ne-node.cat-logic { --c: #a78bfa; }
+/* NPC behaviour graphs (js/npcs.js) */
+.ne-node.cat-event { --c: #22c55e; }
+.ne-node.cat-activity { --c: #38bdf8; }
+.ne-node.cat-step { --c: #f59e0b; }
+.ne-node.cat-flow { --c: #a78bfa; }
+.npc-list .btn-row .inp { flex: 1; }
+.npc-row { display: flex; flex-direction: column; gap: 2px; padding: 6px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.npc-row:hover { background: #232834; }
+.npc-row.active { background: #2a2140; border-left: 3px solid #c084fc; }
+.npc-name { font-weight: 600; }
 .pal-btn { border-left-color: var(--c); }
 .ne-icon { display: inline-flex; width: 20px; justify-content: center; font-size: 13px; }
 .ne-icon.sm { width: 16px; font-size: 11px; }
@@ -196,7 +206,7 @@ select.inp { cursor: pointer; }
 .usage:hover { background: #20252f; }
 
 /* ---- node editor ---- */
-#quest-wrap { display: flex; flex-direction: column; }
+#quest-wrap, #npc-wrap { display: flex; flex-direction: column; }
 .ne-bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--line); z-index: 3; flex-wrap: wrap; }
 .ne-bar .inp { width: 200px; }
 .ne-bar-label { color: var(--muted); }

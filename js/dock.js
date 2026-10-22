@@ -126,7 +126,7 @@
   };
   D.close = function (id) {
     if (!P[id]) return;
-    if (P[id].kind === 'view' && Object.values(P).filter((p) => p.kind === 'view' && D.isOpen(p.id)).length <= 1) { DS.toast('Keep at least one view open (Map, Game, 3D or Quests)', 'warn', 2500); return; }
+    if (P[id].kind === 'view' && Object.values(P).filter((p) => p.kind === 'view' && D.isOpen(p.id)).length <= 1) { DS.toast('Keep at least one view open (Map, Game, 3D, Quests or NPCs)', 'warn', 2500); return; }
     if (popups[id]) { const w = popups[id]; delete popups[id]; L.floating = L.floating.filter((f) => f.id !== id); try { w.close(); } catch (e) { /* gone */ } }
     removeFromTree(id);
     if (P[id].onClose) P[id].onClose();

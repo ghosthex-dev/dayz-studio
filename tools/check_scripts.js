@@ -16,7 +16,7 @@ const path = require('path');
 const vm = require('vm');
 
 const APP = path.join(__dirname, '..');
-const MODULES = ['util', 'data', 'state', 'validate', 'code', 'customnodes', 'conditions', 'runtime', 'exporters', 'traders', 'showcase'];
+const MODULES = ['util', 'data', 'state', 'validate', 'code', 'customnodes', 'conditions', 'runtime', 'exporters', 'traders', 'npcs', 'showcase'];
 
 function loadStudio() {
   const noop = () => {};

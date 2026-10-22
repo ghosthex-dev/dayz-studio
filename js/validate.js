@@ -270,6 +270,7 @@
     if (!P.objects.length && !P.quests.length) list.push({ level: 'info', msg: 'The project is empty — place some objects or create a quest.', target: null });
     const rank = { error: 0, warn: 1, info: 2 };
     if (DS.Traders) list.push(...DS.Traders.problems());
+    if (DS.Npcs) list.push(...DS.Npcs.problems());
     return list.sort((a, b) => rank[a.level] - rank[b.level]);
   };
 })();

@@ -272,6 +272,22 @@
           cur ? el('button', { class: 'btn', title: 'Show on the map', onclick: () => { if (DS.MapView && DS.MapView.centerOn) DS.MapView.centerOn(cur.x, cur.z); } }, '⌖') : null),
           'The player must stand within reach and look at it.');
       }
+      case 'patrol': {
+        // waypoints [{x, z}]: picked on the map one after another, the NPC walks them from its own position
+        const pts = Array.isArray(p[f.k]) ? p[f.k] : (p[f.k] = []);
+        const done = () => { ch(); S.commit(); S.structure(); rerender(); };
+        const list = el('div', { class: 'patrol-list' }, pts.map((pt, i) => el('div', { class: 'btn-row' },
+          el('span', { class: 'mono' }, `${i + 1}.  ${Math.round(pt.x)}, ${Math.round(pt.z)}`),
+          el('button', { class: 'btn sm', title: 'Show it on the map', onclick: () => DS.MapView.centerOn(pt.x, pt.z, 1.5) }, '⌖'),
+          el('button', { class: 'btn sm', title: 'Remove this waypoint', onclick: () => { pts.splice(i, 1); done(); } }, '✕'))));
+        const add = el('button', { class: 'btn sm primary', onclick: () => DS.pickPosition({ multi: true, prompt: 'Click the map for each waypoint, in walking order  (Esc when done)' }, (r) => {
+          pts.push({ x: r.x, z: r.z });
+          ch(); S.commit(); S.structure();
+        }) }, pts.length ? '+ Add waypoints' : '+ Draw a patrol route');
+        const clear = pts.length ? el('button', { class: 'btn sm', onclick: () => { p[f.k] = []; done(); } }, 'Clear') : null;
+        return el('div', { class: 'ins-row' }, el('span', { class: 'ins-label' }, f.label), list, el('div', { class: 'btn-row' }, add, clear), el('span', { class: 'ins-help' }, f.help));
+      }
+      case 'npcpick': return DS.Npcs.pickWidget(f, n, rerender);
       case 'traderpick': {
         const tl = DS.Traders ? DS.Traders.list() : [];
         const btn = el('button', { class: 'btn sm', onclick: () => DS.Stats && DS.Stats.open('traders') }, '🛒 Traders…');
@@ -282,7 +298,7 @@
         const fl = (S.project.factions && S.project.factions.list) || [];
         const btn = el('button', { class: 'btn sm', onclick: () => DS.Stats && DS.Stats.open('factions') }, '🏳 Factions…');
         if (!fl.length) return row(f.label, el('div', {}, el('span', { class: 'ins-help' }, 'No factions yet. '), btn));
-        return row(f.label, el('div', { class: 'btn-row' }, selectInp(p[f.k], [['', f.k === 'faction' && n.type === 'trg_npc' ? 'None' : 'Pick a faction…']].concat(fl.map((x) => [x.id, x.name || x.id])), (v) => { p[f.k] = v; ch(); rerender(); }), btn), f.help);
+        return row(f.label, el('div', { class: 'btn-row' }, selectInp(p[f.k], [['', f.k === 'faction' && (n.type === 'trg_npc' || n.type === 'npc') ? 'None' : 'Pick a faction…']].concat(fl.map((x) => [x.id, x.name || x.id])), (v) => { p[f.k] = v; ch(); rerender(); }), btn), f.help);
       }
       case 'statpick': {
         const sts = S.project.stats || [];
@@ -346,7 +362,7 @@
         ...(T.custom && !T.missing ? [el('div', { class: 'btn-row pad' }, el('button', { class: 'btn sm', onclick: () => DS.CustomNodes.wizard(n.type) }, '✎ Edit this node type'), el('button', { class: 'btn sm', onclick: () => DS.Console.open() }, '⌨ Console'))] : [])
       );
       const fs = el('div', { class: 'ins-sec' });
-      if (n.type === 'trg_npc') fs.append(sameNpcRow(q, n, draw));
+      if (n.type === 'trg_npc' && !n.p.npcId) fs.append(sameNpcRow(q, n, draw));
       T.fields.forEach((f) => {
         if (f.show && !f.show(n.p)) return;
         fs.append(fieldWidget(f, n, draw));
@@ -647,11 +663,21 @@
     } else if (S.sel.kind === 'loot' && DS.Loot) {
       const inst = DS.Loot.byId.get(S.sel.ids[0]);
       content = inst ? DS.Loot.inspector(inst) : projectInspector();
-    } else if (S.sel.kind === 'link') content = linkInspector();
+    } else if (S.sel.kind === 'bnode' && DS.Npcs) {
+      const n = DS.Npcs.selectedNode();
+      content = n ? DS.Npcs.nodeInspector(n) : projectInspector();
+    } else if (S.sel.kind === 'npc' && DS.Npcs && DS.Npcs.get(S.sel.ids[0])) content = DS.Npcs.inspector(DS.Npcs.get(S.sel.ids[0]));
+    else if (S.sel.kind === 'link' || S.sel.kind === 'blink') content = linkInspector();
+    else if (S.view === 'npcs' && DS.Npcs && DS.Npcs.active()) content = DS.Npcs.inspector(DS.Npcs.active());
     else if (S.view === 'quests' && q) content = questInspector(q);
     else content = projectInspector();
     root.append(content);
   };
+
+  // the form helpers, for other panels that edit settings the same way (NPCs)
+  I.fieldWidget = (f, n, rerender) => fieldWidget(f, n, rerender);
+  I.section = section;
+  I.checkInp = checkInp;
 
   I.init = function (container) {
     root = container;
