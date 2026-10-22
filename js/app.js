@@ -310,6 +310,7 @@
         '-', { label: 'Templates & examples…', run: A.templates },
         { label: 'Welcome guide', run: A.welcome },
         { label: '⟳ Check for updates…', run: () => DS.Updates.open() },
+        { label: '🐞 Report a bug…', run: () => DS.BugReport.open() },
       ]),
     };
     document.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => act[b.dataset.act](b)));
@@ -524,7 +525,7 @@
       el('h3', null, 'About class names'),
       el('p', null, 'The built-in catalogue is a convenience list. For your exact game version use File ▸ Import ▸ types.xml / mapgroupproto.xml so every class on your server is searchable. You can also type any class name manually.')
     );
-    modal({ title: 'DayZ Studio — help', body, wide: true, buttons: (close) => el('button', { class: 'btn primary', onclick: close }, 'Got it') });
+    modal({ title: 'DayZ Studio — help', body, wide: true, buttons: (close) => [el('button', { class: 'btn', title: 'Something broken? Send the logs to the developer as a GitHub issue', onclick: () => { close(); DS.BugReport.open(); } }, '🐞 Report a bug…'), el('button', { class: 'btn primary', onclick: close }, 'Got it')] });
   };
 
   /* ---------- templates ---------- */

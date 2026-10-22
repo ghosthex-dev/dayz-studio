@@ -31,10 +31,21 @@ WORKSHOP_IDS = {'CF': '1559212036', 'DabsFramework': '2545327648', 'DayZEditor':
 state = {'proc': None, 'mode': None, 'world': None, 'started': 0.0, 'log': []}
 
 
+LOG_FILE = os.path.join(HOME, 'logs', 'studio.log')   # the desktop app drops stdout: bug reports read this
+
+
 def log(msg):
     state['log'].append('%s  %s' % (time.strftime('%H:%M:%S'), msg))
     state['log'] = state['log'][-60:]
     print(msg, flush=True)
+    try:
+        os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+        if os.path.isfile(LOG_FILE) and os.path.getsize(LOG_FILE) > 1024 * 1024:
+            os.replace(LOG_FILE, LOG_FILE + '.1')   # keep one older file
+        with open(LOG_FILE, 'a', encoding='utf-8') as f:
+            f.write('%s  %s\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), msg))
+    except OSError:
+        pass
 
 
 # ------------------------------------------------------------------ environment
@@ -1306,6 +1317,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(link_send(body))
         if u.path == '/api/mod/build':
             return self._json(build_export(body))
+        if u.path == '/api/bugreport':
+            return self._json(BUG.collect(body))
+        if u.path == '/api/bugreport/reveal':
+            return self._json(BUG.reveal(body))
         if u.path == '/api/maps/extract':
             return self._json(maps_extract(body))
         if u.path == '/api/workshop/publish':
@@ -1414,8 +1429,11 @@ import server_tools as ST   # noqa: E402  (needs the helpers above)
 import factions             # noqa: E402  (factions.json schema + validation)
 import workshop as WS       # noqa: E402  (Steam Workshop publishing)
 import money as MONEY       # noqa: E402  (dollar bills: model + textures)
+import bugreport as BUG     # noqa: E402  (File > Report a bug: logs zipped for the GitHub issue)
 import worlds as WORLDS     # noqa: E402  (which maps - DLC ones included - are on this PC)
 WS.setup(dict(find_env=find_env, BUILD_DIR=BUILD_DIR))
+BUG.setup(dict(find_env=find_env, find_server=find_server, HOME=HOME, MAPS=MAPS, LOG_FILE=LOG_FILE, LOCAL_DAYZ=LOCAL_DAYZ,
+               PROFILE=PROFILE, SRV_PROFILE=SRV_PROFILE))
 ST.setup(dict(find_env=find_env, find_server=find_server, pack_pbo=pack_pbo, sign_pbo=sign_pbo, steam_roots=steam_roots,
               DATA=DATA, srv_mission=srv_mission, SRV_PROFILE=SRV_PROFILE, PROFILE=PROFILE, LOCAL_DAYZ=LOCAL_DAYZ,
               server_alive=server_alive))

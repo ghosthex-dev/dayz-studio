@@ -471,6 +471,14 @@ flowchart LR
 * DayZ Studio is an unsigned alpha executable. Click **More info** and then click **Run anyway**.
 </details>
 
+<details>
+<summary><b>Something else is broken: 🐞 Report a bug</b></summary>
+
+* Use **File ▸ 🐞 Report a bug…** (or the button in Help). Describe what happened, then press **Open GitHub issue**.
+* Studio zips its own log, the editor's recent errors and the newest DayZ / DayZ Server logs into `Documents\DayZStudio\BugReports`, then opens a new issue on GitHub with your report already filled in. The folder opens too: drag the zip into the issue and press **Submit**.
+* Studio uploads nothing itself, and your Windows user name is removed from the logs. Your project file goes into the zip only if you tick the box.
+</details>
+
 ---
 
 ## ✍️ A Personal Note on Development & AI
