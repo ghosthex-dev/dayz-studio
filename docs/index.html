@@ -710,6 +710,69 @@
       margin: 0 auto 12px;
     }
 
+    /* What's New */
+    .news-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .news-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 22px 24px;
+      display: flex;
+      flex-direction: column;
+    }
+    .news-card.latest { border-color: rgba(34, 211, 238, 0.45); box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.12), 0 12px 30px rgba(0, 0, 0, 0.35); }
+    .news-ver {
+      font-family: monospace;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .news-ver .news-tag {
+      margin-left: 8px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--emerald-glow);
+      color: var(--emerald);
+      font-size: 10px;
+      text-transform: uppercase;
+    }
+    .news-card h3 { font-size: 17px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+    .news-card p { font-size: 13.5px; color: var(--text-dim); line-height: 1.55; }
+    .news-card .feature-list { flex: 1; }
+    .news-link { margin-top: 14px; font-size: 13px; font-weight: 600; }
+
+    /* Featured (full-width) feature card */
+    .feature-card.featured {
+      grid-column: 1 / -1;
+      border-color: rgba(168, 85, 247, 0.45);
+      background: linear-gradient(135deg, rgba(168, 85, 247, 0.07), var(--card) 55%);
+    }
+    .feature-card.featured .feature-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 0 24px;
+    }
+    .new-pill {
+      display: inline-block;
+      margin-left: 8px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(168, 85, 247, 0.15);
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      color: var(--purple);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      vertical-align: middle;
+    }
+
     @media (max-width: 768px) {
       .hero-stats { grid-template-columns: repeat(2, 1fr); }
       .nav-links { display: none; }
@@ -725,9 +788,10 @@
       <div class="brand">
         <span class="brand-mark">◈</span>
         <span>DayZ Studio</span>
-        <span class="badge-alpha">Alpha 5</span>
+        <span class="badge-alpha">Alpha 7</span>
       </div>
       <nav class="nav-links">
+        <a href="#whats-new" class="nav-link">What's New</a>
         <a href="#features" class="nav-link">Features</a>
         <a href="#simulator" class="nav-link">IDE Preview</a>
         <a href="#comparison" class="nav-link">Why Studio?</a>
@@ -752,13 +816,13 @@
     <div class="container hero-content">
       <div class="status-pill">
         <span class="status-dot"></span>
-        <span>LATEST: v0.1.0-ALPHA.5 • 100% VANILLA SERVER COMPATIBLE</span>
+        <span>LATEST: v0.1.0-ALPHA.7 • 100% VANILLA SERVER COMPATIBLE</span>
       </div>
       <h1>
         The Visual Map &amp; Quest IDE for <span class="gradient-text">Vanilla DayZ</span>
       </h1>
       <p class="hero-lead">
-        Build living servers on real terrain: Skyrim-style branching NPC dialogue trees, visual quest flows, custom loot economies, and 1-click cryptographically signed mod exports. <strong>Zero mod dependencies. No CF. No DayZ Expansion required.</strong>
+        Build living servers on real terrain: Skyrim-style branching NPC dialogue trees, NPCs that patrol, emote and keep a daily routine, visual quest flows, custom loot economies, and 1-click cryptographically signed mod exports. <strong>Zero mod dependencies. No CF. No DayZ Expansion required.</strong>
       </p>
       <div class="hero-buttons">
         <a href="https://github.com/ghosthex-dev/dayz-studio/releases/latest" class="btn btn-primary">
@@ -792,6 +856,44 @@
     </div>
   </section>
 
+  <!-- What's New -->
+  <section id="whats-new" style="padding: 20px 0 60px;">
+    <div class="container">
+      <div class="section-title">
+        <h2>What's New</h2>
+        <p>Already installed? Studio offers each update by itself when it starts &mdash; or use <strong>File ▸ ⟳ Check for updates</strong>. Your projects, keys and map data are kept.</p>
+      </div>
+
+      <div class="news-grid">
+        <div class="news-card latest">
+          <div class="news-ver">v0.1.0-alpha.7 <span class="news-tag">Latest</span></div>
+          <h3>🐞 Report a bug from inside Studio</h3>
+          <p>Describe what went wrong and Studio does the rest: it zips its own log, the editor's recent errors and your newest DayZ and DayZ Server logs, then opens a GitHub issue with your report already written out.</p>
+          <ul class="feature-list">
+            <li>File ▸ Report a bug&hellip; (or the button in Help)</li>
+            <li>Drag the zip into the issue and press Submit</li>
+            <li>Your Windows user name is removed from every log</li>
+            <li>Studio uploads nothing itself</li>
+          </ul>
+          <a class="news-link" href="https://github.com/ghosthex-dev/dayz-studio/releases/tag/v0.1.0-alpha.7" target="_blank">Release notes ➔</a>
+        </div>
+
+        <div class="news-card">
+          <div class="news-ver">v0.1.0-alpha.6</div>
+          <h3>👤 NPCs with a life of their own</h3>
+          <p>NPCs got their own tab and a node graph for how they behave: they patrol, wander, keep a daily routine, greet you, wave, sit by the fire, follow you or lead you somewhere.</p>
+          <ul class="feature-list">
+            <li>New NPCs tab (Alt + 5) with look, place, faction &amp; trader</li>
+            <li>Events ➔ steps ➔ activities, wired like a quest</li>
+            <li>19 game emotes and floating say lines</li>
+            <li>Script your own NPC events and steps</li>
+          </ul>
+          <a class="news-link" href="https://github.com/ghosthex-dev/dayz-studio/releases/tag/v0.1.0-alpha.6" target="_blank">Release notes ➔</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Interactive IDE Simulator -->
   <section class="simulator-section" id="simulator">
     <div class="container">
@@ -813,6 +915,7 @@
 
         <div class="ide-tabs">
           <button class="ide-tab active" onclick="switchSimTab('quests', this)">⎇ Quests &amp; Dialogue</button>
+          <button class="ide-tab" onclick="switchSimTab('npcs', this)">👤 NPC Behaviour</button>
           <button class="ide-tab" onclick="switchSimTab('map', this)">🗺️ 2D/3D Map &amp; Eraser</button>
           <button class="ide-tab" onclick="switchSimTab('game', this)">🎮 In-Editor Game View</button>
           <button class="ide-tab" onclick="switchSimTab('traders', this)">🛒 Economy &amp; Traders</button>
@@ -851,6 +954,42 @@
                   <div class="node-header"><span style="color:var(--emerald)">Reward</span> <span>#04</span></div>
                   <div class="node-title">🎁 Morphine + $100 Cash</div>
                   <div class="node-sub">+250 XP &amp; Standing</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- NPCs Tab -->
+          <div id="sim-npcs" class="ide-view-panel">
+            <div class="sim-canvas">
+              <div class="sim-canvas-grid"></div>
+              <div class="hud-overlay">
+                <span class="hud-badge">NPC: MIREK &middot; BEHAVIOUR GRAPH</span>
+                <span class="hud-badge" style="color: var(--purple)">SHOWCASE PROJECT</span>
+              </div>
+              <div class="node-graph-demo">
+                <div class="demo-node" style="border-top: 3px solid var(--purple)">
+                  <div class="node-header"><span style="color:var(--purple)">Event</span> <span>#01</span></div>
+                  <div class="node-title">🚶 Player comes near</div>
+                  <div class="node-sub">Within 6 m &middot; every 2 min</div>
+                </div>
+                <div class="node-arrow">➔</div>
+                <div class="demo-node" style="border-top: 3px solid var(--amber)">
+                  <div class="node-header"><span style="color:var(--amber)">Step</span> <span>#02</span></div>
+                  <div class="node-title">👋 Emote: wave</div>
+                  <div class="node-sub">Faces you, stands up first</div>
+                </div>
+                <div class="node-arrow">➔</div>
+                <div class="demo-node" style="border-top: 3px solid #38bdf8">
+                  <div class="node-header"><span style="color:#38bdf8">Step</span> <span>#03</span></div>
+                  <div class="node-title">🗨 Say</div>
+                  <div class="node-sub">"Welcome to the camp, survivor."</div>
+                </div>
+                <div class="node-arrow">➔</div>
+                <div class="demo-node" style="border-top: 3px solid var(--emerald)">
+                  <div class="node-header"><span style="color:var(--emerald)">Activity</span> <span>#04</span></div>
+                  <div class="node-title">🔥 Stand at the fire</div>
+                  <div class="node-sub">Emote: warm hands</div>
                 </div>
               </div>
             </div>
@@ -966,6 +1105,11 @@
               <td class="tag-good">Visual Node Graph (Skyrim dialogue trees &amp; voice lines)</td>
             </tr>
             <tr>
+              <td><strong>NPC Behaviour</strong></td>
+              <td class="tag-bad">Static NPCs, or AI mods your players must install</td>
+              <td class="tag-good">Behaviour Graphs: patrols, routines, emotes, follow &amp; escort (vanilla)</td>
+            </tr>
+            <tr>
               <td><strong>Testing Iteration Loop</strong></td>
               <td class="tag-bad">PBO repack ➔ Sign key ➔ Restart server (5–10 min loop)</td>
               <td class="tag-good">Docked Game Viewport with live Central Economy (&lt;10s)</td>
@@ -990,6 +1134,21 @@
       </div>
 
       <div class="features-grid">
+        <!-- Featured: NPCs (alpha.6) -->
+        <div class="feature-card featured">
+          <span class="feature-icon">👤</span>
+          <h3>NPCs with a Life of Their Own <span class="new-pill">New in alpha 6</span></h3>
+          <p>Every NPC is one character in the NPCs tab, with its own look, place, faction, trader and a behaviour graph built just like a quest. Quests pick an NPC to talk to, so one character can give several quests &mdash; and NPCs no quest uses still live their routine.</p>
+          <ul class="feature-list">
+            <li>Events: spawned, player near, talked to, hostile seen, time of day</li>
+            <li>Activities: patrol, wander, stand at, follow, escort, guard</li>
+            <li>Steps: walk to, wait, face player, say, emote, give item</li>
+            <li>Day/night schedules &mdash; patrol by day, the campfire at night</li>
+            <li>19 game emotes: wave, salute, point, sit by the fire&hellip;</li>
+            <li>Your own NPC events &amp; steps in Enforce Script</li>
+          </ul>
+        </div>
+
         <!-- Feature 1 -->
         <div class="feature-card">
           <span class="feature-icon">🗺️</span>
@@ -1012,7 +1171,7 @@
             <li>Interactive [F] Talk prompts and multi-choice dialogue trees</li>
             <li>Attach custom .ogg/.wav voice lines with auto-config</li>
             <li>In-game Compass HUD Tracker and Quest Journal [J]</li>
-            <li>Bonus objectives, quest chains, and dynamic NPC patrol routes</li>
+            <li>Bonus objectives, quest chains, and NPCs shared across quests</li>
           </ul>
         </div>
 
@@ -1189,6 +1348,26 @@
           Yes! Go to <strong>File ▸ ☁ Publish to Steam Workshop…</strong>. DayZ Studio automatically signs the PBO, packages the public .bikey, and uploads the mod directly through your local Steam client.
         </div>
       </div>
+
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFaq(this)">
+          <span>Something broke &mdash; how do I report it?</span>
+          <span class="faq-icon">▾</span>
+        </button>
+        <div class="faq-answer">
+          Use <strong>File ▸ 🐞 Report a bug…</strong> (also in Help). Describe what happened and press <strong>Open GitHub issue</strong>: Studio zips its logs into <code>Documents\DayZStudio\BugReports</code> and opens a new GitHub issue with your report filled in. Drag the zip into the issue and press <strong>Submit</strong>. Studio uploads nothing itself, your Windows user name is removed from the logs, and your project file is only included if you tick the box.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFaq(this)">
+          <span>I'm on an older alpha. How do I update?</span>
+          <span class="faq-icon">▾</span>
+        </button>
+        <div class="faq-answer">
+          DayZ Studio checks for updates when it starts and offers the new version by itself; you can also use <strong>File ▸ ⟳ Check for updates</strong>. Projects you made with quest NPCs are moved into the new NPCs tab automatically the first time you open them. If you run a server with a mod you exported, rebuild it and update it on your server to give your players the new NPCs.
+        </div>
+      </div>
     </div>
   </section>
 
@@ -1198,7 +1377,8 @@
       <div class="footer-links">
         <a href="https://github.com/ghosthex-dev/dayz-studio">GitHub Repository</a>
         <a href="https://github.com/ghosthex-dev/dayz-studio/releases/latest">Download Latest Release</a>
-        <a href="https://github.com/ghosthex-dev/dayz-studio/issues">Report Issue / Feedback</a>
+        <a href="https://github.com/ghosthex-dev/dayz-studio/issues/new?template=bug_report.md&amp;labels=bug">Report a Bug</a>
+        <a href="https://github.com/ghosthex-dev/dayz-studio/issues">Issues &amp; Feedback</a>
         <a href="https://github.com/ghosthex-dev/dayz-studio/blob/main/LICENSE">License</a>
       </div>
       <p class="footer-disclaimer">
