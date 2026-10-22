@@ -567,6 +567,16 @@
   };
 
   /* ---------------------------------------------------------------- launching */
+  // the map's Central Economy in the Studio viewport: loot in buildings, infected, animals, cars (on unless turned off)
+  L.economy = (() => { try { return localStorage.getItem('dzstudio.economy') !== '0'; } catch (e) { return true; } })();
+  // the project's loot (edited spawn points, placed buildings that have loot) replaces the map's own files in game
+  function lootFiles() {
+    const Lt = DS.Loot;
+    if (!Lt || Lt.loadedWorld !== S.project.meta.world || Lt.state !== 'ok') return null;
+    if (!Lt.modified() && !Lt.autoInstances().length) return null;
+    return { 'mapgrouppos.xml': Lt.exportPos(), 'mapgroupproto.xml': Lt.exportProto() };
+  }
+
   L.launch = async function (opts) {
     if (L.launching || L.fresh) return;
     const pt = !!(opts && opts.playtest);
@@ -577,6 +587,7 @@
     try {
       const exp = opts && opts.exportName ? opts.exportName : '';
       const body = { world: S.project.meta.world, playtest: pt, exportName: exp, engine: pt || exp ? 'world' : L.engine };
+      if (body.engine === 'world' && L.economy) Object.assign(body, { economy: true, loot: lootFiles() });
       r = host ? await host.launchEditor(body) : await api('/api/editor/launch', body);
     } catch (e) {
       r = { ok: false, error: String(e) };
@@ -718,6 +729,8 @@
       el('select', { class: 'inp sm', disabled: L.fresh || L.launching, title: 'DayZ Studio viewport: the game runs without any other mod. DayZ Editor (Dabs): the game with the Dabs editor UI.', onchange: (e) => { L.engine = e.target.value; renderBar(); } },
         el('option', { value: 'world', selected: L.engine === 'world' }, 'Studio viewport'),
         el('option', { value: 'dabs', selected: L.engine === 'dabs' }, 'DayZ Editor (Dabs)')),
+      el('label', { class: 'gv-tog', title: 'Run the map\'s Central Economy, like a real server: loot in buildings (your own loot spawn edits included), infected, animals and cars. Each launch starts fresh. Turn off for an empty world. Applies to the Studio viewport and play-tests; takes effect on the next launch.' },
+        el('input', { type: 'checkbox', checked: L.economy, disabled: L.fresh || L.launching, onchange: (e) => { L.economy = e.target.checked; try { localStorage.setItem('dzstudio.economy', L.economy ? '1' : '0'); } catch (x) {} } }), '🎒 Loot & infected'),
       el('button', { class: 'btn', disabled: !L.fresh && !L.launching, onclick: () => L.close() }, '■ Close game'),
       chip,
       el('span', { class: 'sep' }),

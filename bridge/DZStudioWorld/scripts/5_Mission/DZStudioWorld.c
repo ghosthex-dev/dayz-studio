@@ -114,6 +114,20 @@ class DZWDump
 	}
 }
 
+// what lies around a point (op "near"): loose items the Central Economy spawned, infected and animals
+class DZWNear
+{
+	int items;
+	int infected;
+	int animals;
+	ref array<string> sample;
+
+	void DZWNear()
+	{
+		sample = new array<string>;
+	}
+}
+
 class DZWProbe
 {
 	float fx;
@@ -682,6 +696,32 @@ class DZW
 			else if (c.op == "shapes")
 			{
 				ApplyPreview(c.shapes);
+			}
+			else if (c.op == "near")
+			{
+				// x,z: centre, y: radius -> near.json
+				array<Object> nearObjs = new array<Object>;
+				array<CargoBase> nearCargo = new array<CargoBase>;
+				GetGame().GetObjectsAtPosition3D(Vector(c.x, GetGame().SurfaceY(c.x, c.z), c.z), c.y, nearObjs, nearCargo);
+				DZWNear nr = new DZWNear();
+				foreach (Object no : nearObjs)
+				{
+					if (no.IsInherited(ZombieBase))
+						nr.infected++;
+					else if (no.IsInherited(AnimalBase))
+						nr.animals++;
+					else
+					{
+						ItemBase nib = ItemBase.Cast(no);
+						if (nib && !nib.GetHierarchyParent())
+						{
+							nr.items++;
+							if (nr.sample.Count() < 30)
+								nr.sample.Insert(nib.GetType());
+						}
+					}
+				}
+				JsonFileLoader<DZWNear>.JsonSaveFile(DIR + "/near.json", nr);
 			}
 			else if (c.op == "dump")
 			{

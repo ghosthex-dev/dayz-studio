@@ -265,12 +265,15 @@ def build_world(env):
     return build_mod(env, os.path.abspath(WORLD_SRC), WORLD_MOD, 'dzstudioworld', 'DZStudioWorld')
 
 
-def ensure_world_mission(map_name):
-    """offline mission that simply runs the stock MissionGameplay (our mod takes over once it loads)"""
+def ensure_world_mission(map_name, economy=False):
+    """offline mission that simply runs the stock MissionGameplay (our mod takes over once it loads).
+    economy: start the map's Central Economy like DayZ's own offline missions (prepare_ce puts its files in place)"""
     folder = os.path.join(MISSIONS, 'DZStudioWorld.' + map_name)
     os.makedirs(folder, exist_ok=True)
+    start = ('\t// the map\'s Central Economy, as in DayZ\'s own offline missions: loot, infected, animals, vehicles\n'
+             '\tHive ce = CreateHive();\n\tif (ce)\n\t\tce.InitOffline();\n') if economy else ''
     with open(os.path.join(folder, 'init.c'), 'w') as f:
-        f.write('void main()\n{\n}\n\nMission CreateCustomMission(string path)\n{\n    return new MissionGameplay();\n}\n')
+        f.write('void main()\n{\n' + start + '}\n\nMission CreateCustomMission(string path)\n{\n    return new MissionGameplay();\n}\n')
     proto = os.path.join(folder, 'MapGroupProto.xml')
     if not os.path.isfile(proto):
         root = os.path.join(DOCS_DAYZ, 'Editor', 'Missions')
@@ -283,6 +286,66 @@ def ensure_world_mission(map_name):
             with open(proto, 'w') as f:
                 f.write('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<prototype>\n</prototype>\n')
     return folder
+
+
+LOOT_FILES = ('mapgrouppos.xml', 'mapgroupproto.xml')
+
+
+def prepare_ce(folder, world, loot=None):
+    """Put the map's Central Economy files into a game-view mission folder. They come from worlds_<map>_ce.pbo,
+    which every DayZ install has (no DayZ Server needed), and are unpacked again only after a DayZ update.
+    Every session starts fresh (the economy's storage is wiped), and the project's own loot files
+    (loot = {'mapgrouppos.xml': text, 'mapgroupproto.xml': text}) replace the map's. Returns '' or why not."""
+    from extract_maps import pbo_entries
+    g = WORLDS.game_worlds(find_env()['game']).get(world)
+    if not g or not g['ce']:
+        return 'DayZ has no Central Economy files for %s' % WORLDS.world_name(world)
+    ce = g['ce']
+    entries = [(n.replace('\\', '/'), off, size) for n, off, size in pbo_entries(ce) if n.lower() != 'config.bin']
+    stamp = os.path.join(folder, '.dzstudio_ce')
+    sig = '%s|%d|%d' % (ce, os.path.getsize(ce), int(os.path.getmtime(ce)))
+    try:
+        old = open(stamp, encoding='utf-8').read().splitlines()
+    except OSError:
+        old = []
+    custom = old[1:] if old and old[0] == sig else None
+
+    def unpack(names=None):
+        with open(ce, 'rb') as src:
+            for n, off, size in entries:
+                if names is not None and n.lower() not in names:
+                    continue
+                dst = os.path.join(folder, *n.split('/'))
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                src.seek(off)
+                with open(dst, 'wb') as out:
+                    left = size
+                    while left > 0:
+                        chunk = src.read(min(left, 1 << 22))
+                        if not chunk:
+                            break
+                        out.write(chunk)
+                        left -= len(chunk)
+
+    if custom is None:
+        log('unpacking the %s Central Economy (%d files)' % (world, len(entries)))
+        unpack()
+        custom = []
+    elif custom:
+        unpack(set(custom))   # the last session used project loot files: back to the map's own
+    custom = []
+    for fn in LOOT_FILES:   # the project's loot over the map's own
+        text = (loot or {}).get(fn)
+        if isinstance(text, str) and text.strip():
+            with open(os.path.join(folder, fn), 'w', encoding='utf-8', newline='\n') as f:
+                f.write(text)
+            custom.append(fn)
+    with open(stamp, 'w', encoding='utf-8') as f:
+        f.write('\n'.join([sig] + custom))
+    for d in os.listdir(folder):   # no leftovers from the last session (loot, infected, cars)
+        if d.lower().startswith('storage_') and os.path.isdir(os.path.join(folder, d)):
+            shutil.rmtree(os.path.join(folder, d), ignore_errors=True)
+    return ''
 
 
 def launch_editor(body):
@@ -309,12 +372,21 @@ def launch_editor(body):
                 except OSError:
                     pass
     map_name = WORLDS.world_class(world_suffix(body.get('world', 'chernarusplus')))
+    economy = False
     if engine == 'dabs':
         mod_list = [env['mods'][n] for n in ('CF', 'DabsFramework', 'DayZEditor')] + [LINK_DIR_MOD]
         mission = ensure_editor_mission(map_name) if map_name else None
     else:
         mod_list = [WORLD_MOD]
-        mission = ensure_world_mission(map_name) if map_name else None
+        economy = bool(body.get('economy')) and bool(map_name)
+        if economy:
+            folder = os.path.join(MISSIONS, 'DZStudioWorld.' + map_name)
+            os.makedirs(folder, exist_ok=True)
+            why = prepare_ce(folder, world_suffix(body.get('world', 'chernarusplus')), body.get('loot'))
+            if why:
+                log(why + ' - starting without loot')
+                economy = False
+        mission = ensure_world_mission(map_name, economy) if map_name else None
         for d in link_dirs():  # the standalone mod only acts when this flag exists
             with open(os.path.join(os.path.dirname(d), 'world.flag'), 'w') as f:
                 f.write('1')
@@ -347,7 +419,7 @@ def launch_editor(body):
     log('launch %s: %s' % (engine, ' '.join(args)))
     state['proc'] = subprocess.Popen(args, cwd=env['game'])
     state.update(mode='editor', world=body.get('world'), started=time.time(), engine=engine)
-    return {'ok': True, 'pid': state['proc'].pid, 'map': map_name, 'engine': engine}
+    return {'ok': True, 'pid': state['proc'].pid, 'map': map_name, 'engine': engine, 'economy': engine != 'dabs' and economy}
 
 
 # ---- local dedicated server (multiplayer test of an exported mod) ------------
