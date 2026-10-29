@@ -125,7 +125,7 @@
     if (!b.ok) { setState('bad', 'Build failed: ' + (b.error || '')); return; }
     if (DS.app) DS.app.lastBuild = b.name;
     setState('', 'Starting the local server - compiling scripts…');
-    const s = await api('/api/server/start', { exportName: b.name, world: S.project.meta.world || 'chernarusplus', resetProgress: false, debug: true });
+    const s = await api('/api/server/start', { exportName: b.name, world: S.project.meta.world || 'chernarusplus', resetProgress: false, debug: true, mods: DS.Mods ? DS.Mods.forLaunch() : [] });
     if (!s.ok) { setState('bad', s.error || 'Could not start the server'); return; }
     stopOnFail = true;
     file = ''; offset = 0; state = 'compiling';

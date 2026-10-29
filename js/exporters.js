@@ -891,6 +891,8 @@ Format used: 24-byte header [cells, cells, mapWidth, mapHeight, ${DS.Zones.ubits
       factions: factionsJson(P),
       trade: tradeJson(P),
       sounds: DS.Sounds ? DS.Sounds.all().map((s) => ({ id: s.id, ext: s.ext })) : [],
+      // the mods the project loads in Studio (Project > Mods): INSTALL.txt tells server owners to load them too
+      requires: DS.Mods ? DS.Mods.forLaunch() : [],
     };
   };
   X.zipName = () => U.safeName(S.project.meta.name) + '_dayz_export.zip';

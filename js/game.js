@@ -11,6 +11,9 @@
   G.job = { running: false, msg: '', pct: 0 };
   G.checked = false;
 
+  // the project's mods (Project > Mods) load in every game Studio starts, so captures know their classes too
+  const mods = () => (DS.Mods ? DS.Mods.forLaunch() : []);
+
   async function api(path, body) {
     const r = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     return r.json();
@@ -44,7 +47,7 @@
     const classes = classList();
     let r;
     try {
-      r = await api('/api/capture/start', { world, size: S.project.meta.mapSize, n, classes });
+      r = await api('/api/capture/start', { world, size: S.project.meta.mapSize, n, classes, mods: mods() });
     } catch (e) {
       r = { ok: false, error: String(e) };
     }
@@ -88,7 +91,7 @@
     const size = S.project.meta.mapSize;
     G.job = { running: true, msg: 'Starting DayZ to scan the world objects… (about 3 minutes)', pct: 5 };
     S.emit('game');
-    const r = await api('/api/capture/start', { world, size, n: 16, classes: [], scan: true, x0: 0, z0: 0, x1: size, z1: size, cell: 100 }).catch((e) => ({ ok: false, error: String(e) }));
+    const r = await api('/api/capture/start', { world, size, n: 16, classes: [], scan: true, x0: 0, z0: 0, x1: size, z1: size, cell: 100, mods: mods() }).catch((e) => ({ ok: false, error: String(e) }));
     if (!r.ok) {
       G.job = { running: false, msg: r.error || 'Could not start the game', pct: 0, error: true };
       S.emit('game');
@@ -124,7 +127,7 @@
     const world = S.project.meta.world;
     G.job = { running: true, msg: 'Starting DayZ to read the class list…', pct: 10 };
     S.emit('game');
-    const r = await api('/api/capture/start', { world, size: S.project.meta.mapSize, n: 16, classes: [], list: true }).catch((e) => ({ ok: false, error: String(e) }));
+    const r = await api('/api/capture/start', { world, size: S.project.meta.mapSize, n: 16, classes: [], list: true, mods: mods() }).catch((e) => ({ ok: false, error: String(e) }));
     if (!r.ok) {
       G.job = { running: false, msg: r.error || 'Could not start the game', pct: 0, error: true };
       S.emit('game');
@@ -149,7 +152,7 @@
   };
 
   G.launchEditor = async function () {
-    const r = await api('/api/editor/launch', { world: S.project.meta.world });
+    const r = await api('/api/editor/launch', { world: S.project.meta.world, mods: mods() });
     if (!r.ok) DS.toast(r.error || 'Could not start DayZ', 'error', 6000);
     else DS.toast('Starting DayZ with the Editor mod… choose the map, then File ▸ Import ▸ Object Spawner', 'ok', 7000);
   };

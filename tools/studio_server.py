@@ -173,15 +173,76 @@ def map_mods(env, world):
     return deps + [g['mod']]
 
 
-def mod_arg(mods):
-    """-mod=a;b;c with each mod once"""
-    seen, out = set(), []
+def mod_arg(mods, flag='-mod=', skip=()):
+    """-mod=a;b;c with each mod once (and none of skip - the mods already in -mod, for -serverMod)"""
+    seen, out = {os.path.normcase(os.path.abspath(m)) for m in skip}, []
     for m in mods:
         k = os.path.normcase(os.path.abspath(m))
         if k not in seen:
             seen.add(k)
             out.append(m)
-    return '-mod=' + ';'.join(out)
+    return flag + ';'.join(out)
+
+
+def user_mods(env, entries):
+    """the Workshop / @ mods a project chose to load (meta.mods: [{id, serverOnly}]) -> (mods for game and server,
+    server-only mods), each with the mods it requires in front. Raises ValueError naming a mod that is gone or
+    needs mods that are not installed."""
+    both, server = [], []
+    for e in entries or []:
+        key = str((e or {}).get('id', '')) if isinstance(e, dict) else str(e)
+        if not key:
+            continue
+        folder = WORLDS.find_mod(env['game'], key)
+        if not folder:
+            raise ValueError('The mod %s from this project\'s mod list is not installed (unsubscribed on the Steam Workshop, or its '
+                             '@folder was removed). Subscribe to it again, or take it off the list (Project > Mods).' % ((e.get('name') if isinstance(e, dict) else '') or key))
+        deps, missing = WORLDS.mod_dependencies(env['game'], folder)
+        if missing:
+            raise ValueError('%s needs mods that are not installed (it requires the addons %s). Subscribe to the mods its Steam Workshop '
+                             'page lists under "Required items", then try again.' % (WORLDS.mod_name(folder), ', '.join(missing)))
+        (server if isinstance(e, dict) and e.get('serverOnly') else both).extend(deps + [folder])
+    return both, server
+
+
+def mod_keys(paths, srv):
+    """copy the .bikey files of mods (keys / Keys folder) into the server's keys folder"""
+    os.makedirs(os.path.join(srv, 'keys'), exist_ok=True)
+    for m in paths:
+        kd = os.path.join(m, 'keys')
+        for k in (os.listdir(kd) if os.path.isdir(kd) else []):
+            if k.lower().endswith('.bikey'):
+                shutil.copy2(os.path.join(kd, k), os.path.join(srv, 'keys', k))
+
+
+# ---- saved mod lists (shared by every project): data/modlists.json = {"lists": [{"name", "mods": [{id, name, serverOnly}]}]}
+MODLISTS = os.path.join(DATA, 'modlists.json')
+
+
+def mods_info():
+    try:
+        with open(MODLISTS, encoding='utf-8') as f:
+            lists = json.load(f).get('lists', [])
+    except (OSError, ValueError):
+        lists = []
+    return {'ok': True, 'mods': WORLDS.installed_mods(find_env()['game']), 'lists': lists}
+
+
+def mods_list_save(body):
+    """{action: 'save', name, mods} adds or replaces a list by name; {action: 'delete', name} removes it"""
+    name = str(body.get('name') or '').strip()[:80]
+    if not name:
+        return {'ok': False, 'error': 'Give the list a name.'}
+    lists = [l for l in mods_info()['lists'] if l.get('name', '').lower() != name.lower()]
+    if body.get('action') == 'save':
+        mods = [{'id': re.sub(r'[^A-Za-z0-9_@ .\-]', '', str(m.get('id', ''))), 'name': str(m.get('name', ''))[:120],
+                 'serverOnly': bool(m.get('serverOnly'))} for m in body.get('mods') or [] if isinstance(m, dict) and m.get('id')]
+        lists.append({'name': name, 'mods': mods})
+        lists.sort(key=lambda l: l['name'].lower())
+    os.makedirs(DATA, exist_ok=True)
+    with open(MODLISTS, 'w', encoding='utf-8') as f:
+        json.dump({'lists': lists}, f, indent=1)
+    return {'ok': True, 'lists': lists}
 
 
 def start_capture(body):
@@ -191,8 +252,9 @@ def start_capture(body):
     if game_alive():
         return {'ok': False, 'error': 'The game is already running (started by DayZ Studio). Close it first.'}
     world = body.get('world', 'chernarusplus')
-    try:
-        mods = map_mods(env, world)
+    try:   # the map's mods and the project's own (their classes end up in the class list and the bounds)
+        both, server = user_mods(env, body.get('mods'))
+        mods = both + server + map_mods(env, world)
     except ValueError as e:
         return {'ok': False, 'error': str(e)}
     size = float(body.get('size', 15360))
@@ -398,8 +460,9 @@ def launch_editor(body):
             return {'ok': False, 'error': 'Missing Steam Workshop mod(s): ' + ', '.join(missing) + '. Subscribe to them on the Steam Workshop first.'}
     if game_alive():
         return {'ok': False, 'error': 'The game is already running (started by DayZ Studio). Close it first.'}
-    try:
-        maps = map_mods(env, body.get('world', ''))
+    try:   # the project's mods (offline the game is its own server, so server-only mods load too), then the map's
+        both, server = user_mods(env, body.get('mods'))
+        maps = both + server + map_mods(env, body.get('world', ''))
     except ValueError as e:
         return {'ok': False, 'error': str(e)}
     if engine == 'dabs':
@@ -592,8 +655,9 @@ def local_server_start(body):
                     'Install server mission.' % (WORLDS.world_name(world.lower()), g['modName'])}
         return {'ok': False, 'error': 'DayZ Server has no mission for %s (mpmissions\\dayzOffline.%s). If it is a new DLC map, '
                 'update DayZ Server in Steam; a mod map needs its own server mission.' % (WORLDS.world_name(world), world)}
-    try:
-        maps = map_mods(find_env(), world)   # a mod map: the server loads the map mod and what it needs (Deer Isle: CF)
+    try:   # the project's mods, then a mod map's (the map mod and what it needs - Deer Isle: CF); server-only ones via -serverMod
+        both, server_only = user_mods(find_env(), body.get('mods'))
+        maps = both + map_mods(find_env(), world)
     except ValueError as e:
         return {'ok': False, 'error': str(e)}
     os.makedirs(SRV_PROFILE, exist_ok=True)
@@ -636,6 +700,8 @@ def local_server_start(body):
         f.write(nm)
     with open(os.path.join(SRV_ROOT, 'world.txt'), 'w') as f:   # Join loads the same map mods
         f.write(world)
+    with open(os.path.join(SRV_ROOT, 'mods.txt'), 'w', encoding='utf-8') as f:   # ... and the same project mods
+        f.write('\n'.join(both))
     # "check signatures like a real server": install the mod's .bikey in the server's keys folder, verifySignatures = 2
     verify = 0
     if body.get('verify'):
@@ -645,11 +711,7 @@ def local_server_start(body):
         os.makedirs(os.path.join(srv, 'keys'), exist_ok=True)
         for k in keys:
             shutil.copy2(os.path.join(em, 'keys', k), os.path.join(srv, 'keys', k))
-        for m in maps:   # the map mods are signed too: their keys (keys / Keys folder) go to the server as well
-            kd = os.path.join(m, 'keys')
-            for k in (os.listdir(kd) if os.path.isdir(kd) else []):
-                if k.lower().endswith('.bikey'):
-                    shutil.copy2(os.path.join(kd, k), os.path.join(srv, 'keys', k))
+        mod_keys(maps, srv)   # the other mods players load are signed too: their keys go to the server as well
         verify = 2
     with open(cfg, 'w') as f:
         f.write('hostname = "DayZ Studio test server";\npassword = "";\npasswordAdmin = "";\n'
@@ -662,6 +724,8 @@ def local_server_start(body):
                 '        template = "%s";\n    };\n};\n' % (nm, verify, template))
     args = [os.path.join(srv, 'DayZServer_x64.exe'), '-config=' + cfg, '-port=%d' % SRV_PORT,
             '-profiles=' + SRV_PROFILE, mod_arg(maps + [em]), '-dologs', '-adminlog', '-netlog', '-freezecheck']
+    if server_only:
+        args.insert(5, mod_arg(server_only, '-serverMod=', skip=maps + [em]))
     log('local server: ' + ' '.join(args))
     state['srv'] = detached(args, srv)
     state['srvMod'] = nm
@@ -730,6 +794,8 @@ def local_server_join(body):
     try:   # the map mods the server runs with (a mod map such as Deer Isle, and what it needs)
         world = open(os.path.join(SRV_ROOT, 'world.txt')).read().strip() if os.path.isfile(os.path.join(SRV_ROOT, 'world.txt')) else ''
         maps = map_mods(env, world) if world else []
+        mf = os.path.join(SRV_ROOT, 'mods.txt')   # the project mods the server runs with (not its server-only ones)
+        maps = ([m for m in open(mf, encoding='utf-8').read().splitlines() if m.strip() and os.path.isdir(m)] if os.path.isfile(mf) else []) + maps
     except ValueError as e:
         return {'ok': False, 'error': str(e)}
     # servers run BattlEye, so the client must too (DayZ_BE.exe starts it, like the official launcher)
@@ -1016,14 +1082,24 @@ def build_export(body):
     players = ('   they subscribe to it on the Steam Workshop:\n'
                '   https://steamcommunity.com/sharedfiles/filedetails/?id=%s\n' % wid) if wid else \
         '   publish it on the Steam Workshop or hand them the @%s folder.\n' % nm
+    # the Workshop / @ mods the project loads in Studio (Project > Mods): the server needs them too
+    req = [r for r in body.get('requires') or [] if isinstance(r, dict) and r.get('id')]
+    needs = ''.join('     - %s  %s%s\n' % (
+        r.get('name') or r['id'],
+        'https://steamcommunity.com/sharedfiles/filedetails/?id=%s' % r['id'] if str(r['id']).isdigit() else '(the %s folder)' % r['id'],
+        '  - server only: load it with -serverMod=' if r.get('serverOnly') else '') for r in req)
+    if needs:
+        needs = '   This project was made and tested with these mods - load them on the server too (and players need the\n' \
+                '   ones not marked server only):\n' + needs
     install = (
         'DayZ Studio - quest mod "%s"\n\n'
         '1. Copy the folder  @%s  into your DayZ server folder (next to DayZServer_x64.exe).\n'
         '2. Start the server with  -mod=@%s  (add it to your other mods separated by ;).\n'
+        '%s'
         '   The conversation, tracker and journal screens run on the players\' PCs, so players need this mod too -\n'
         '%s'
         '3. Copy the folder  profile/DZStudioQuests  into your server PROFILE folder (the one given with -profiles=).\n'
-        '   quests.json in it is your quest data; per-player progress is written next to it (players/ folder).\n' % (nm, nm, nm, players)
+        '   quests.json in it is your quest data; per-player progress is written next to it (players/ folder).\n' % (nm, nm, nm, needs, players)
         + step4 +
         '5. Restart the server. The script log shows "[DZStudio] Loaded N quest(s)."\n')
     zpath = os.path.join(BUILD_DIR, nm + '_ready.zip')
@@ -1354,6 +1430,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(link_state())
         if u.path == '/api/server/status':
             return self._json(local_server_status())
+        if u.path == '/api/mods':
+            return self._json(mods_info())
         if u.path == '/api/worlds':
             return self._json({'ok': True, 'worlds': WORLDS.discover(find_env()['game'], find_server(), MAPS, DATA)})
         if u.path == '/api/maps/status':
@@ -1446,6 +1524,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(playtest_prepare(body))
         if u.path == '/api/playtest/flag':
             return self._json(playtest_flag(body))
+        if u.path == '/api/mods/lists':
+            return self._json(mods_list_save(body))
         if u.path == '/api/server/mission/install':
             return self._json(install_server_mission(body))
         if u.path == '/api/server/start':

@@ -310,6 +310,7 @@ flowchart LR
   * Toggle **🎒 Loot & infected** off anytime for a peaceful building environment.
 * **Bidirectional Live Sync:** Moving an object in Studio updates its position in the game within a second. Selecting an object in-game highlights it in Studio.
 * **Live Quest Visualization:** Renders translucent quest trigger cylinders, beacon pillars, and flow lines live inside the running game viewport.
+* **🧩 Your Workshop mods:** With nothing selected, **Inspector ▸ Mods ▸ Choose mods…** lists every mod you're subscribed to on the Steam Workshop (and `@folders` in your DayZ folder). The ones you tick load in the game view, captures (so **Capture class list** knows their items), the local test server and **Join** - the mods they require come along by themselves (e.g. DayZ-Editor → Dabs Framework + CF). Mark a mod **server only** to load it with `-serverMod` on the local server and keep it off the client. **💾 Save as list…** keeps a named mod list any project can load again, and the exported mod's `INSTALL.txt` tells server owners which mods to load with it.
 
 <details>
 <summary><b>Standalone Viewport Architecture & CE Details</b></summary>

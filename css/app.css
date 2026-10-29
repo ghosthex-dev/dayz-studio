@@ -270,6 +270,19 @@ select.inp { cursor: pointer; }
 .removed-list { display: grid; gap: 2px; max-height: 240px; overflow: auto; margin: 4px 0; }
 .removed-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 6px; align-items: center; font-size: 12px; }
 .removed-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* project mods (js/mods.js) */
+.mod-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; font-size: 12px; padding: 2px 0; }
+.mod-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mod-picker { display: grid; gap: 10px; }
+.mod-lists, .mod-search { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.mod-lists select { flex: 1; min-width: 160px; }
+.mod-search input { flex: 1; min-width: 160px; }
+.mod-list { display: grid; gap: 2px; max-height: 46vh; overflow: auto; border: 1px solid var(--line); border-radius: 6px; padding: 4px; }
+.mod-pick { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 4px 8px; border-radius: 4px; font-size: 12.5px; }
+.mod-pick.on { background: rgba(56, 189, 248, 0.08); }
+.mod-pick .chk { align-items: flex-start; }
+.mod-pick .chk input { margin-top: 2px; }
+.mod-so { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
 .srv-info { padding: 10px 12px; margin: 8px 0; background: var(--panel2, #1b1f24); border-radius: 6px; line-height: 1.6; }
 .srv-log { max-height: 160px; overflow: auto; padding: 6px 10px; font: 12px/1.5 ui-monospace, Consolas, monospace; background: #111418; border-radius: 6px; }
 .srv .chk { display: inline-flex; align-items: center; gap: 6px; margin: 0 8px; font-size: 12px; }

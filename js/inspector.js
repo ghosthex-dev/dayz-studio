@@ -564,6 +564,7 @@
           el('button', { class: 'btn sm', onclick: () => { S.project.bg = null; S.changed('meta'); S.commit(); I.render(); } }, 'Clear')),
         S.project.bg ? row('Opacity', numInp(Math.round((S.project.bg.opacity == null ? 0.9 : S.project.bg.opacity) * 100), (v) => { S.project.bg.opacity = U.clamp(v, 5, 100) / 100; DS.MapView.invalidate(); S.changed('meta'); }, { min: 5, max: 100, step: 5 }), '%') : null,
         el('div', { class: 'ins-help' }, 'Use a top-down map image covering the whole map (e.g. a satellite export from iZurvive or your own render). It is stretched over 0–map size.')),
+      DS.Mods ? DS.Mods.section(() => I.render()) : null,
       section('Export naming',
         row('Mod / folder name', textInp(m.modName, (v) => { m.modName = U.safeName(v); ch(); }), 'Used for the quest framework mod and file names.')),
       removedSection()

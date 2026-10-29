@@ -391,7 +391,7 @@
     const act = async (path, body, ok) => { const r = await api(path, body).catch(() => ({ ok: false, error: 'studio server not running' })); if (!r.ok) msg(r.error || 'failed', 'error'); else if (ok) msg(ok, 'ok'); refresh(); };
     const flag = (f, lines) => act('/api/server/flag', { flag: f, lines }, null);
     const btns = {
-      start: el('button', { class: 'btn primary', onclick: () => act('/api/server/start', { exportName: name, world: S.project.meta.world || 'chernarusplus', resetProgress: reset.checked, verify: verify.checked }, 'Server starting — about a minute') }, '① Start server'),
+      start: el('button', { class: 'btn primary', onclick: () => act('/api/server/start', { exportName: name, world: S.project.meta.world || 'chernarusplus', resetProgress: reset.checked, verify: verify.checked, mods: DS.Mods ? DS.Mods.forLaunch() : [] }, 'Server starting — about a minute') }, '① Start server'),
       join: el('button', { class: 'btn primary', onclick: () => act('/api/server/join', { exportName: name }, 'Game starting — it connects by itself') }, '② Join with the game'),
       talk: el('button', { class: 'btn sm', title: 'Teleport next to the first quest NPC and open the conversation', onclick: () => flag('talk') }, '💬 Go talk to the first NPC'),
       kill: el('button', { class: 'btn sm', title: 'Count one infected kill for active kill objectives', onclick: () => flag('simkill', ['@infected']) }, '☠ Simulate kill'),

@@ -281,6 +281,32 @@ def mod_dependencies(game, folder):
     return order[:-1], sorted(missing)
 
 
+def mod_key(folder):
+    """how a project names a mod: its Workshop id (the folder name in workshop\\content\\221100), or '@name' for a
+    mod in DayZ's folder - the same on every PC subscribed to it"""
+    return os.path.basename(os.path.normpath(folder))
+
+
+def installed_mods(game):
+    """every mod Studio can load: [{'id', 'name', 'path', 'workshop', 'maps': [world ids], 'needs': [ids of the
+    mods it requires], 'missing': [required addons no installed mod brings]}], Workshop items first"""
+    out = []
+    worlds = mod_worlds(game)
+    for folder, addons in mod_folders(game):
+        deps, missing = mod_dependencies(game, folder)
+        key = mod_key(folder)
+        out.append({'id': key, 'name': mod_name(folder), 'path': folder, 'workshop': not key.startswith('@'),
+                    'maps': sorted(w for w, g in worlds.items() if os.path.normcase(g['mod']) == os.path.normcase(folder)),
+                    'needs': [mod_key(d) for d in deps], 'missing': missing})
+    return out
+
+
+def find_mod(game, key):
+    """the folder of an installed mod by its id ('1559212036' / '@MyMod'), or None"""
+    key = str(key or '')
+    return next((f for f, a in mod_folders(game) if mod_key(f).lower() == key.lower()), None)
+
+
 def all_worlds(game):
     """the game's own maps and the map mods ({id: {'pbo', 'ce', 'dlc'[, 'mod', 'modName']}}); the game's win"""
     out = mod_worlds(game)

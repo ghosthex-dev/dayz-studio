@@ -586,7 +586,7 @@
     let r;
     try {
       const exp = opts && opts.exportName ? opts.exportName : '';
-      const body = { world: S.project.meta.world, playtest: pt, exportName: exp, engine: pt || exp ? 'world' : L.engine };
+      const body = { world: S.project.meta.world, playtest: pt, exportName: exp, engine: pt || exp ? 'world' : L.engine, mods: DS.Mods ? DS.Mods.forLaunch() : [] };
       if (body.engine === 'world' && L.economy) Object.assign(body, { economy: true, loot: lootFiles() });
       r = host ? await host.launchEditor(body) : await api('/api/editor/launch', body);
     } catch (e) {
