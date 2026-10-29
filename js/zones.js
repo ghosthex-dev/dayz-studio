@@ -1,9 +1,9 @@
 /* DayZ Studio - loot zones (Central Economy area flags).
    The game stores "where do which loot tiers / usages apply" in areaflags.map:
-     header 24 bytes [cellsX, cellsZ, mapW, mapH, 32, 0]
-     uint32 usage-flag grid (bit order = cfglimitsdefinition usageflags)
-     tier grid, 8 bits (Tier1..Tier4, Unique) or 4 bits per cell
-     rows start at the SOUTH edge.
+     header 24 bytes [cellsX, cellsZ, mapW, mapH, usage bits, 0]
+     usage-flag grid, 32 bits per cell (16 on some mod maps, e.g. Deer Isle; bit order = cfglimitsdefinition usageflags)
+     tier grid, 8 bits (Tier1..Tier4, Unique), 4 bits, or 16 bits (mod maps with more tiers, e.g. Deer Isle's Tier1..Tier15)
+     rows start at the SOUTH edge. An exported file keeps the map's own layout.
    Zones are vector shapes (polygon / circle) painted over the vanilla raster in order. */
 (function () {
   const DS = (window.DS = window.DS || {});
@@ -18,17 +18,27 @@
 
   Z.state = 'idle'; // idle | loading | ok | none
   Z.loadedWorld = null;
-  Z.base = null; // {usage:Uint32Array, value:Uint8Array}
+  Z.base = null; // {usage:Uint32Array, value:Uint8Array (Uint16Array with 16-bit tiers)}
   Z.work = null;
   Z.N = 4096;
   Z.size = 15360;
+  Z.ubits = 32;
   Z.vbits = 8;
   Z.mode = 'off'; // tier | usage | off  (opt-in so the terrain stays visible)
   Z.opacity = 0.55;
   Z.ui = { layer: 'tier', op: 'set', flags: ['Tier1'], shape: 'poly' };
   Z.draft = null;
 
-  const usageNames = () => (DS.Loot && DS.Loot.limits && DS.Loot.limits.usages.length ? DS.Loot.limits.usages : USAGES);
+  // the map's own usage and tier names (cfglimitsdefinition.xml), as many as its grids have bits for
+  const usageNames = () => (DS.Loot && DS.Loot.limits && DS.Loot.limits.usages.length ? DS.Loot.limits.usages : USAGES).slice(0, Z.ubits);
+  const tierNames = () => (DS.Loot && DS.Loot.limits && DS.Loot.limits.values.length ? DS.Loot.limits.values : TIERS).slice(0, Z.vbits);
+  const valueArray = (n) => (Z.vbits === 16 ? new Uint16Array(n) : new Uint8Array(n));
+  // the vanilla colours for up to Tier4 + Unique; a green-to-red ramp for maps with more tiers
+  const tierColorAt = (i, count) => {
+    if (count <= TIER_COL.length) return TIER_COL[i] || '#ffffff';
+    const h = Math.round(120 - (120 * i) / Math.max(1, count - 1)), c = (n) => { const k = (n + h / 30) % 12, v = 0.5 - 0.4 * Math.max(-1, Math.min(k - 3, 9 - k, 1)); return Math.round(v * 255).toString(16).padStart(2, '0'); };
+    return '#' + c(0) + c(8) + c(4);
+  };
   const zones = () => S.project.zones || (S.project.zones = []);
   const invalidate = () => DS.MapView && DS.MapView.invalidate();
   const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
@@ -46,11 +56,16 @@
   async function ingest(d) {
     const buf = d.raw ? new Uint8Array(d.raw) : await inflate(d.gz); // copy raw so we own the memory
     const N = d.n;
-    const usage = new Uint32Array(buf.buffer, buf.byteOffset, N * N);
+    const ubits = d.ubits || 32;
+    const voff = buf.byteOffset + N * N * (ubits / 8);
+    // a 16-bit usage grid is widened to 32 bits (export writes it back as 16 bits); the 16-bit grids are copied
+    // out, since a typed-array view needs an aligned offset
+    const usage = ubits === 32 ? new Uint32Array(buf.buffer, buf.byteOffset, N * N) : Uint32Array.from(new Uint16Array(buf.slice(0, N * N * 2).buffer));
     let value;
-    if (d.vbits === 8) value = new Uint8Array(buf.buffer, buf.byteOffset + N * N * 4, N * N);
+    if (d.vbits === 16) value = new Uint16Array(buf.buffer.slice(voff, voff + N * N * 2));
+    else if (d.vbits === 8) value = new Uint8Array(buf.buffer, voff, N * N);
     else {
-      const packed = new Uint8Array(buf.buffer, buf.byteOffset + N * N * 4, (N * N) >> 1);
+      const packed = new Uint8Array(buf.buffer, voff, (N * N) >> 1);
       value = new Uint8Array(N * N);
       for (let i = 0; i < packed.length; i++) {
         value[2 * i] = packed[i] & 15;
@@ -59,6 +74,7 @@
     }
     Z.N = N;
     Z.size = d.size;
+    Z.ubits = ubits;
     Z.vbits = d.vbits;
     Z.base = { usage, value };
   }
@@ -76,7 +92,7 @@
         if (d && typeof DecompressionStream !== 'undefined') {
           try { await ingest(d); Z.state = 'ok'; } catch (e) { console.warn('areaflags', e); Z.state = 'none'; }
         } else Z.state = 'none';
-        if (Z.state === 'none') { Z.N = 4096; Z.size = S.project.meta.mapSize; Z.vbits = 8; }
+        if (Z.state === 'none') { Z.N = 4096; Z.size = S.project.meta.mapSize; Z.ubits = 32; Z.vbits = 8; }
         Z.rebuild();
         S.emit('zones');
         res();
@@ -94,10 +110,11 @@
   Z.importMap = async function (arrayBuffer) {
     const dv = new DataView(arrayBuffer);
     const n = dv.getUint32(0, true), nz = dv.getUint32(4, true), mw = dv.getUint32(8, true);
-    const rest = arrayBuffer.byteLength - 24 - n * nz * 4;
-    const vbits = rest === n * nz ? 8 : rest * 2 === n * nz ? 4 : 0;
+    const ubits = dv.getUint32(16, true) === 16 ? 16 : 32;
+    const rest = arrayBuffer.byteLength - 24 - n * nz * (ubits / 8);
+    const vbits = rest === n * nz * 2 ? 16 : rest === n * nz ? 8 : rest * 2 === n * nz ? 4 : 0;
     if (n !== nz || !vbits) throw new Error('Unexpected areaflags.map layout');
-    await ingest({ n, size: mw, vbits, raw: new Uint8Array(arrayBuffer, 24) });
+    await ingest({ n, size: mw, ubits, vbits, raw: new Uint8Array(arrayBuffer, 24) });
     Z.state = 'ok';
     Z.loadedWorld = S.project.meta.world;
     Z.rebuild();
@@ -106,13 +123,12 @@
 
   /* ============================== rasterising ============================== */
   function maskOf(s) {
-    const names = s.layer === 'tier' ? TIERS : usageNames();
+    const names = s.layer === 'tier' ? tierNames() : usageNames();
     let m = 0;
     (s.flags || []).forEach((f) => {
       const i = names.indexOf(f);
       if (i >= 0) m |= 1 << i;
     });
-    if (s.layer === 'tier' && Z.vbits === 4) m &= 15;
     return m >>> 0;
   }
 
@@ -172,11 +188,11 @@
     if (!Z.base && !shapes.length) { Z.work = null; Z.overlayDirty = true; return; }
     if (!Z.base) {
       // map without shipped data: start from an empty raster
-      Z.base = { usage: new Uint32Array(Z.N * Z.N), value: new Uint8Array(Z.N * Z.N) };
+      Z.base = { usage: new Uint32Array(Z.N * Z.N), value: valueArray(Z.N * Z.N) };
     }
     if (!shapes.length) Z.work = Z.base;
     else {
-      if (!Z.work || Z.work === Z.base) Z.work = { usage: new Uint32Array(Z.N * Z.N), value: new Uint8Array(Z.N * Z.N) };
+      if (!Z.work || Z.work === Z.base || Z.work.value.constructor !== Z.base.value.constructor) Z.work = { usage: new Uint32Array(Z.N * Z.N), value: valueArray(Z.N * Z.N) };
       Z.work.usage.set(Z.base.usage);
       Z.work.value.set(Z.base.value);
       shapes.forEach(applyShape);
@@ -185,6 +201,15 @@
   };
 
   S.on('structure', () => { if (Z.loadedWorld) Z.touch(); });
+  // the tier and usage names (and so the colours and zone masks) come from the map's loot data: redo the raster
+  // when they change (the map's loot arrived), not on every loot edit
+  let namesSig = '';
+  S.on('loot', () => {
+    const sig = tierNames().join() + '|' + usageNames().join();
+    if (sig === namesSig) return;
+    namesSig = sig;
+    if (Z.loadedWorld) Z.touch();
+  });
   S.on('project', () => {
     if (S.project.meta.world !== Z.loadedWorld) Z.load(S.project.meta.world);
     else Z.touch();
@@ -201,7 +226,8 @@
     const img = ctx.createImageData(M, M);
     const d = img.data;
     const N = Z.N, stride = N / M;
-    const tcol = TIER_COL.map(hex);
+    const tn = tierNames();
+    const tcol = tn.map((t, i) => hex(tierColorAt(i, tn.length)));
     const names = usageNames();
     const ucol = names.map((n) => hex(usageColor(n).length === 7 ? usageColor(n) : '#e2e8f0'));
     if (Z.mode === 'tier') {
@@ -210,7 +236,9 @@
         for (let x = 0; x < M; x++) {
           const v = W.value[row * N + Math.floor(x * stride)];
           if (!v) continue;
-          const b = v & 8 ? 3 : v & 4 ? 2 : v & 2 ? 1 : v & 1 ? 0 : 4;
+          // the highest tier of the cell (vanilla: Tier1..Tier4 before Unique)
+          const b = tn.length <= TIER_COL.length ? (v & 8 ? 3 : v & 4 ? 2 : v & 2 ? 1 : v & 1 ? 0 : 4) : 31 - Math.clz32(v);
+          if (!tcol[b]) continue;
           const o = (y * M + x) * 4;
           d[o] = tcol[b][0]; d[o + 1] = tcol[b][1]; d[o + 2] = tcol[b][2]; d[o + 3] = 255;
         }
@@ -254,9 +282,10 @@
   /* ============================== shapes: geometry helpers ============================== */
   function shapeColor(s) {
     if (s.layer === 'tier') {
+      const tn = tierNames();
       let b = -1;
-      TIERS.forEach((t, i) => { if ((s.flags || []).includes(t)) b = i; });
-      return b >= 0 ? TIER_COL[b] : '#ffffff';
+      tn.forEach((t, i) => { if ((s.flags || []).includes(t)) b = i; });
+      return b >= 0 ? tierColorAt(b, tn.length) : '#ffffff';
     }
     return usageColor((s.flags || [])[0]);
   }
@@ -467,14 +496,17 @@
     const W = Z.work || Z.base;
     if (!W) return null;
     const N = Z.N;
-    const vbytes = Z.vbits === 8 ? N * N : (N * N) >> 1;
-    const out = new Uint8Array(24 + N * N * 4 + vbytes);
+    const ubytes = N * N * (Z.ubits / 8);
+    const vbytes = Z.vbits === 16 ? N * N * 2 : Z.vbits === 8 ? N * N : (N * N) >> 1;
+    const out = new Uint8Array(24 + ubytes + vbytes);
     const dv = new DataView(out.buffer);
     const mw = Math.round(Z.size);
-    [N, N, mw, mw, 32, 0].forEach((v, i) => dv.setUint32(i * 4, v, true));
-    out.set(new Uint8Array(W.usage.buffer, W.usage.byteOffset, N * N * 4), 24);
-    const off = 24 + N * N * 4;
-    if (Z.vbits === 8) out.set(W.value, off);
+    [N, N, mw, mw, Z.ubits, 0].forEach((v, i) => dv.setUint32(i * 4, v, true));
+    if (Z.ubits === 32) out.set(new Uint8Array(W.usage.buffer, W.usage.byteOffset, ubytes), 24);
+    else out.set(new Uint8Array(Uint16Array.from(W.usage).buffer), 24);
+    const off = 24 + ubytes;
+    if (Z.vbits === 16) out.set(new Uint8Array(W.value.buffer, W.value.byteOffset, vbytes), off);
+    else if (Z.vbits === 8) out.set(W.value, off);
     else for (let i = 0; i < vbytes; i++) out[off + i] = (W.value[2 * i] & 15) | ((W.value[2 * i + 1] & 15) << 4);
     return out;
   };
@@ -489,8 +521,9 @@
       return el('button', { class: 'chip' + (on ? ' on' : ''), style: on && c ? { background: c + '33', borderColor: c } : {}, onclick: () => onToggle(o, !on) }, o);
     }));
   }
-  const tierOpts = () => (Z.vbits === 4 ? TIERS.slice(0, 4) : TIERS);
-  const tierColor = (t) => TIER_COL[TIERS.indexOf(t)];
+  const tierOpts = tierNames;
+  Z.tierNames = tierNames;
+  const tierColor = (t) => { const tn = tierNames(); return tierColorAt(tn.indexOf(t), tn.length); };
 
   Z.inspector = function (sh) {
     const box = el('div', { class: 'ins-body' });
@@ -504,7 +537,7 @@
           el('label', { class: 'ins-row' }, el('span', { class: 'ins-label' }, 'Name'),
             (() => { const i = el('input', { class: 'inp', value: sh.name }); i.addEventListener('input', () => { sh.name = i.value; S.changed('zones'); }); i.addEventListener('change', () => { S.commit(); S.emit('zones'); }); return i; })()),
           el('label', { class: 'ins-row' }, el('span', { class: 'ins-label' }, 'What it controls'),
-            (() => { const s = el('select', { class: 'inp' }, el('option', { value: 'tier' }, 'Loot tier (Tier1–Tier4 / Unique)'), el('option', { value: 'usage' }, 'Usage (Military, Coast, …)')); s.value = sh.layer; s.addEventListener('change', () => { sh.layer = s.value; sh.flags = sh.layer === 'tier' ? ['Tier1'] : ['Military']; ch(); S.commit(); draw(); }); return s; })()),
+            (() => { const s = el('select', { class: 'inp' }, el('option', { value: 'tier' }, 'Loot tier (' + tierNames()[0] + '–' + tierNames().slice(-1)[0] + ')'), el('option', { value: 'usage' }, 'Usage (Military, Coast, …)')); s.value = sh.layer; s.addEventListener('change', () => { sh.layer = s.value; sh.flags = sh.layer === 'tier' ? ['Tier1'] : ['Military']; ch(); S.commit(); draw(); }); return s; })()),
           el('label', { class: 'ins-row' }, el('span', { class: 'ins-label' }, 'Operation'),
             (() => { const s = el('select', { class: 'inp' }, el('option', { value: 'set' }, 'Set — replace what is there'), el('option', { value: 'add' }, 'Add — keep existing and add these'), el('option', { value: 'remove' }, 'Remove — clear these from the area')); s.value = sh.op; s.addEventListener('change', () => { sh.op = s.value; ch(); S.commit(); draw(); }); return s; })()),
           el('div', { class: 'ins-label' }, sh.layer === 'tier' ? 'Tiers' : 'Usages'),

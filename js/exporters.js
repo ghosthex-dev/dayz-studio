@@ -824,7 +824,7 @@ NOTES
 ===============================================
 
 areaflags.map is a COMPLETE replacement for  mpmissions/${S.world().mission}/areaflags.map
-It holds, for every ~${U.round(DS.Zones.size / DS.Zones.N, 2)} m cell of the map, which loot TIERS (Tier1-Tier4, Unique) and
+It holds, for every ~${U.round(DS.Zones.size / DS.Zones.N, 2)} m cell of the map, which loot TIERS (${DS.Zones.tierNames().join(', ')}) and
 which USAGE flags apply. An item only spawns where one of its tier values matches the tier of the ground
 (types.xml <value name="TierN"/>), and usage flags control ground/dynamic loot areas.
 
@@ -832,8 +832,8 @@ which USAGE flags apply. An item only spawns where one of its tier values matche
 2. Copy this file over it and restart the server.
 3. Zones in this project (painted in order, later wins): see zones.json.
 
-Format used: 24-byte header [cells, cells, mapWidth, mapHeight, 32, 0], uint32 usage grid, then the tier grid
-(${DS.Zones.vbits}-bit), rows from the SOUTH edge. Same layout as the vanilla file for this map.
+Format used: 24-byte header [cells, cells, mapWidth, mapHeight, ${DS.Zones.ubits}, 0], ${DS.Zones.ubits}-bit usage grid, then the tier grid
+(${DS.Zones.vbits}-bit), rows from the SOUTH edge. Same layout as the map's own file.
 `, 'Install notes');
     }
     if (opts.expansion) {

@@ -541,9 +541,13 @@
         row('Author', textInp(m.author, (v) => { m.author = v; ch(); }))),
       section('World',
         row('Map', worldSel),
-        cur.installed === false ? el('div', { class: 'ins-help warn-text' }, `${cur.name} isn't installed in your DayZ. You can still place things on it, but its imagery, the game view and play-testing need the map - install it through Steam (DLC maps: buy or download the DLC).`) : null,
+        cur.installed === false ? el('div', { class: 'ins-help warn-text' }, cur.mod
+          ? `${cur.name} isn't installed. You can still place things on it, but its imagery, loot and zones need the map - subscribe to it on the Steam Workshop (or put its @folder in your DayZ folder), let Steam download it, then reopen Studio.`
+          : `${cur.name} isn't installed in your DayZ. You can still place things on it, but its imagery, the game view and play-testing need the map - install it through Steam (DLC maps: buy or download the DLC).`) : null,
+        cur.installed && cur.modName ? el('div', { class: 'ins-help' }, `Found in your mods: ${cur.modName}.`) : null,
         cur.missing ? el('div', { class: 'ins-help warn-text' }, `This project was made for “${cur.id}”, a map this PC doesn't have. Its objects and quests are kept; install the map to see its imagery and test in game.`) : null,
         cur.installed && cur.server === false && !cur.mod ? el('div', { class: 'ins-help' }, `DayZ Server has no mission for ${cur.name} yet - update DayZ Server in Steam to test on a local server.`) : null,
+        cur.installed && cur.mod && cur.missionFromMod && (cur.server === false || cur.missionOutdated) ? serverMissionButton(cur) : null,
         row('Map size (m)', numInp(m.mapSize, (v) => { m.mapSize = Math.max(512, v); ch(); DS.MapView.invalidate(); }, { step: 256 }), 'Square world side length in metres. Chernarus+ = 15360.'),
         row('Grid snap (m)', selectInp(m.snap, [[0, 'Off'], [1, '1 m'], [5, '5 m'], [10, '10 m'], [25, '25 m'], [50, '50 m']], (v) => { m.snap = +v; ch(); })),
         checkInp(m.showTerrain !== false, (v) => { m.showTerrain = v; ch(); DS.MapView.invalidate(); }, 'Show game terrain imagery'),
@@ -575,6 +579,32 @@
   function loadMapLayers(world, fresh) {
     if (DS.Loot) { if (fresh) DS.Loot.loadedWorld = null; DS.Loot.load(world).then(() => S.emit('loot')); }
     if (DS.Zones) { if (fresh) DS.Zones.loadedWorld = null; DS.Zones.load(world).then(() => DS.MapView.invalidate()); }
+  }
+
+  /** a mod map's server mission: DayZ Server has none, but the map mod brings its files - unpack them into
+   *  DayZServer/mpmissions (or update one Studio installed, after a mod update; the old one is backed up) */
+  function serverMissionButton(w) {
+    const update = !!w.missionOutdated;
+    const btn = el('button', { class: 'btn sm' + (update ? '' : ' primary'), onclick: async () => {
+      btn.disabled = true;
+      btn.textContent = 'Installing…';
+      const r = await fetch('/api/server/mission/install', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ world: w.id, update }) })
+        .then((x) => x.json()).catch(() => ({ ok: false, error: 'studio server not running' }));
+      if (!r.ok) {
+        DS.toast(r.error || 'Could not install the server mission', 'error', 8000);
+        btn.disabled = false;
+        btn.textContent = update ? '⟳ Update server mission' : '⬇ Install server mission';
+        return;
+      }
+      DS.toast(`Server mission ${r.mission} installed - ${w.name} can now run on the local test server.`, 'ok', 7000);
+      await DS.loadWorlds();
+      I.render();
+    } }, update ? '⟳ Update server mission' : '⬇ Install server mission');
+    return el('div', { class: 'ins-row' },
+      el('div', { class: 'ins-help' }, update
+        ? `${w.modName} was updated since Studio installed its server mission. Updating puts the new mission files in place (the old mission folder is kept in Studio's server folder, mission_backups).`
+        : `DayZ Server has no mission for ${w.name}, but ${w.modName} brings one. Install it to test on the local server - Studio copies the map's own mission files into DayZServer\\mpmissions.`),
+      btn);
   }
 
   function extractMapsButton(w) {

@@ -160,6 +160,30 @@ def world_suffix(world):
     return re.sub(r'[^A-Za-z0-9_]', '', str(world)) or 'chernarusplus'
 
 
+def map_mods(env, world):
+    """the mods a mod map (Deer Isle, ...) needs loaded - the mods it requires (Deer Isle: CF), then itself - or [].
+    Raises ValueError naming what is missing when a mod it requires is not installed."""
+    g = WORLDS.all_worlds(env['game']).get(world_suffix(world).lower())
+    if not g or not g.get('mod'):
+        return []
+    deps, missing = WORLDS.mod_dependencies(env['game'], g['mod'])
+    if missing:
+        raise ValueError('%s needs mods that are not installed (it requires the addons %s). Subscribe to the mods its Steam Workshop '
+                         'page lists under "Required items", let Steam download them, then try again.' % (g['modName'], ', '.join(missing)))
+    return deps + [g['mod']]
+
+
+def mod_arg(mods):
+    """-mod=a;b;c with each mod once"""
+    seen, out = set(), []
+    for m in mods:
+        k = os.path.normcase(os.path.abspath(m))
+        if k not in seen:
+            seen.add(k)
+            out.append(m)
+    return '-mod=' + ';'.join(out)
+
+
 def start_capture(body):
     env = find_env()
     if not env['game']:
@@ -167,6 +191,10 @@ def start_capture(body):
     if game_alive():
         return {'ok': False, 'error': 'The game is already running (started by DayZ Studio). Close it first.'}
     world = body.get('world', 'chernarusplus')
+    try:
+        mods = map_mods(env, world)
+    except ValueError as e:
+        return {'ok': False, 'error': str(e)}
     size = float(body.get('size', 15360))
     n = int(body.get('n', 1024))
     classes = [c for c in body.get('classes', []) if re.fullmatch(r'[A-Za-z0-9_\-]+', c or '')]
@@ -189,7 +217,7 @@ def start_capture(body):
     os.makedirs(mission, exist_ok=True)
     with open(os.path.join(mission, 'init.c'), 'w') as f:
         f.write('void main()\n{\n}\n\nMission CreateCustomMission(string path)\n{\n\treturn DZStudioCreateMission();\n}\n')
-    args = [os.path.join(env['game'], 'DayZ_x64.exe'), '-mod=' + MOD_DIR, '-mission=' + mission, '-profiles=' + PROFILE,
+    args = [os.path.join(env['game'], 'DayZ_x64.exe'), mod_arg(mods + [MOD_DIR]), '-mission=' + mission, '-profiles=' + PROFILE,
             '-window', '-nosplash', '-skipIntro', '-noBenchmark', '-nopause']
     log('launch: ' + ' '.join(args))
     state['proc'] = subprocess.Popen(args, cwd=env['game'])
@@ -308,7 +336,7 @@ def prepare_ce(folder, world, loot=None):
     Every session starts fresh (the economy's storage is wiped), and the project's own loot files
     (loot = {'mapgrouppos.xml': text, 'mapgroupproto.xml': text}) replace the map's. Returns '' or why not."""
     from extract_maps import pbo_entries
-    g = WORLDS.game_worlds(find_env()['game']).get(world)
+    g = WORLDS.all_worlds(find_env()['game']).get(world)
     if not g or not g['ce']:
         return 'DayZ has no Central Economy files for %s' % WORLDS.world_name(world)
     ce = g['ce']
@@ -370,6 +398,10 @@ def launch_editor(body):
             return {'ok': False, 'error': 'Missing Steam Workshop mod(s): ' + ', '.join(missing) + '. Subscribe to them on the Steam Workshop first.'}
     if game_alive():
         return {'ok': False, 'error': 'The game is already running (started by DayZ Studio). Close it first.'}
+    try:
+        maps = map_mods(env, body.get('world', ''))
+    except ValueError as e:
+        return {'ok': False, 'error': str(e)}
     if engine == 'dabs':
         build_link(env)
     else:
@@ -385,10 +417,10 @@ def launch_editor(body):
     map_name = WORLDS.world_class(world_suffix(body.get('world', 'chernarusplus')))
     economy = False
     if engine == 'dabs':
-        mod_list = [env['mods'][n] for n in ('CF', 'DabsFramework', 'DayZEditor')] + [LINK_DIR_MOD]
+        mod_list = maps + [env['mods'][n] for n in ('CF', 'DabsFramework', 'DayZEditor')] + [LINK_DIR_MOD]
         mission = ensure_editor_mission(map_name) if map_name else None
     else:
-        mod_list = [WORLD_MOD]
+        mod_list = maps + [WORLD_MOD]
         economy = bool(body.get('economy')) and bool(map_name)
         if economy:
             folder = os.path.join(MISSIONS, 'DZStudioWorld.' + map_name)
@@ -424,7 +456,7 @@ def launch_editor(body):
                 f.write('1')
     elif body.get('playtest') and os.path.isdir(QT_MOD):
         mod_list.append(QT_MOD)
-    args = [os.path.join(env['game'], 'DayZ_x64.exe'), '-mod=' + ';'.join(mod_list), '-nosplash', '-skipIntro', '-noBenchmark', '-window', '-nopause']
+    args = [os.path.join(env['game'], 'DayZ_x64.exe'), mod_arg(mod_list), '-nosplash', '-skipIntro', '-noBenchmark', '-window', '-nopause']
     if mission:
         args.append('-mission=' + mission)
     log('launch %s: %s' % (engine, ' '.join(args)))
@@ -442,6 +474,59 @@ SRV_PORT = 2302
 def srv_mission(world):
     """DayZ Server's stock mission for a map (dayzOffline.<id>), '' when it has none"""
     return WORLDS.server_mission(find_server(), world)
+
+
+def install_server_mission(body):
+    """DayZ Server ships no mission for a mod map, but the map mod brings one in its Central Economy pbo (init.c,
+    the economy files, db, env, areaflags.map): unpack it into DayZServer/mpmissions/dayzOffline.<id>. A mission
+    that is there already is left alone, unless Studio made it and {"update": true} (after a mod update) - then the
+    old one is moved to server/mission_backups first, since the types.xml tools may have changed it."""
+    srv = find_server()
+    if not srv:
+        return {'ok': False, 'error': 'DayZ Server is not installed. In Steam: Library > Tools > DayZ Server > Install.'}
+    world = world_suffix(body.get('world', '')).lower()
+    g = WORLDS.all_worlds(find_env()['game']).get(world)
+    if not g or not g.get('mod') or not g['ce']:
+        return {'ok': False, 'error': '%s is not a mod map that brings its own mission files.' % WORLDS.world_name(world)}
+    name = srv_mission(world) or 'dayzOffline.' + world
+    dst = os.path.join(srv, 'mpmissions', name)
+    sig = WORLDS.mission_source_sig(g['ce'])
+    if os.path.isdir(dst):
+        old = WORLDS.mission_stamp(srv, name)
+        if not old:
+            return {'ok': False, 'error': 'DayZServer\\mpmissions\\%s already exists and was not installed by Studio, so it is left as it is.' % name}
+        if old == sig:
+            return {'ok': True, 'mission': name, 'already': True}
+        if not body.get('update'):
+            return {'ok': False, 'error': 'The %s mission is from an older version of %s. Update it to use the new one.' % (name, g['modName'])}
+        backups = os.path.join(SRV_ROOT, 'mission_backups')
+        os.makedirs(backups, exist_ok=True)
+        moved = os.path.join(backups, '%s-%s' % (name, time.strftime('%Y-%m-%d_%H-%M-%S')))
+        shutil.move(dst, moved)
+        log('server mission %s: old version moved to %s' % (name, moved))
+    from extract_maps import pbo_entries
+    tmp = dst + '.installing'
+    shutil.rmtree(tmp, ignore_errors=True)
+    count = 0
+    with open(g['ce'], 'rb') as src:
+        for n, off, size in pbo_entries(g['ce']):
+            rel = n.replace('\\', '/')
+            if rel.lower() == 'config.bin' or rel.lower().startswith('bikeys/') or '..' in rel.split('/'):
+                continue   # the pbo's own config, the keys (players' and servers' business), anything outside the folder
+            out = os.path.join(tmp, *rel.split('/'))
+            os.makedirs(os.path.dirname(out), exist_ok=True)
+            src.seek(off)
+            with open(out, 'wb') as f:
+                f.write(src.read(size))
+            count += 1
+    if not os.path.isfile(os.path.join(tmp, 'init.c')):
+        shutil.rmtree(tmp, ignore_errors=True)
+        return {'ok': False, 'error': '%s has no init.c in its mission files - install its server mission by hand.' % g['modName']}
+    with open(os.path.join(tmp, WORLDS.MISSION_STAMP), 'w', encoding='utf-8') as f:
+        f.write(sig + '\nInstalled by DayZ Studio from %s (%s). Delete this file to keep Studio from updating the mission.\n' % (g['modName'], g['ce']))
+    os.rename(tmp, dst)
+    log('server mission %s installed from %s (%d files)' % (name, g['modName'], count))
+    return {'ok': True, 'mission': name, 'files': count}
 
 
 def find_server():
@@ -501,8 +586,16 @@ def local_server_start(body):
     world = world_suffix(body.get('world', 'chernarusplus'))
     template = srv_mission(world)
     if not template:
+        g = WORLDS.all_worlds(find_env()['game']).get(world.lower()) or {}
+        if g.get('mod') and g.get('ce'):
+            return {'ok': False, 'error': 'DayZ Server has no mission for %s yet. Install it from the %s mod: Inspector > World > '
+                    'Install server mission.' % (WORLDS.world_name(world.lower()), g['modName'])}
         return {'ok': False, 'error': 'DayZ Server has no mission for %s (mpmissions\\dayzOffline.%s). If it is a new DLC map, '
                 'update DayZ Server in Steam; a mod map needs its own server mission.' % (WORLDS.world_name(world), world)}
+    try:
+        maps = map_mods(find_env(), world)   # a mod map: the server loads the map mod and what it needs (Deer Isle: CF)
+    except ValueError as e:
+        return {'ok': False, 'error': str(e)}
     os.makedirs(SRV_PROFILE, exist_ok=True)
     for fn in os.listdir(SRV_PROFILE):  # old logs
         if fn.lower().endswith(('.rpt', '.log', '.adm', '.mdmp')):
@@ -541,6 +634,8 @@ def local_server_start(body):
     cfg = os.path.join(SRV_ROOT, 'serverDZ.cfg')
     with open(os.path.join(SRV_ROOT, 'mod.txt'), 'w') as f:
         f.write(nm)
+    with open(os.path.join(SRV_ROOT, 'world.txt'), 'w') as f:   # Join loads the same map mods
+        f.write(world)
     # "check signatures like a real server": install the mod's .bikey in the server's keys folder, verifySignatures = 2
     verify = 0
     if body.get('verify'):
@@ -550,6 +645,11 @@ def local_server_start(body):
         os.makedirs(os.path.join(srv, 'keys'), exist_ok=True)
         for k in keys:
             shutil.copy2(os.path.join(em, 'keys', k), os.path.join(srv, 'keys', k))
+        for m in maps:   # the map mods are signed too: their keys (keys / Keys folder) go to the server as well
+            kd = os.path.join(m, 'keys')
+            for k in (os.listdir(kd) if os.path.isdir(kd) else []):
+                if k.lower().endswith('.bikey'):
+                    shutil.copy2(os.path.join(kd, k), os.path.join(srv, 'keys', k))
         verify = 2
     with open(cfg, 'w') as f:
         f.write('hostname = "DayZ Studio test server";\npassword = "";\npasswordAdmin = "";\n'
@@ -561,7 +661,7 @@ def local_server_start(body):
                 'instanceId = 77;\nstorageAutoFix = 1;\n\nclass Missions\n{\n    class DayZ\n    {\n'
                 '        template = "%s";\n    };\n};\n' % (nm, verify, template))
     args = [os.path.join(srv, 'DayZServer_x64.exe'), '-config=' + cfg, '-port=%d' % SRV_PORT,
-            '-profiles=' + SRV_PROFILE, '-mod=' + em, '-dologs', '-adminlog', '-netlog', '-freezecheck']
+            '-profiles=' + SRV_PROFILE, mod_arg(maps + [em]), '-dologs', '-adminlog', '-netlog', '-freezecheck']
     log('local server: ' + ' '.join(args))
     state['srv'] = detached(args, srv)
     state['srvMod'] = nm
@@ -627,9 +727,14 @@ def local_server_join(body):
     if not os.path.isdir(em):
         return {'ok': False, 'error': 'Build the mod first.'}
     name = re.sub(r'[^A-Za-z0-9_ ]', '', str(body.get('name', 'StudioTester'))) or 'StudioTester'
+    try:   # the map mods the server runs with (a mod map such as Deer Isle, and what it needs)
+        world = open(os.path.join(SRV_ROOT, 'world.txt')).read().strip() if os.path.isfile(os.path.join(SRV_ROOT, 'world.txt')) else ''
+        maps = map_mods(env, world) if world else []
+    except ValueError as e:
+        return {'ok': False, 'error': str(e)}
     # servers run BattlEye, so the client must too (DayZ_BE.exe starts it, like the official launcher)
     exe = 'DayZ_BE.exe' if os.path.isfile(os.path.join(env['game'], 'DayZ_BE.exe')) else 'DayZ_x64.exe'
-    args = [os.path.join(env['game'], exe), '-connect=127.0.0.1', '-port=%d' % SRV_PORT, '-mod=' + em,
+    args = [os.path.join(env['game'], exe), '-connect=127.0.0.1', '-port=%d' % SRV_PORT, mod_arg(maps + [em]),
             '-name=' + name, '-nosplash', '-skipIntro', '-noBenchmark', '-window', '-nopause']
     log('join local server: ' + ' '.join(args))
     state['proc'] = subprocess.Popen(args, cwd=env['game'])
@@ -1341,6 +1446,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(playtest_prepare(body))
         if u.path == '/api/playtest/flag':
             return self._json(playtest_flag(body))
+        if u.path == '/api/server/mission/install':
+            return self._json(install_server_mission(body))
         if u.path == '/api/server/start':
             return self._json(local_server_start(body))
         if u.path == '/api/server/stop':
@@ -1394,13 +1501,21 @@ def maps_extract(body=None):
     if not game:
         return {'ok': False, 'error': 'DayZ was not found - install it from Steam first'}
     world = re.sub(r'[^A-Za-z0-9_]', '', str((body or {}).get('world', '')))
-    if world and world not in WORLDS.game_worlds(game):
-        return {'ok': False, 'error': '%s is not installed in DayZ (no worlds_%s_data.pbo). Install it through Steam first.' % (WORLDS.world_name(world), world)}
+    g = WORLDS.all_worlds(game).get(world.lower()) if world else None
+    if world and not g:
+        return {'ok': False, 'error': '%s was not found. DLC maps: install the DLC through Steam. Mod maps: subscribe to the map on the Steam Workshop '
+                '(or put its @folder in the DayZ folder), let Steam download it, then reopen Studio.' % WORLDS.world_name(world.lower())}
+    if g and g.get('mod') and not g['pbo'] and not g['ce']:
+        return {'ok': False, 'error': '%s (%s) has no satellite tiles or Central Economy files that Studio can read.' % (WORLDS.world_name(world.lower()), g['modName'])}
+    if g and g.get('mod'):   # a mod map: its own pbos, named as its author likes
+        cmd = ['--name', world.lower()] + (['--pbo', g['pbo']] if g['pbo'] else []) + (['--ce', g['ce']] if g['ce'] else [])
+    else:
+        cmd = [game] + (['--world', world] if world else [])
     maps_job.update(running=True, log=['Starting…'], done=False)
 
     def run():
         try:
-            p = subprocess.Popen([sys.executable, '-u', os.path.join(HERE, 'extract_maps.py'), game] + (['--world', world] if world else []), cwd=APP,
+            p = subprocess.Popen([sys.executable, '-u', os.path.join(HERE, 'extract_maps.py')] + cmd, cwd=APP,
                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors='replace',
                                  creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             for line in p.stdout:

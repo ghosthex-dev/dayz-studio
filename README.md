@@ -152,6 +152,8 @@ Because DayZ Studio distributes zero proprietary game files, it builds its local
 
 *Supported maps:* **Chernarus+**, **Livonia**, **Sakhal**, **Nasdara**, and future DLC maps automatically discovered from your `DayZ\Addons` directory, plus community terrains like **Namalsk** and **Deer Isle**.
 
+*Mod maps:* subscribe to the map on the Steam Workshop and Studio finds it (also an `@folder` in your DayZ folder). Imagery, loot and loot zones are extracted from the mod's own files; capture, the game view and the local test server load the map mod together with the mods it needs (Deer Isle: CF). DayZ Server has no mission for a mod map, so **Install server mission** (Map view ▸ World) copies the one the map mod brings into `DayZServer\mpmissions`. After a map update it offers **Update server mission** and keeps the old folder in Studio's `mission_backups`.
+
 ---
 
 ### 4. Jump In: The Showcase Project

@@ -9,6 +9,7 @@ Reads the satellite tiles that ship inside your own DayZ install and writes them
     python extract_maps.py "D:/Games/DayZ"      # explicit DayZ folder
     python extract_maps.py --world nasdara      # just one map (DLC maps are found in their own DayZ/<dlc> folder)
     python extract_maps.py --pbo path/to/worlds_xyz_data.pbo --name xyz   # a mod / DLC map
+    python extract_maps.py --pbo .../data.pbo --ce .../ce.pbo --name deerisle   # a mod map's tiles + its loot and zones
 
 Needs:  pip install pillow
 Output per world:  maps/<world>/overview.jpg  (4096px)  and  maps/<world>/t/XXX_YYY.jpg (512px tiles)
@@ -306,32 +307,34 @@ def extract_loot(ce_pbo, world):
 
 
 def extract_areaflags(ce_pbo, world):
-    """areaflags.map = 24-byte header [cells_x, cells_z, map_w, map_h, 32, 0], then a uint32 usage-flag
-    grid, then a value (tier) grid of 8 or 4 bits per cell. Row 0 is the SOUTH edge. Stored gzip+base64
-    in maps/<world>/areaflags.js so the editor can load it without a server."""
+    """areaflags.map = 24-byte header [cells_x, cells_z, map_w, map_h, usage bits, 0], then the usage-flag grid
+    (32 bits per cell on the official maps, 16 on some mod maps such as Deer Isle), then a value (tier) grid of
+    16, 8 or 4 bits per cell. Row 0 is the SOUTH edge. Stored gzip+base64 in maps/<world>/areaflags.js so the
+    editor can load it without a server."""
     import base64, gzip, json
     ents = pbo_entries(ce_pbo)
     raw = read_pbo_file(ce_pbo, ents, 'areaflags.map')
     if not raw:
         print('  %s: no areaflags.map' % world)
         return False
-    nx, nz, mw, mh, bits, _ = struct.unpack_from('<6I', raw, 0)
+    nx, nz, mw, mh, ubits, _ = struct.unpack_from('<6I', raw, 0)
+    ubits = ubits if ubits in (16, 32) else 32
     body = raw[24:]
     cells = nx * nz
-    rest = len(body) - cells * 4
-    vbits = 8 if rest == cells else 4 if rest * 2 == cells else None
+    rest = len(body) - cells * ubits // 8
+    vbits = 16 if rest == cells * 2 else 8 if rest == cells else 4 if rest * 2 == cells else None
     if nx != nz or vbits is None:
-        print('  %s: unexpected areaflags layout (%d x %d, %d bytes) - skipped' % (world, nx, nz, len(raw)))
+        print('  %s: unexpected areaflags layout (%d x %d, %d-bit usage, %d bytes) - skipped' % (world, nx, nz, ubits, len(raw)))
         return False
     gz = gzip.compress(body, 6)
     outdir = os.path.join(OUT, world)
     os.makedirs(outdir, exist_ok=True)
-    meta = {'n': nx, 'size': mw, 'vbits': vbits, 'gz': base64.b64encode(gz).decode('ascii')}
+    meta = {'n': nx, 'size': mw, 'ubits': ubits, 'vbits': vbits, 'gz': base64.b64encode(gz).decode('ascii')}
     with open(os.path.join(outdir, 'areaflags.js'), 'w', encoding='ascii') as f:
         f.write('window.DS_AREAFLAGS = window.DS_AREAFLAGS || {};\nwindow.DS_AREAFLAGS[%s] = ' % json.dumps(world))
         json.dump(meta, f, separators=(',', ':'))
         f.write(';\n')
-    print('  %s areaflags: %dx%d cells, %d-bit tiers, %d KB' % (world, nx, nz, vbits, len(gz) // 1024))
+    print('  %s areaflags: %dx%d cells, %d-bit usage, %d-bit tiers, %d KB' % (world, nx, nz, ubits, vbits, len(gz) // 1024))
     return True
 
 
@@ -350,11 +353,18 @@ def find_install(arg):
 
 if __name__ == '__main__':
     args = sys.argv[1:]
-    if '--pbo' in args:
-        pbo = args[args.index('--pbo') + 1]
-        name = args[args.index('--name') + 1] if '--name' in args else re.sub(r'^worlds_|_data\.pbo$', '', os.path.basename(pbo))
-        extract(pbo, name)
-        sys.exit(0)
+    if '--pbo' in args or '--ce' in args:   # a map's own pbos (a mod map names them as it likes)
+        pbo = args[args.index('--pbo') + 1] if '--pbo' in args else ''
+        ce = args[args.index('--ce') + 1] if '--ce' in args else ''
+        name = args[args.index('--name') + 1] if '--name' in args else re.sub(r'^worlds_|_data\.pbo$', '', os.path.basename(pbo or ce))
+        ok = extract(pbo, name) if pbo else False
+        if not pbo:
+            print('  %s: the map has no satellite tiles to extract' % name)
+        if ce:
+            extract_loot(ce, name)
+            extract_areaflags(ce, name)
+        print('Extracted %s. Reload DayZ Studio.' % name if ok else 'No imagery extracted for %s.' % name)
+        sys.exit(0 if ok else 1)
     only = None
     if '--world' in args:  # just one map, e.g. a new DLC map:  --world nasdara
         i = args.index('--world')

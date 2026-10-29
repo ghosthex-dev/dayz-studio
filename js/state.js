@@ -70,10 +70,13 @@
       }
       if (f.size) w.size = f.size;
       if (f.mission) w.mission = f.mission;
-      Object.assign(w, { installed: f.game, dlc: f.dlc, server: !!f.mission, imagery: f.imagery, terrain: f.terrain });
+      Object.assign(w, { installed: f.game, dlc: f.dlc, modName: f.mod || '', server: !!f.mission, imagery: f.imagery, terrain: f.terrain,
+        missionFromMod: !!f.missionFromMod, missionOutdated: !!f.missionOutdated });
+      if (f.mod) w.mod = true;
     });
-    // official maps the server didn't find are not installed (DLC not owned / not downloaded)
-    DS.WORLDS.forEach((w) => { if (!w.mod && w.installed === undefined) w.installed = false; });
+    // maps the server didn't find are not installed (DLC not owned / not downloaded, map mod not subscribed) - except
+    // 'custom', which is the user's own map with their own background image
+    DS.WORLDS.forEach((w) => { if (w.id !== 'custom' && w.installed === undefined) w.installed = false; });
     return true;
   };
   /** name for the Map list: "Nasdara (DLC)", "Sakhal (not installed)" */

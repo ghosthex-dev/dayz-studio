@@ -1,5 +1,7 @@
 # game launches, profiles, logs, test servers
 _game/
+# Studio's own log (Report a bug zips it)
+logs/
 # data extracted from your own DayZ install (terrain, models, textures, scene) - Bohemia Interactive content, never upload
 data/*
 !data/README.txt
