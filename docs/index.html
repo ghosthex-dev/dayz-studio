@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DayZ Studio — Visual Map &amp; Quest IDE for Vanilla DayZ</title>
-  <meta name="description" content="Visual map and quest editor for vanilla DayZ servers. Real terrain, RPG quests with NPC conversations, Central Economy loot, signed mod export, and in-editor testing.">
+  <meta name="description" content="Visual map and quest editor for vanilla DayZ servers. Real terrain, RPG quests with NPC conversations, Central Economy loot, Workshop mod maps like Deer Isle, signed mod export, and in-editor testing.">
   <link rel="icon" type="image/svg+xml" href="assets/banner.svg">
 
   <style>
@@ -788,7 +788,7 @@
       <div class="brand">
         <span class="brand-mark">◈</span>
         <span>DayZ Studio</span>
-        <span class="badge-alpha">Alpha 7</span>
+        <span class="badge-alpha">Alpha 8</span>
       </div>
       <nav class="nav-links">
         <a href="#whats-new" class="nav-link">What's New</a>
@@ -816,7 +816,7 @@
     <div class="container hero-content">
       <div class="status-pill">
         <span class="status-dot"></span>
-        <span>LATEST: v0.1.0-ALPHA.7 • 100% VANILLA SERVER COMPATIBLE</span>
+        <span>LATEST: v0.1.0-ALPHA.8 • 100% VANILLA SERVER COMPATIBLE</span>
       </div>
       <h1>
         The Visual Map &amp; Quest IDE for <span class="gradient-text">Vanilla DayZ</span>
@@ -866,7 +866,20 @@
 
       <div class="news-grid">
         <div class="news-card latest">
-          <div class="news-ver">v0.1.0-alpha.7 <span class="news-tag">Latest</span></div>
+          <div class="news-ver">v0.1.0-alpha.8 <span class="news-tag">Latest</span></div>
+          <h3>🏝 Mod maps: Deer Isle and friends</h3>
+          <p>Map mods you subscribe to on the Steam Workshop are found by themselves and work like an official map &mdash; real imagery, loot, loot zones, terrain capture, the game view and the local test server.</p>
+          <ul class="feature-list">
+            <li>Extracts from the mod's own files, however they're named</li>
+            <li>Deer Isle's 15 loot tiers in the Zones panel</li>
+            <li>Loads the mods a map needs by itself (Deer Isle: CF)</li>
+            <li>Install server mission: test mod maps on the local server</li>
+          </ul>
+          <a class="news-link" href="https://github.com/ghosthex-dev/dayz-studio/releases/tag/v0.1.0-alpha.8" target="_blank">Release notes ➔</a>
+        </div>
+
+        <div class="news-card">
+          <div class="news-ver">v0.1.0-alpha.7</div>
           <h3>🐞 Report a bug from inside Studio</h3>
           <p>Describe what went wrong and Studio does the rest: it zips its own log, the editor's recent errors and your newest DayZ and DayZ Server logs, then opens a GitHub issue with your report already written out.</p>
           <ul class="feature-list">
@@ -1110,6 +1123,11 @@
               <td class="tag-good">Behaviour Graphs: patrols, routines, emotes, follow &amp; escort (vanilla)</td>
             </tr>
             <tr>
+              <td><strong>Community Mod Maps</strong></td>
+              <td class="tag-bad">Hunt down mission files, unpack pbos, wire up -mod lines by hand</td>
+              <td class="tag-good">Workshop maps found automatically, server mission installed in 1 click</td>
+            </tr>
+            <tr>
               <td><strong>Testing Iteration Loop</strong></td>
               <td class="tag-bad">PBO repack ➔ Sign key ➔ Restart server (5–10 min loop)</td>
               <td class="tag-good">Docked Game Viewport with live Central Economy (&lt;10s)</td>
@@ -1155,7 +1173,7 @@
           <h3>World &amp; Map Engineering</h3>
           <p>Extract to-scale satellite imagery and 3D ODOL building meshes directly from your local DayZ installation.</p>
           <ul class="feature-list">
-            <li>Chernarus+, Livonia, Sakhal, Nasdara, and custom terrains</li>
+            <li>Chernarus+, Livonia, Sakhal, Nasdara, and Workshop mod maps like Deer Isle</li>
             <li>1-Click Vanilla Object Eraser for world clutter</li>
             <li>3D transform gizmos, surface snapping, and prefab stamps</li>
             <li>Real-time performance heatmaps (150m network radius)</li>
@@ -1346,6 +1364,16 @@
         </button>
         <div class="faq-answer">
           Yes! Go to <strong>File ▸ ☁ Publish to Steam Workshop…</strong>. DayZ Studio automatically signs the PBO, packages the public .bikey, and uploads the mod directly through your local Steam client.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFaq(this)">
+          <span>Can I use community maps like Deer Isle?</span>
+          <span class="faq-icon">▾</span>
+        </button>
+        <div class="faq-answer">
+          Yes. Subscribe to the map on the Steam Workshop (or put its <code>@folder</code> in your DayZ folder) and Studio lists it as installed. <strong>Extract imagery</strong> reads its satellite tiles, loot and loot zones from the mod's own files, and terrain capture and the game view start DayZ with the map mod plus the mods it needs (Deer Isle comes with CF by itself). DayZ Server has no mission for a mod map, so use <strong>Install server mission</strong> in the Map view's World section &mdash; Studio copies the mission the map mod brings into <code>DayZServer\mpmissions</code>. Deer Isle is tested; please report other maps that misbehave. Players on your server need the map mod too, as with any modded map.
         </div>
       </div>
 
