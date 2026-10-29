@@ -78,19 +78,20 @@
 
     new ResizeObserver(resize).observe(root);
     canvas.addEventListener('mousedown', onDown);
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    // the window the 3D view is in (it can float into its own window, js/dock.js)
+    U.onWin(canvas, 'mousemove', onMove);
+    U.onWin(canvas, 'mouseup', onUp);
     canvas.addEventListener('wheel', onWheel, { passive: false });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-    window.addEventListener('keydown', (e) => { if (S.view === 'view3d') keys[e.code] = true; });
-    window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+    U.onWin(canvas, 'keydown', (e) => { if (S.view === 'view3d') keys[e.code] = true; });
+    U.onWin(null, 'keyup', (e) => { keys[e.code] = false; });   // a key let go anywhere
 
     if (DS.Models) DS.Models.onTexture = () => { dirty = true; };
     ['changed', 'structure', 'selection', 'loot', 'zones', 'terrain3d'].forEach((ev) => S.on(ev, () => { dirty = true; schedule(ev); }));
     S.on('project', () => { terrainVer = ''; schedule('project'); });
     renderHud();
     resize();
-    loop();
+    U.loop(loop, canvas);   // frames of the window the 3D view is in
     return true;
   }
 
@@ -406,6 +407,7 @@
     if (!renderer) return;
     const r = root.getBoundingClientRect();
     const w = Math.max(50, r.width), h = Math.max(50, r.height);
+    renderer.setPixelRatio(Math.min(U.winOf(canvas).devicePixelRatio || 1, 2));   // the monitor its window is on
     renderer.setSize(w, h, false);
     canvas.style.width = w + 'px';
     canvas.style.height = h + 'px';
@@ -414,7 +416,6 @@
     dirty = true;
   }
   function loop() {
-    requestAnimationFrame(loop);
     if (!S.shown('view3d')) return;
     // keyboard fly: move the target on the ground plane
     let mv = false;

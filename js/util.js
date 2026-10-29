@@ -106,6 +106,60 @@
     };
   };
 
+  // ---- several windows (js/dock.js floats panels into their own windows) ----------------------------
+  // A panel's element moves between the main window and floating windows but keeps running in this page, so code
+  // that listens on "the window" or animates must use the window the element is in now.
+  const wins = [window];          // the main window, then the open floating windows
+  const winHooks = [];            // [type, fn, el, opts] registered with U.onWin, added to every new window
+  /** the window an element is shown in (the main window when it is not in a document) */
+  U.winOf = (e) => (e && e.ownerDocument && e.ownerDocument.defaultView) || window;
+  /** every open window: the main one first */
+  U.windows = () => wins.filter((w) => w === window || !w.closed);
+  /** a floating window opened (js/dock.js): it gets the U.onWin listeners too */
+  const newWin = [];
+  U.addWindow = function (w) {
+    if (wins.includes(w)) return;
+    wins.push(w);
+    winHooks.forEach(([type, fn, opts, wrap]) => w.addEventListener(type, wrap(w), opts));
+    newWin.forEach((fn) => fn(w));
+    w.addEventListener('pagehide', () => { const i = wins.indexOf(w); if (i > 0) wins.splice(i, 1); });
+  };
+  /** fn(window) for the main window, the open floating windows and every one opened later */
+  U.eachWindow = function (fn) { newWin.push(fn); U.windows().forEach((w) => fn(w)); };
+  /** a window-level listener (mousemove / mouseup during a drag, keys) for the window el is in at the time:
+      registered on every window, called only for events of the window that hosts el (all windows without el) */
+  U.onWin = function (el, type, fn, opts) {
+    const wrap = (w) => (ev) => { if (!el || U.winOf(el) === w) fn(ev); };
+    winHooks.push([type, fn, opts, wrap]);
+    U.windows().forEach((w) => w.addEventListener(type, wrap(w), opts));
+  };
+  /** requestAnimationFrame of the window el is in - a minimized main window stops its own frames, a floating
+      window on another monitor keeps going; without el: the first window that is not hidden */
+  U.raf = function (fn, el) {
+    const w = el ? U.winOf(el) : (U.windows().find((x) => !x.document.hidden) || window);
+    return w.requestAnimationFrame(fn);
+  };
+  /** run fn on every frame of the window el is in, following el when it moves to another window (a frame asked
+      of a window that closed or no longer hosts el never comes: a watchdog asks the new one) */
+  const loops = [];
+  U.loop = function (fn, el) {
+    const lp = { gen: 0, on: null, el };
+    lp.arm = () => {
+      const w = U.winOf(el);
+      if (lp.on === w || w.closed) return;
+      const g = ++lp.gen;
+      lp.on = w;
+      w.requestAnimationFrame(() => {
+        if (g !== lp.gen) return;   // re-armed elsewhere meanwhile
+        lp.on = null;
+        try { fn(); } finally { lp.arm(); }
+      });
+    };
+    loops.push(lp);
+    lp.arm();
+  };
+  setInterval(() => loops.forEach((lp) => { if (!lp.on || lp.on.closed || lp.on !== U.winOf(lp.el)) { lp.on = null; lp.arm(); } }), 500);
+
   // ---- CRC32 + store-only ZIP ------------------------------------------------
   const crcTable = (function () {
     const t = new Uint32Array(256);

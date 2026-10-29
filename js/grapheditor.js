@@ -62,10 +62,11 @@
       vp.addEventListener('dblclick', (e) => {
         if (!e.target.closest('.ne-node') && !e.target.closest('.ne-wire-hit')) openAddMenu(e.clientX, e.clientY);
       });
-      window.addEventListener('mousemove', onMove);
-      window.addEventListener('mouseup', onUp);
-      window.addEventListener('mousedown', (e) => {
-        if (ctxMenu && !e.target.closest('.ctx-menu')) closeMenu();
+      // the window the graph is in (it can float into its own window, js/dock.js)
+      U.onWin(vp, 'mousemove', onMove);
+      U.onWin(vp, 'mouseup', onUp);
+      U.onWin(vp, 'mousedown', (e) => {
+        if (ctxMenu && !(e.target.closest && e.target.closest('.ctx-menu'))) closeMenu();
       });
       S.on('structure', render);
       S.on('changed', render);
@@ -266,7 +267,7 @@
         S.commit();
       } else if (d.type === 'connect') {
         d.tmp.remove();
-        const t = document.elementFromPoint(e.clientX, e.clientY);
+        const t = vp.ownerDocument.elementFromPoint(e.clientX, e.clientY);
         const card = t && t.closest ? t.closest('.ne-node') : null;
         if (card && g) {
           const ok = E.link(g, d.from.id, card.dataset.id);
@@ -340,10 +341,11 @@
       ctxMenu = null;
     }
     function placeMenu(m, cx, cy) {
-      document.body.append(m);
+      const w = U.winOf(vp);   // the menu opens in the graph's own window
+      w.document.body.append(m);
       const r = m.getBoundingClientRect();
-      m.style.left = Math.min(cx, window.innerWidth - r.width - 8) + 'px';
-      m.style.top = Math.min(cy, window.innerHeight - r.height - 8) + 'px';
+      m.style.left = Math.min(cx, w.innerWidth - r.width - 8) + 'px';
+      m.style.top = Math.min(cy, w.innerHeight - r.height - 8) + 'px';
       ctxMenu = m;
     }
     function openAddMenu(cx, cy, fromButton) {

@@ -36,7 +36,8 @@
 
   /* ---------- dropdown menu ---------- */
   function dropdown(anchor, items) {
-    document.querySelectorAll('.ctx-menu.dd').forEach((m) => m.remove());
+    const w = U.winOf(anchor), doc = w.document;   // in the anchor's window (panels can float into their own)
+    U.windows().forEach((x) => x.document.querySelectorAll('.ctx-menu.dd').forEach((m) => m.remove()));
     const m = el('div', { class: 'ctx-menu dd' });
     items.forEach((it) => {
       if (it === '-') return m.append(el('div', { class: 'ctx-sep' }));
@@ -46,11 +47,11 @@
     const r = anchor.getBoundingClientRect();
     m.style.left = r.left + 'px';
     m.style.top = r.bottom + 4 + 'px';
-    document.body.append(m);
+    doc.body.append(m);
     const off = (e) => {
-      if (!m.contains(e.target)) { m.remove(); window.removeEventListener('mousedown', off, true); }
+      if (!m.contains(e.target)) { m.remove(); w.removeEventListener('mousedown', off, true); }
     };
-    setTimeout(() => window.addEventListener('mousedown', off, true), 0);
+    setTimeout(() => w.addEventListener('mousedown', off, true), 0);
   }
 
   A.dropdown = dropdown;

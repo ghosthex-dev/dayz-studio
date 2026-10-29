@@ -25,11 +25,11 @@
   /* ---------------------------------------------------------------- panels */
   function registerPanels() {
     const wrap = (id) => () => { const e = document.getElementById(id); e.classList.remove('hidden'); return e; };
-    D.register('map', { title: 'Map', icon: '🗺', kind: 'view', home: 'center', float: false, make: wrap('map-wrap') });
-    D.register('game', { title: 'Game', icon: '🎮', kind: 'view', home: 'center', float: false, make: wrap('game-wrap') });
-    D.register('view3d', { title: '3D', icon: '🧊', kind: 'view', home: 'center', float: false, make: wrap('view3d-wrap'), onShow: () => DS.View3D && DS.View3D.show() });
-    D.register('quests', { title: 'Quests', icon: '⎇', kind: 'view', home: 'center', float: false, make: wrap('quest-wrap') });
-    D.register('npcs', { title: 'NPCs', icon: '👤', kind: 'view', home: 'center', float: false, make: wrap('npc-wrap') });
+    D.register('map', { title: 'Map', icon: '🗺', kind: 'view', home: 'center', make: wrap('map-wrap') });
+    D.register('game', { title: 'Game', icon: '🎮', kind: 'view', home: 'center', make: wrap('game-wrap') });
+    D.register('view3d', { title: '3D', icon: '🧊', kind: 'view', home: 'center', make: wrap('view3d-wrap'), onShow: () => DS.View3D && DS.View3D.show() });
+    D.register('quests', { title: 'Quests', icon: '⎇', kind: 'view', home: 'center', make: wrap('quest-wrap') });
+    D.register('npcs', { title: 'NPCs', icon: '👤', kind: 'view', home: 'center', make: wrap('npc-wrap') });
     D.register('npclist', { title: 'NPC list', icon: '👥', home: 'left', make: () => DS.Npcs.listPanel() });
     D.register('inspector', { title: 'Inspector', icon: '☰', home: 'right', make: wrap('right') });
     [['assets', 'Assets', '▤'], ['loot', 'Loot', '🎁'], ['zones', 'Zones', '⬡'], ['gamedata', 'Game setup', '⚙', 'game'], ['scene', 'Scene', '≣'], ['outline', 'Quest list', '☷', 'quests']]
@@ -284,7 +284,12 @@
     items.push({ label: '\u2003 Save as a new profile…', run: W.saveAs },
       { label: '\u2003 Profiles: manage, import, export…', run: W.manage });
     items.push('-', { head: 'Panels' });
-    D.panels().forEach((p) => items.push({ label: mark(D.isOpen(p.id), (p.icon ? p.icon + ' ' : '') + p.title), run: () => D.toggle(p.id) }));
+    D.panels().forEach((p) => items.push({ label: mark(D.isOpen(p.id), (p.icon ? p.icon + ' ' : '') + p.title + (D.areaOf(p.id) && D.areaOf(p.id) !== 'main' ? '  ⧉' : '')), run: () => D.toggle(p.id) }));
+    // windows: drag a tab out of a window (e.g. onto a second monitor) to give it a window of its own
+    const fw = D.windows();
+    items.push('-', { head: fw.length ? 'Windows' : 'Windows (drag a tab out of the window to open one)' });
+    fw.forEach((w) => items.push({ label: '  ⧉ ' + w.title, run: () => D.focusWindow(w.key) }));
+    if (fw.length) items.push({ label: '  ⇱ Bring every panel back into the main window', run: () => fw.forEach((w) => w.panels.forEach((id) => D.dockBack(id))) });
     items.push('-', { head: 'Layout' },
       { label: '  Maximize / restore the focused area', key: DS.Keys.label('maximize'), run: () => D.toggleMax() },
       { label: '  Collapse / expand the left side', key: DS.Keys.label('sideLeft'), run: () => D.toggleSide('left') },

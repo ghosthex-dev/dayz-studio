@@ -180,7 +180,7 @@
   Z.touch = function () {
     if (pending) return;
     pending = true;
-    requestAnimationFrame(() => { pending = false; Z.rebuild(); invalidate(); });
+    U.raf(() => { pending = false; Z.rebuild(); invalidate(); });   // a window that is not minimized
   };
 
   Z.rebuild = function () {

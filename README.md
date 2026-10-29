@@ -398,7 +398,8 @@ flowchart LR
 
 ### ▦ Modular IDE Workspace
 
-* **Docking & Multi-Monitor:** Drag tabs to rearrange panels, dock side-by-side, or right-click any panel and select **Float in its own window** to span multiple monitors.
+* **Docking:** Drag tabs to rearrange panels, tab them together or dock them side by side.
+* **🖥🖥 Multiple windows & monitors:** Drag any tab - the Map, Game, 3D, Quests and NPCs views too - **out of the window** and drop it on the desktop or a second monitor: it opens in a window of its own. Every window is a docking area like the main one, so drag more tabs into it (tab strip or edges), split it, or drag them back. Right-click a tab for **⧉ Move to a new window** / **⇱ Back to the main window**; the ▦ menu lists the open windows. The docked DayZ game follows the **Game** view into its window, and windows reopen where you left them (a window on a monitor that is gone opens on the main screen). The main window always keeps one view.
 * **Workspace Profiles:** Quickly switch between tailored layouts: *Default*, *Mapping*, *Quest Writing*, *Map + Quests Side-by-Side*, *Scripting*, or save your own custom `.dzworkspace.json` profile.
 * **Scalable UI:** Scale the entire interface from 80% to 150% for high-DPI displays.
 

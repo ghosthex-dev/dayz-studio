@@ -635,9 +635,13 @@
     embed = el('div', { class: 'gv-embed' }, overlayMsg);
     root.append(bar, embed);
     new ResizeObserver(layout).observe(embed);
-    window.addEventListener('resize', layout);
-    new MutationObserver(layout).observe(document.body, { childList: true });
-    new MutationObserver(layout).observe(document.getElementById('modal-root'), { childList: true });
+    U.onWin(null, 'resize', layout);
+    // menus and dialogs over the game hide it (the docked DayZ window is always on top): in every window
+    U.eachWindow((w) => {
+      new MutationObserver(layout).observe(w.document.body, { childList: true });
+      const mr = w.document.getElementById('modal-root');
+      if (mr) new MutationObserver(layout).observe(mr, { childList: true });
+    });
     S.on('linkstate', renderBar);
     S.on('link', renderBar);
     S.on('view', () => { renderBar(); layout(); });
@@ -646,15 +650,17 @@
     setTimeout(poll, 300);
   };
 
-  function overlayOpen() {
-    return !!document.querySelector('.modal-back, .ctx-menu');
+  function overlayOpen() {   // a dialog or menu in the window the game view is in
+    return !!embed.ownerDocument.querySelector('.modal-back, .ctx-menu');
   }
 
   function layout() {
     if (!host || !embed) return;
     const r = embed.getBoundingClientRect();
     const visible = S.shown('game') && !overlayOpen() && r.width > 40 && r.height > 40;
-    host.setRect({ x: r.left, y: r.top, w: r.width, h: r.height, visible });
+    // win: the floating window the game view is in ('' = the main window) - the desktop app docks DayZ there
+    const w = U.winOf(embed);
+    host.setRect({ x: r.left, y: r.top, w: r.width, h: r.height, visible, win: w === window ? '' : w.name });
     renderOverlay();
   }
 

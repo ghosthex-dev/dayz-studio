@@ -45,27 +45,27 @@
     new ResizeObserver(resize).observe(cv.parentElement);
     resize();
     cv.addEventListener('mousedown', onDown);
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    // the window the map is in (it can float into its own window, js/dock.js)
+    U.onWin(cv, 'mousemove', onMove);
+    U.onWin(cv, 'mouseup', onUp);
     cv.addEventListener('wheel', onWheel, { passive: false });
     cv.addEventListener('contextmenu', (e) => e.preventDefault());
     cv.addEventListener('mouseleave', () => ((mouse.inside = false), (dirty = true)));
     cv.addEventListener('dblclick', onDbl);
-    window.addEventListener('keydown', (e) => {
+    U.onWin(cv, 'keydown', (e) => {
       if (e.code === 'Space' && !isTyping(e)) spaceDown = true;
     });
-    window.addEventListener('keyup', (e) => {
+    U.onWin(cv, 'keyup', (e) => {
       if (e.code === 'Space') spaceDown = false;
     });
     ['changed', 'selection', 'tool', 'asset', 'view', 'project'].forEach((ev) => S.on(ev, () => (dirty = true)));
     S.on('project', () => M.fit());
-    (function loop() {
+    U.loop(() => {   // frames of the window the map is in
       if (dirty && S.shown('map')) {
         dirty = false;
         draw();
       }
-      requestAnimationFrame(loop);
-    })();
+    }, cv);
     M.fit();
   };
   function isTyping(e) {
@@ -74,7 +74,7 @@
   }
   function resize() {
     const r = cv.parentElement.getBoundingClientRect();
-    dpr = window.devicePixelRatio || 1;
+    dpr = U.winOf(cv).devicePixelRatio || 1;   // the monitor the map's window is on
     W = Math.max(50, r.width);
     H = Math.max(50, r.height);
     cv.width = W * dpr;
