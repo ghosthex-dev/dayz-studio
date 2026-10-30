@@ -4,9 +4,16 @@
 // (a folder with latest.yml + the setup .exe) to try an update without a GitHub release.
 const { app, ipcMain } = require('electron');
 
-function setup(getWin, stopServer) {
+/** manual: an add-on's { mode: 'manual', note, url } (a build that is updated from elsewhere) - the
+    public GitHub feed must not replace that build with the free one */
+function setup(getWin, stopServer, manual) {
   // the installer starts Studio again with --updated after an update
   const state = { state: 'idle', version: app.getVersion(), updated: process.argv.includes('--updated') };
+  if (manual && app.isPackaged) {
+    Object.assign(state, { state: 'manual', note: manual.note || '', url: manual.url || '' });
+    ['host:update-state', 'host:update-check', 'host:update-download', 'host:update-install'].forEach((ch) => ipcMain.handle(ch, () => state));
+    return;
+  }
   const send = (patch) => {
     Object.assign(state, patch);
     const win = getWin();

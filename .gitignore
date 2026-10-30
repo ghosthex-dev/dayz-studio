@@ -2,6 +2,10 @@
 _game/
 # Studio's own log (Report a bug zips it)
 logs/
+# add-on packs (they come from their own folders) and what they keep
+addons/*
+!addons/README.md
+addons-data/
 # data extracted from your own DayZ install (terrain, models, textures, scene) - Bohemia Interactive content, never upload
 data/*
 !data/README.txt

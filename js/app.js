@@ -308,6 +308,8 @@
         { label: 'mapgrouppos.xml → loot spawn positions…', run: () => importXml('pos') },
         { label: 'areaflags.map → loot zones (tiers/usage)…', run: A.importAreaflags },
         { label: 'Map background image…', run: A.loadBackground },
+        // add-on items (js/addons.js 'menu.file'), under the edition's name
+        ...((x) => (x.length ? ['-', { head: (DS.Addons && DS.Addons.edition()) || 'Add-ons' }, ...x] : []))(DS.Hooks ? DS.Hooks.collect('menu.file') : []),
         '-', { label: 'Templates & examples…', run: A.templates },
         { label: 'Welcome guide', run: A.welcome },
         { label: '⟳ Check for updates…', run: () => DS.Updates.open() },
@@ -524,9 +526,11 @@
       el('table', { class: 'keys' }, keys.map((k) => el('tr', null, el('td', null, k[0]), el('td', { class: 'mono' }, k[1])))),
       el('p', null, el('a', { href: '#', onclick: (e) => { e.preventDefault(); const m = document.querySelector('.modal-back'); if (m) m.remove(); DS.Keys.open(); } }, 'Change the keyboard shortcuts…')),
       el('h3', null, 'About class names'),
-      el('p', null, 'The built-in catalogue is a convenience list. For your exact game version use File ▸ Import ▸ types.xml / mapgroupproto.xml so every class on your server is searchable. You can also type any class name manually.')
+      el('p', null, 'The built-in catalogue is a convenience list. For your exact game version use File ▸ Import ▸ types.xml / mapgroupproto.xml so every class on your server is searchable. You can also type any class name manually.'),
+      ...(DS.Addons && DS.Addons.list.length ? [el('h3', null, 'Add-ons'), ...DS.Addons.list.map((a) => el('p', null, el('b', null, a.name), ` ${a.version || ''}${a.edition ? ' · ' + a.edition : ''}`))] : []),
+      ...(DS.Hooks ? DS.Hooks.collect('help.about') : [])
     );
-    modal({ title: 'DayZ Studio — help', body, wide: true, buttons: (close) => [el('button', { class: 'btn', title: 'Something broken? Send the logs to the developer as a GitHub issue', onclick: () => { close(); DS.BugReport.open(); } }, '🐞 Report a bug…'), el('button', { class: 'btn primary', onclick: close }, 'Got it')] });
+    modal({ title: 'DayZ Studio — help' + (DS.Addons && DS.Addons.edition() ? ' (' + DS.Addons.edition() + ')' : ''), body, wide: true, buttons: (close) => [el('button', { class: 'btn', title: 'Something broken? Send the logs to the developer as a GitHub issue', onclick: () => { close(); DS.BugReport.open(); } }, '🐞 Report a bug…'), el('button', { class: 'btn primary', onclick: close }, 'Got it')] });
   };
 
   /* ---------- templates ---------- */
@@ -684,5 +688,6 @@
       welcome();
     }
   }
-  document.addEventListener('DOMContentLoaded', boot);
+  // add-ons (js/addons.js) load first, so their panels, hooks and menu items are there when Studio starts
+  document.addEventListener('DOMContentLoaded', () => (DS.Addons ? DS.Addons.load() : Promise.resolve()).catch(() => {}).then(boot));
 })();

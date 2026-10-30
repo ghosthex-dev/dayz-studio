@@ -47,6 +47,11 @@
       }
       body.append(el('div', { class: 'srv-info' }, 'Installed version: ', el('b', null, st.version || '?')));
       const s = st.state;
+      if (s === 'manual') {   // an add-on updates this build itself: not from the public releases
+        body.append(el('p', null, st.note || 'This build does not update itself.'),
+          st.url ? el('p', null, el('a', { href: st.url, target: '_blank' }, 'Where to get updates')) : null);
+        return;
+      }
       if (s === 'idle' || s === 'none' || s === 'error') {
         if (s === 'none') body.append(el('div', { class: 'ok-box' }, `✔ You have the newest version${st.latest && st.latest !== st.version ? ' (' + st.latest + ')' : ''}.`));
         if (s === 'error') body.append(el('div', { class: 'problem error' }, 'Could not check for updates: ' + (st.error || 'unknown error') + ' - are you online?'));
@@ -82,7 +87,7 @@
     if (!host) return;
     host.onState(onState);
     st = await host.state();
-    if (st.state === 'unsupported') return;
+    if (st.state === 'unsupported' || st.state === 'manual') return;
     // first start after an update (the installer passes --updated; the stored version is a fallback): say so
     const last = store(KEY_VER);
     store(KEY_VER, st.version);

@@ -250,7 +250,21 @@ function stopServer() {
     try { serverProc.kill(); } catch (e) { clearTimeout(t); resolve(); }
   });
 }
-updater.setup(() => win, stopServer);
+// an add-on bundled with this build (studio/addons/<id>/addon.json) can say how the build is updated instead
+function addonUpdates() {
+  const fs = require('fs');
+  const dir = path.join(ROOT, 'addons');
+  try {
+    for (const name of fs.readdirSync(dir)) {
+      const mf = path.join(dir, name, 'addon.json');
+      if (!fs.existsSync(mf)) continue;
+      const u = (JSON.parse(fs.readFileSync(mf, 'utf8')) || {}).updates;
+      if (u && u.mode === 'manual') return u;
+    }
+  } catch (e) { /* no add-ons */ }
+  return null;
+}
+updater.setup(() => win, stopServer, addonUpdates());
 
 // developer hook: with DZS_DEBUG=1, run JS from _eval.js inside the page and write _eval.out
 // (in desktop/, or in DZS_DEBUG_DIR - the installed app's own folder is read-only)

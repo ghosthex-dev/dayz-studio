@@ -1394,6 +1394,8 @@ class Handler(SimpleHTTPRequestHandler):
     def translate_path(self, path):
         # data/ and maps/ are the user's own extracted game data: served from HOME (differs from APP once installed)
         p = urlparse(path).path
+        if p.startswith('/addons/'):   # an add-on's own files (addons.py), wherever its folder is
+            return ADD.file_path(p) or os.path.join(APP, 'addons', '_missing_')
         for pre, root in (('/data/', DATA), ('/maps/', MAPS)):
             if p.startswith(pre) and HOME != APP:
                 rel = os.path.normpath(unquote(p[len(pre):])).lstrip('\\/')
@@ -1414,8 +1416,23 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _addon(self, method, u, arg):
+        """an add-on's route (/api/addons/<id>/...): its answer, or an error it raised"""
+        fn = ADD.route(method, u.path)
+        if not fn:
+            return self._json({'ok': False, 'error': 'unknown add-on route'}, 404)
+        try:
+            return self._json(fn(arg))
+        except Exception as e:
+            log('add-on route %s failed: %s' % (u.path, e))
+            return self._json({'ok': False, 'error': '%s: %s' % (type(e).__name__, e)})
+
     def do_GET(self):
         u = urlparse(self.path)
+        if u.path == '/api/addons':
+            return self._json({'ok': True, 'addons': ADD.listing()})
+        if u.path.startswith('/api/addons/'):
+            return self._addon('GET', u, parse_qs(u.query))
         if u.path == '/api/env':
             env = find_env()
             have = {}
@@ -1490,6 +1507,8 @@ class Handler(SimpleHTTPRequestHandler):
         u = urlparse(self.path)
         n = int(self.headers.get('Content-Length', 0))
         body = json.loads(self.rfile.read(n) or b'{}')
+        if u.path.startswith('/api/addons/'):
+            return self._addon('POST', u, body)
         if u.path == '/api/capture/start':
             return self._json(start_capture(body))
         if u.path == '/api/capture/finalize':
@@ -1626,6 +1645,7 @@ import workshop as WS       # noqa: E402  (Steam Workshop publishing)
 import money as MONEY       # noqa: E402  (dollar bills: model + textures)
 import bugreport as BUG     # noqa: E402  (File > Report a bug: logs zipped for the GitHub issue)
 import worlds as WORLDS     # noqa: E402  (which maps - DLC ones included - are on this PC)
+import addons as ADD        # noqa: E402  (feature packs in addons/<id>/ - started in main())
 WS.setup(dict(find_env=find_env, BUILD_DIR=BUILD_DIR))
 BUG.setup(dict(find_env=find_env, find_server=find_server, HOME=HOME, MAPS=MAPS, LOG_FILE=LOG_FILE, LOCAL_DAYZ=LOCAL_DAYZ,
                PROFILE=PROFILE, SRV_PROFILE=SRV_PROFILE))
@@ -1638,6 +1658,9 @@ def main():
     import socket
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
     os.makedirs(GAME_DATA, exist_ok=True)
+    # add-ons: their server routes start with Studio (a broken one is reported and skipped)
+    ADD.setup(dict(log=log, find_env=find_env, find_server=find_server, APP=APP, HOME=HOME, DATA=DATA, MAPS=MAPS,
+                   AUDIO_DIR=os.path.join(DATA, '_audio')))
 
     class V6(ThreadingHTTPServer):
         address_family = socket.AF_INET6

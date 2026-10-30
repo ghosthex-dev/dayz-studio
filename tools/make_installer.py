@@ -125,7 +125,25 @@ def build(version=None):
     return exe
 
 
-def main(version=None):
+def stage_addon(src):
+    """an add-on pack (a folder with addon.json) into studio/addons/<id>, and the
+    Python packages it lists ("pip") into the private Python"""
+    with open(os.path.join(src, 'addon.json'), encoding='utf-8') as f:
+        m = json.load(f)
+    aid = re.sub(r'[^A-Za-z0-9_-]', '', str(m.get('id') or os.path.basename(os.path.normpath(src))))
+    out = os.path.join(STAGE, 'studio', 'addons', aid)
+    shutil.copytree(src, out, ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '.git*', 'tests', '*.md'))
+    print('    %s %s -> addons/%s' % (m.get('name', aid), m.get('version', ''), aid))
+    pkgs = [str(p) for p in m.get('pip') or []]
+    if pkgs:
+        site = os.path.join(STAGE, 'python', 'Lib', 'site-packages')
+        subprocess.run([sys.executable, '-m', 'pip', 'install', '--disable-pip-version-check', '--no-compile', '--target', site,
+                        '--platform', 'win_amd64', '--python-version', '.'.join(PY_VER.split('.')[:2]), '--implementation', 'cp',
+                        '--only-binary=:all:', '--cache-dir', os.path.join(CACHE, 'pip')] + pkgs, check=True)
+        print('    + ' + ', '.join(pkgs))
+
+
+def main(version=None, addons=()):
     shutil.rmtree(STAGE, ignore_errors=True)
     shutil.rmtree(os.path.join(DIST, 'installer'), ignore_errors=True)
     os.makedirs(os.path.join(STAGE, 'studio'))
@@ -133,9 +151,19 @@ def main(version=None):
     stage_studio()
     step('staging Python %s + %s' % (PY_VER, ', '.join(WHEELS)))
     stage_python()
+    for a in addons:
+        step('staging the add-on ' + a)
+        stage_addon(a)
     step('building the installer (electron-builder)')
     return build(version)
 
 
 if __name__ == '__main__':
-    main(sys.argv[1] if len(sys.argv) > 1 else None)
+    # python tools/make_installer.py [version] [--addon <folder>]...   (a build with add-on packs)
+    args = sys.argv[1:]
+    adds = []
+    while '--addon' in args:
+        i = args.index('--addon')
+        adds.append(args[i + 1])
+        del args[i:i + 2]
+    main(args[0] if args else None, adds)

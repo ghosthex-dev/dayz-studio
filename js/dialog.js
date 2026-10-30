@@ -169,6 +169,10 @@
       KINDS.filter(([k]) => k !== 'locked' || chained || dlg.locked.lines.length || kind === 'locked').forEach(([k, label]) => tabs.append(el('button', { class: 'btn sm' + (k === kind ? ' primary' : ''), onclick: () => { kind = k; selId = null; pv = null; openExtras.clear(); draw(); } },
         label + (dlg[k].lines.length ? ` (${dlg[k].lines.length})` : ''))));
       root.append(tabs, el('div', { class: 'ins-help' }, KINDS.find((k) => k[0] === kind)[2]));
+      // add-on tools for the whole conversation (js/addons.js 'dialog.tools')
+      const redraw = () => { selId = null; pv = null; draw(); };
+      const tools = DS.Hooks ? DS.Hooks.collect('dialog.tools', { node, p, quest, dialog: dlg, kind, changed, redraw }) : [];
+      if (tools.length) root.append(el('div', { class: 'btn-row dlg-tools' }, ...tools));
 
       if (!d.lines.length) {
         root.append(el('div', { class: 'hint-box' }, 'Nothing written here yet. When empty, the game uses a simple built-in line' + (kind === 'offer' ? ' made from your quick greeting.' : '.')),
@@ -224,6 +228,8 @@
           snd.append(file, el('button', { class: 'btn sm', onclick: () => file.click() }, '🎙 Attach voice file (.ogg / .wav)…'),
             el('span', { class: 'ins-help' }, 'Plays when this line appears.'));
         }
+        // add-on tools for this line's voice (js/addons.js 'dialog.voice')
+        if (DS.Hooks) snd.append(...DS.Hooks.collect('dialog.voice', { node, p, quest, line: l, kind, changed, redraw: draw }));
         form.append(el('div', { class: 'ins-row' }, el('span', { class: 'ins-label' }, 'Voice'), snd));
         // the NPC reacts first: open the conversation with this line when a condition holds
         form.append(el('div', { class: 'ins-row' }, el('span', { class: 'ins-label' }, 'Open with this line when'),
