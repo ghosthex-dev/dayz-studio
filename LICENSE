@@ -15,6 +15,8 @@ Subject to the terms of this Agreement, the Licensor grants you a non-exclusive,
 * Download, install, and run the Software for your own personal, non-commercial use.
 * Modify, fork, or adapt the source code strictly for your own personal use and server testing.
 
+The license granted above applies strictly to the public open-source repository branches. The right to compile, redistribute, or access standalone compiled binary executables (.exe) of unreleased Experimental, Alpha, or Pre-Release versions of DayZ Studio is strictly restricted to authorized developer distribution channels (the GhostHex Dev Patreon pipeline).
+
 ### 2. Restrictions on Use
 
 You strictly may not:
