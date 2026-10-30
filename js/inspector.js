@@ -681,6 +681,7 @@
     if (!root) return;
     root.innerHTML = '';
     const q = S.activeQuestObj();
+    const extra = DS.Hooks ? DS.Hooks.collect('inspector', { sel: S.sel, view: S.view })[0] : null;   // an add-on's own selection or view
     let content;
     if (S.sel.kind === 'object') {
       const objs = S.sel.ids.map((i) => S.obj(i)).filter(Boolean);
@@ -699,6 +700,7 @@
       content = n ? DS.Npcs.nodeInspector(n) : projectInspector();
     } else if (S.sel.kind === 'npc' && DS.Npcs && DS.Npcs.get(S.sel.ids[0])) content = DS.Npcs.inspector(DS.Npcs.get(S.sel.ids[0]));
     else if (S.sel.kind === 'link' || S.sel.kind === 'blink') content = linkInspector();
+    else if (extra) content = extra;
     else if (S.view === 'npcs' && DS.Npcs && DS.Npcs.active()) content = DS.Npcs.inspector(DS.Npcs.active());
     else if (S.view === 'quests' && q) content = questInspector(q);
     else content = projectInspector();

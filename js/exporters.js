@@ -270,10 +270,15 @@
       const g = npc.faction ? guardGun(String(npc.hands || '').trim()) : null;
       if (g) used.set(g[2], g);
     });
+    (DS.Hooks ? DS.Hooks.collect('build.guns', { P: S.project }) : []).forEach((c) => {   // guns of add-ons' characters
+      const g = guardGun(String(c || '').trim());
+      if (g) used.set(g[2], g);
+    });
     return [...used.values()];
   };
   const guardGun = (cls) => (cls ? GUARD_GUNS.find((g) => g[0].test(cls)) || null : null);
   X.guardGun = guardGun;
+  X.shotSet = shotSet;
 
   /** factions.json (validated again by the studio server before it goes into the mod); '' without factions */
   /* traders & money -> trade.json in the server profile (read by DSQuests.LoadTrade). The dollar bills of the quest
@@ -781,6 +786,7 @@ check the script log for errors and report them back if something needs adjustin
       add('quests', `source/${nm}/scripts/4_World/DSQuests.c`, DS.RUNTIME.core, 'Quest runtime');
       add('quests', `source/${nm}/scripts/4_World/DSCustom.c`, customScripts(P), 'Your Custom Script nodes');
       add('quests', `source/${nm}/scripts/5_Mission/DSMission.c`, DS.RUNTIME.hookMod, 'Mission hook');
+      extraFiles(P, 'source').forEach((f) => add('quests', f.path.startsWith('scripts/') ? `source/${nm}/${f.path}` : f.path, f.text, f.desc || 'Add-on file'));
       add('quests', 'profile/DZStudioQuests/quests.json', questsJson(P), 'Quest definitions (goes in the server profile folder)');
       (DS.Sounds ? DS.Sounds.all() : []).forEach((s) => add('quests', `source/${nm}/sounds/${s.id}.${s.ext}`, () => DS.Sounds.bytes(s) || new Uint8Array(0), 'Voice line: ' + s.name));
       add('quests', 'mission_mode/ds_quests_all.c', DS.RUNTIME.core + '\n' + customScripts(P), 'Single-file alternative for mission init.c');
@@ -858,6 +864,7 @@ Format used: 24-byte header [cells, cells, mapWidth, mapHeight, ${DS.Zones.ubits
   X.checkScripts = function (p) {
     const out = [];
     const files = [['DSQuests.c', p.core], ['DSCustom.c', p.custom], ['DSMission.c', p.hook]];
+    (p.files || []).filter((f) => /\.c$/.test(f.path)).forEach((f) => files.push([f.path.split('/').pop(), f.text]));
     files.forEach(([file, text]) => {
       if (!text || !DS.Code || !DS.Code.checkFile) return;
       DS.Code.checkFile(text).filter((i) => i.level === 'error').forEach((i) => {
@@ -872,6 +879,13 @@ Format used: 24-byte header [cells, cells, mapWidth, mapHeight, ${DS.Zones.ubits
     });
     return out;
   };
+
+  /** files add-ons put into a build (hook 'build.files'): [{ path, text, desc }] - scripts under scripts/4_World or
+      scripts/5_Mission, data under profile/DZStudioQuests */
+  function extraFiles(P, kind) {
+    return DS.Hooks ? DS.Hooks.collect('build.files', { P, kind }).filter((f) => f && f.path && f.text != null) : [];
+  }
+  X.extraFiles = (kind) => extraFiles(S.project, kind);
 
   X.modPayload = function () {
     const P = S.project;
@@ -890,6 +904,7 @@ Format used: 24-byte header [cells, cells, mapWidth, mapHeight, ${DS.Zones.ubits
       quests: questsJson(P),
       factions: factionsJson(P),
       trade: tradeJson(P),
+      files: extraFiles(P, 'mod'),
       sounds: DS.Sounds ? DS.Sounds.all().map((s) => ({ id: s.id, ext: s.ext })) : [],
       // the mods the project loads in Studio (Project > Mods): INSTALL.txt tells server owners to load them too
       requires: DS.Mods ? DS.Mods.forLaunch() : [],

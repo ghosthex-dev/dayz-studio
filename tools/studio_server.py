@@ -505,6 +505,7 @@ def launch_editor(body):
             os.makedirs(os.path.join(PLAY_DIR, 'players'), exist_ok=True)
             if os.path.isfile(qj):
                 shutil.copy2(qj, os.path.join(PLAY_DIR, 'quests.json'))
+            copy_profile_extras(PLAY_DIR)
             for fn in os.listdir(os.path.join(PLAY_DIR, 'players')):
                 try:
                     os.remove(os.path.join(PLAY_DIR, 'players', fn))
@@ -678,6 +679,7 @@ def local_server_start(body):
             shutil.copy2(fj, os.path.join(qdir, extra))
         elif os.path.isfile(os.path.join(qdir, extra)):
             os.remove(os.path.join(qdir, extra))
+    copy_profile_extras(qdir)
     if body.get('resetProgress'):
         for fn in os.listdir(os.path.join(qdir, 'players')):
             try:
@@ -1005,6 +1007,34 @@ def factions_file(body):
     return factions.validate_text(raw)
 
 
+def extra_files(body):
+    """the files add-ons add to a build (js hook 'build.files') -> (scripts [(relative path, text)], data [(name, text)]);
+    raises ValueError for any other path"""
+    scripts, data = [], []
+    for f in body.get('files') or []:
+        path, text = str(f.get('path', '')), f.get('text')
+        if not isinstance(text, str):
+            raise ValueError('add-on file without text: %s' % path)
+        if re.match(r'^scripts/(4_World|5_Mission)/[A-Za-z0-9_]+\.c$', path):
+            scripts.append((os.path.join(*path.split('/')), text))
+        elif re.match(r'^profile/DZStudioQuests/[a-z0-9_]+\.json$', path):
+            data.append((path.split('/')[-1], text))
+        else:
+            raise ValueError('an add-on tried to write outside the mod: %s' % path)
+    return scripts, data
+
+
+def copy_profile_extras(dest):
+    """add-ons' data files of the last build, next to quests.json (a stale one is harmless: only its add-on's script,
+    which is not in the mod any more, reads it)"""
+    prof = os.path.join(BUILD_DIR, 'profile', 'DZStudioQuests')
+    if not os.path.isdir(prof):
+        return
+    for fn in os.listdir(prof):
+        if fn.endswith('.json') and fn not in ('quests.json', 'factions.json', 'trade.json'):
+            shutil.copy2(os.path.join(prof, fn), os.path.join(dest, fn))
+
+
 def build_export(body):
     """pack the quest framework the browser exported into a ready-to-install mod (PBO) + profile files, zipped"""
     import zipfile
@@ -1019,6 +1049,10 @@ def build_export(body):
     trade_text, trade_err = trade_file(body)
     if trade_err:
         return {'ok': False, 'error': trade_err}
+    try:
+        add_scripts, add_data = extra_files(body)
+    except ValueError as e:
+        return {'ok': False, 'error': str(e)}
     src = os.path.join(GAME_DATA, '_src_export_' + nm)
     shutil.rmtree(src, ignore_errors=True)
     os.makedirs(os.path.join(src, 'scripts', '4_World'), exist_ok=True)
@@ -1031,6 +1065,8 @@ def build_export(body):
     w(os.path.join('scripts', '4_World', 'DSQuests.c'), body['core'])
     w(os.path.join('scripts', '4_World', 'DSCustom.c'), body['custom'])
     w(os.path.join('scripts', '5_Mission', 'DSMission.c'), body['hook'])
+    for rel, text in add_scripts:
+        w(rel, text)
     n_snd = 0
     for s_ in body.get('sounds', []):
         sid = re.sub(r'[^A-Za-z0-9]', '', str(s_.get('id', '')))
@@ -1078,6 +1114,12 @@ def build_export(body):
             f.write(trade_text)
     elif os.path.isfile(trade_path):
         os.remove(trade_path)
+    for fn in os.listdir(prof):   # add-ons' data files: this build's only
+        if fn.endswith('.json') and fn not in ('quests.json', 'factions.json', 'trade.json'):
+            os.remove(os.path.join(prof, fn))
+    for fn, text in add_data:
+        with open(os.path.join(prof, fn), 'w', encoding='utf-8') as f:
+            f.write(text)
     wid = re.sub(r'\D', '', str(body.get('workshopId') or ''))
     players = ('   they subscribe to it on the Steam Workshop:\n'
                '   https://steamcommunity.com/sharedfiles/filedetails/?id=%s\n' % wid) if wid else \
@@ -1114,6 +1156,8 @@ def build_export(body):
             z.write(fac_path, 'profile/DZStudioQuests/factions.json')
         if trade_text:
             z.write(trade_path, 'profile/DZStudioQuests/trade.json')
+        for fn, _text in add_data:
+            z.write(os.path.join(prof, fn), 'profile/DZStudioQuests/' + fn)
         z.writestr('INSTALL.txt', install)
     return {'ok': True, 'zip': 'data/_build/%s_ready.zip' % nm, 'name': nm, 'pboBytes': os.path.getsize(pbo),
             'binarized': bool(env.get('cfgConvert')), 'sounds': n_snd, 'folder': mod_dir, 'money': money,
@@ -1271,6 +1315,13 @@ def playtest_prepare(body):
         f.write(body['custom'])
     with open(os.path.join(QT_SRC, 'scripts', '5_Mission', 'DSMissionHook.c'), 'w', encoding='utf-8') as f:
         f.write(body['hook'])
+    try:
+        add_scripts, add_data = extra_files(body)
+    except ValueError as e:
+        return {'ok': False, 'error': str(e)}
+    for rel, text in add_scripts:
+        with open(os.path.join(QT_SRC, rel), 'w', encoding='utf-8') as f:
+            f.write(text)
     snd_dir = os.path.join(QT_SRC, 'sounds')
     for s in body.get('sounds', []):
         sid = re.sub(r'[^A-Za-z0-9]', '', str(s.get('id', '')))
@@ -1310,6 +1361,9 @@ def playtest_prepare(body):
             f.write(trade_text)
     elif os.path.isfile(os.path.join(PLAY_DIR, 'trade.json')):
         os.remove(os.path.join(PLAY_DIR, 'trade.json'))
+    for fn, text in add_data:
+        with open(os.path.join(PLAY_DIR, fn), 'w', encoding='utf-8') as f:
+            f.write(text)
     with open(os.path.join(PLAY_DIR, 'playtest.flag'), 'w') as f:
         f.write('1')
     return {'ok': True}

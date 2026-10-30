@@ -341,6 +341,8 @@
         S.select(null, []);
         S.commit();
       }
+    } else if (DS.Hooks && DS.Hooks.collect('selection.delete', { sel: S.sel }).length) {
+      // an add-on's own selection kind
     } else if (S.sel.kind === 'bnode' && DS.Npcs) {
       DS.Npcs.deleteNodes(S.sel.ids);
       S.select(null, []);

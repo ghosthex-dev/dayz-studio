@@ -10,8 +10,12 @@
    Hook names: 'dialog.tools' (buttons above a conversation: ctx { node, p, dialog, kind, changed, redraw }),
    'dialog.voice' (next to a line's voice file: ctx { node, p, line, changed, redraw }), 'menu.file' (File menu
    items { label, run }), 'help.about' (elements in Help), 'map.draw' (draw on the 2D map: ctx { ctx, w2s, s, W, H },
-   w2s(x, z) -> [px, py]; call DS.MapView.invalidate() when the layer changes). Panels: DS.Dock.register(id, def)
-   like js/workspace.js - the add-on's scripts run before the workspace is built. */
+   w2s(x, z) -> [px, py]; call DS.MapView.invalidate() when the layer changes), 'inspector' (ctx { sel, view }: an
+   element to show in the Inspector for the add-on's own selection or view, or nothing), 'build.files' (ctx { P, kind }:
+   files for the quest mod, synchronously: { path, text, desc }, path scripts/4_World|5_Mission/Name.c or
+   profile/DZStudioQuests/name.json), 'build.guns' (ctx { P }: weapon classes whose shot sound the mod needs),
+   'selection.delete' (ctx { sel }: delete the add-on's own selection and return true). Panels: DS.Dock.register(id, def) like js/workspace.js - the add-on's scripts
+   run before the workspace is built. */
 (function () {
   const DS = (window.DS = window.DS || {});
   const H = (DS.Hooks = {});
