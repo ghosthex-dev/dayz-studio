@@ -708,6 +708,9 @@
     // NPCs (NPCs tab): every character with its name, the open / selected one with its routes
     if (DS.Npcs) DS.Npcs.drawMap(ctx, w2s, view.s);
 
+    // add-ons' own layers (js/addons.js, hook 'map.draw')
+    if (DS.Hooks) DS.Hooks.collect('map.draw', { ctx, w2s, s: view.s, W, H });
+
     // quest overlay
     markers = [];
     if (q) drawQuestOverlay(q);

@@ -9,7 +9,9 @@
      DS.Hooks.collect(name, ctx)     everything the add-ons returned for name (built-in code calls this)
    Hook names: 'dialog.tools' (buttons above a conversation: ctx { node, p, dialog, kind, changed, redraw }),
    'dialog.voice' (next to a line's voice file: ctx { node, p, line, changed, redraw }), 'menu.file' (File menu
-   items { label, run }), 'help.about' (elements in Help). */
+   items { label, run }), 'help.about' (elements in Help), 'map.draw' (draw on the 2D map: ctx { ctx, w2s, s, W, H },
+   w2s(x, z) -> [px, py]; call DS.MapView.invalidate() when the layer changes). Panels: DS.Dock.register(id, def)
+   like js/workspace.js - the add-on's scripts run before the workspace is built. */
 (function () {
   const DS = (window.DS = window.DS || {});
   const H = (DS.Hooks = {});

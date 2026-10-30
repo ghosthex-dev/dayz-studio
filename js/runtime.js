@@ -924,6 +924,7 @@ class DSQuests
 	int m_HelloTries;
 	ref map<string, string> m_Talk;          // server: the conversation each player has open ("quest|node|state")
 	float m_SaveT;
+	float m_ReloadT;
 	ref map<int, string> m_Chunks;
 	ref map<string, float> m_Globals;        // server: persistent server-wide variables
 	float m_FxT;
@@ -1002,7 +1003,7 @@ class DSQuests
 			m_LogLines.RemoveOrdered(0);
 	}
 
-	// play-test: pick up a re-exported quests.json without restarting the game
+	// pick up a re-exported quests.json without restarting (play-test, or reload.flag on a live server)
 	void Reload()
 	{
 		string path = ROOT + "/quests.json";
@@ -2595,6 +2596,20 @@ class DSQuests
 		{
 			PollFlags(first);
 			WriteProgress(first);
+		}
+		else
+		{
+			// a live server: quest data uploaded with a reload.flag next to it is picked up without a restart
+			m_ReloadT += step;
+			if (m_ReloadT >= 15)
+			{
+				m_ReloadT = 0;
+				if (FileExist(ROOT + "/reload.flag"))
+				{
+					DeleteFile(ROOT + "/reload.flag");
+					Reload();
+				}
+			}
 		}
 	}
 
