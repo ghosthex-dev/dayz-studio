@@ -1,0 +1,164 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 400" width="1600" height="400">
+  <defs>
+    <!-- Background Gradients -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#07090e"/>
+      <stop offset="40%" stop-color="#0c1118"/>
+      <stop offset="75%" stop-color="#080d14"/>
+      <stop offset="100%" stop-color="#040608"/>
+    </linearGradient>
+
+    <!-- Accent Gradients -->
+    <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+
+    <linearGradient id="accentDivider" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0"/>
+      <stop offset="15%" stop-color="#22d3ee" stop-opacity="0.9"/>
+      <stop offset="50%" stop-color="#38bdf8" stop-opacity="1"/>
+      <stop offset="85%" stop-color="#10b981" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>
+    </linearGradient>
+
+    <linearGradient id="radarSweep" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Filters -->
+    <filter id="cyanGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Tactical Grid & Dot Patterns -->
+    <pattern id="gridPattern" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#22d3ee" stroke-opacity="0.04" stroke-width="1"/>
+    </pattern>
+    <pattern id="subGrid" width="8" height="8" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="0.75" fill="#38bdf8" fill-opacity="0.025"/>
+    </pattern>
+  </defs>
+
+  <style>
+    .tactical-font { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .ui-font { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
+    .brand-title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 900; font-size: 64px; fill: #ffffff; letter-spacing: 3px; }
+    .subtitle-badge { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 13px; font-weight: 700; fill: #22d3ee; letter-spacing: 4px; text-transform: uppercase; }
+    .tagline { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 400; font-size: 16.5px; fill: #94a3b8; }
+    .spec-readout { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11px; fill: #475569; letter-spacing: 1.5px; }
+    .pill-bg { fill: #0f1622; stroke: #1e293b; stroke-width: 1.2; rx: 6px; }
+    .pill-txt { font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600; fill: #cbd5e1; }
+  </style>
+
+  <!-- Background Base -->
+  <rect width="100%" height="100%" fill="url(#bgGrad)"/>
+  <rect width="100%" height="100%" fill="url(#gridPattern)"/>
+  <rect width="100%" height="100%" fill="url(#subGrid)"/>
+
+  <!-- Tactical Radar & Range Finder Graphics (Right Side) -->
+  <g transform="translate(1400, 200)" opacity="0.32">
+    <circle cx="0" cy="0" r="175" fill="none" stroke="#22d3ee" stroke-width="1.2" stroke-dasharray="3 6"/>
+    <circle cx="0" cy="0" r="125" fill="none" stroke="#22d3ee" stroke-width="1"/>
+    <circle cx="0" cy="0" r="75" fill="none" stroke="#38bdf8" stroke-width="1" stroke-dasharray="2 4"/>
+    <circle cx="0" cy="0" r="25" fill="none" stroke="#22d3ee" stroke-width="1"/>
+    <line x1="-220" y1="0" x2="220" y2="0" stroke="#22d3ee" stroke-width="1" stroke-dasharray="2 5"/>
+    <line x1="0" y1="-190" x2="0" y2="190" stroke="#22d3ee" stroke-width="1" stroke-dasharray="2 5"/>
+    <!-- Radar sector -->
+    <path d="M 0 0 L 124 -72 A 125 125 0 0 1 125 0 Z" fill="url(#radarSweep)"/>
+  </g>
+
+  <!-- Corner Tactical Brackets -->
+  <g stroke="#22d3ee" stroke-opacity="0.4" stroke-width="2" fill="none">
+    <path d="M 28 42 L 28 22 L 48 22"/>
+    <path d="M 1572 42 L 1572 22 L 1552 22"/>
+    <path d="M 28 358 L 28 378 L 48 378"/>
+    <path d="M 1572 358 L 1572 378 L 1552 378"/>
+  </g>
+
+  <!-- Telemetry Coordinates -->
+  <text x="56" y="38" class="spec-readout">SYS.ID // GHOSTHEX-STUDIO-LABS</text>
+  <text x="56" y="372" class="spec-readout">STANDALONE DESKTOP TOOLING • ZERO VANILLA MOD DEPENDENCIES</text>
+  <text x="1270" y="38" class="spec-readout">GRID 064 // CHERNARUS+ • LIVONIA • SAKHAL</text>
+  <text x="1360" y="372" class="spec-readout">STATUS: ACTIVE PIPELINE [OK]</text>
+
+  <!-- Glowing Accent Dividers -->
+  <rect x="220" y="55" width="1160" height="1.5" fill="url(#accentDivider)"/>
+  <rect x="220" y="342" width="1160" height="1.5" fill="url(#accentDivider)"/>
+
+  <!-- Left Main Branding Unit (Patreon avatar clearance: ~330px left safe margin) -->
+  <g transform="translate(330, 75)">
+
+    <!-- Logo Icon (Safely positioned to the left of the title, completely separated!) -->
+    <g transform="translate(0, 36)">
+      <rect x="0" y="0" width="76" height="76" rx="16" fill="#0d1824" stroke="#22d3ee" stroke-width="1.8" stroke-opacity="0.8"/>
+      <circle cx="38" cy="38" r="26" fill="none" stroke="#22d3ee" stroke-opacity="0.25" stroke-dasharray="3 3"/>
+      <!-- Reticle / Diamond Icon -->
+      <path d="M 38 15 L 61 38 L 38 61 L 15 38 Z" fill="none" stroke="url(#cyanGrad)" stroke-width="2.6" filter="url(#softGlow)"/>
+      <circle cx="38" cy="38" r="4.5" fill="#38bdf8"/>
+    </g>
+
+    <!-- Header Text Block positioned with generous clearance to the right of logo -->
+    <g transform="translate(96, 0)">
+      
+      <!-- Top System Badge -->
+      <g transform="translate(0, 18)">
+        <rect x="0" y="-12" width="220" height="24" rx="4" fill="#0d1f2d" stroke="#22d3ee" stroke-width="1"/>
+        <circle cx="14" cy="0" r="4" fill="#22d3ee" filter="url(#softGlow)"/>
+        <text x="28" y="4" class="subtitle-badge">GHOSTHEX DEV LABS</text>
+      </g>
+
+      <!-- Main Title: Completely clean & unhindered -->
+      <text x="0" y="86" class="brand-title">DAYZ STUDIO</text>
+
+      <!-- Subtitle & Value Proposition -->
+      <text x="0" y="123" class="tagline">Next-Gen Visual IDE for <tspan fill="#ffffff" font-weight="600">DayZ Server Architecture</tspan> &amp; Vanilla RPG Engineering</text>
+      <text x="0" y="147" class="tagline" font-size="14" fill="#64748b">Visual Quests • Dialogue Trees • 3D Terrain Viewport • Central Economy • Standalone Desktop Builds</text>
+
+      <!-- Feature & Patreon Cafe Tier Pills -->
+      <g transform="translate(0, 180)">
+        
+        <!-- Tier 1 Pill -->
+        <g transform="translate(0, 0)">
+          <rect width="175" height="34" class="pill-bg"/>
+          <circle cx="16" cy="17" r="4" fill="#38bdf8"/>
+          <text x="30" y="22" class="pill-txt">◈ Studio Insider</text>
+        </g>
+
+        <!-- Tier 2 Pill -->
+        <g transform="translate(188, 0)">
+          <rect width="195" height="34" class="pill-bg"/>
+          <circle cx="16" cy="17" r="4" fill="#fbbf24"/>
+          <text x="30" y="22" class="pill-txt">🚀 Experimental Builds</text>
+        </g>
+
+        <!-- Tier 3 Pill -->
+        <g transform="translate(396, 0)">
+          <rect width="185" height="34" class="pill-bg"/>
+          <circle cx="16" cy="17" r="4" fill="#34d399"/>
+          <text x="30" y="22" class="pill-txt">🤝 Core Contributor</text>
+        </g>
+
+        <!-- Tech Tag Pill -->
+        <g transform="translate(594, 0)">
+          <rect width="185" height="34" class="pill-bg"/>
+          <circle cx="16" cy="17" r="4" fill="#a855f7"/>
+          <text x="30" y="22" class="pill-txt">📦 1-Click Signed PBO</text>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

@@ -13,14 +13,17 @@
   <img src="https://img.shields.io/badge/DayZ-1.25%20%7C%201.26%20%7C%201.30%2B-10b981?style=for-the-badge&logo=steam&logoColor=white" alt="DayZ 1.25 - 1.30+">
   <img src="https://img.shields.io/badge/Vanilla%20Server-Zero%20Dependencies-f59e0b?style=for-the-badge" alt="Zero Mod Dependencies">
   <img src="https://img.shields.io/badge/Mod%20Signing-Automated%20PBO-a855f7?style=for-the-badge" alt="Automated Mod Signing">
+  <a href="https://www.patreon.com/c/GhostHexDev"><img src="https://img.shields.io/badge/Patreon-Support%20Project-ff424d?style=for-the-badge&logo=patreon&logoColor=white" alt="Support on Patreon"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-EULA-64748b?style=for-the-badge" alt="License"></a>
 </p>
 
 <p align="center">
   <a href="https://ghosthex-dev.github.io/dayz-studio/"><b>🌐 Live Showcase Site</b></a> •
+  <a href="https://www.patreon.com/c/GhostHexDev"><b>❤️ Patreon / Insider Builds</b></a> •
   <a href="#quick-start"><b>🚀 Quick Start</b></a> •
   <a href="https://github.com/ghosthex-dev/dayz-studio/releases/latest"><b>📥 Download Setup (.exe)</b></a> •
   <a href="#why-dayz-studio"><b>💡 Why DayZ Studio?</b></a> •
+  <a href="#patreon-support"><b>◈ Patreon Cafe</b></a> •
   <a href="#feature-tour"><b>✨ Feature Tour</b></a> •
   <a href="#workflow"><b>🔄 Workflow</b></a> •
   <a href="#shortcuts"><b>⌨️ Shortcuts</b></a> •
@@ -484,6 +487,28 @@ flowchart LR
 </details>
 
 ---
+
+---
+
+<a id="patreon-support"></a>
+## ❤️ Support the Project & The Patreon Cafe
+
+DayZ Studio is and will always remain **free and open-source** for its public stable releases and repository code. 
+
+Developing a full 3D/2D visual desktop IDE, writing custom binary terrain parsers, maintaining live game sync, and keeping up with Bohemia Interactive engine updates requires hundreds of hours of dedicated development. 
+
+To help make continuous standalone tooling sustainable, we maintain a community-funded pipeline on **[Patreon](https://www.patreon.com/c/GhostHexDev)**:
+
+| Tier | Pledge | Key Perks & Deliverables |
+| :--- | :--- | :--- |
+| **Studio Insider** | **$5** / mo | Discord `Studio Insider` role, private dev diaries & architecture sneak-peeks (`#🏠│insider-info`), feature concept voting (`#💡│feature-suggestions`), and repo credits. |
+| **Experimental Tester** ⭐ | **$15** / mo | **Direct access to download standalone compiled Alpha/Experimental binary executables (`.exe`)** (`#🚀│experimental-builds`), priority bug triage (`#🪲│testing-feedback`), and early access to unreleased editors. |
+| **Core Contributor** | **$35** / mo | Executive chat & voice advisory lounge (`#🤝│roundtable-hq`), 1-on-1 consultations with the developer on custom server workflows, roadmap priority influence, and VIP startup splash credit. |
+
+> [!IMPORTANT]
+> **Experimental Executable Access (EULA Section 1):** In accordance with the root [LICENSE](LICENSE), public repository code is open-source, while standalone compiled binary executables (`.exe`) of unreleased Experimental, Alpha, and Pre-Release builds are distributed exclusively through the authorized [GhostHex Dev Patreon pipeline](https://www.patreon.com/c/GhostHexDev).
+
+👉 **[Join the GhostHex Dev Patreon & Unlock Experimental Builds](https://www.patreon.com/c/GhostHexDev)**
 
 ## ✍️ A Personal Note on Development & AI
 

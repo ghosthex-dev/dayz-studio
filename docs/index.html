@@ -161,6 +161,19 @@
       padding: 6px 12px;
       font-size: 13px;
     }
+    .btn-patreon {
+      background: linear-gradient(135deg, #ff424d, #f97316);
+      color: #fff !important;
+      font-weight: 700;
+      box-shadow: 0 4px 18px rgba(255, 66, 77, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .btn-patreon:hover {
+      background: linear-gradient(135deg, #ff5e67, #fb923c);
+      color: #fff !important;
+      box-shadow: 0 6px 24px rgba(255, 66, 77, 0.55);
+      transform: translateY(-1px);
+    }
 
     /* Hero Section */
     .hero {
@@ -798,11 +811,15 @@
         <a href="#comparison" class="nav-link">Why Studio?</a>
         <a href="#shortcuts" class="nav-link">Shortcuts</a>
         <a href="#quickstart" class="nav-link">Setup</a>
+        <a href="#patreon" class="nav-link" style="color: #ff7b82; font-weight: 600;">❤️ Patreon</a>
         <a href="#faq" class="nav-link">FAQ</a>
       </nav>
       <div class="nav-actions">
         <a href="https://github.com/ghosthex-dev/dayz-studio" target="_blank" class="btn btn-secondary btn-sm">
           ⭐ Star on GitHub
+        </a>
+        <a href="https://www.patreon.com/c/GhostHexDev" target="_blank" class="btn btn-patreon btn-sm">
+          ❤️ Patreon
         </a>
         <a href="https://github.com/ghosthex-dev/dayz-studio/releases/latest" class="btn btn-primary btn-sm">
           ⬇ Download .exe
@@ -828,6 +845,9 @@
       <div class="hero-buttons">
         <a href="https://github.com/ghosthex-dev/dayz-studio/releases/latest" class="btn btn-primary">
           ⬇ Download Setup (.exe)
+        </a>
+        <a href="https://www.patreon.com/c/GhostHexDev" target="_blank" class="btn btn-patreon">
+          ❤️ Support on Patreon &amp; Get Early Builds
         </a>
         <a href="manual/" class="btn btn-secondary" style="border-color: #38bdf8; color: #38bdf8;">
           📖 Read User Manual
@@ -1331,6 +1351,88 @@
     </div>
   </section>
 
+
+  <!-- Patreon / Freemium Supporter Section -->
+  <section class="patreon-section" id="patreon" style="padding: 70px 0; border-top: 1px solid var(--line); background: radial-gradient(circle at 50% 0%, rgba(255, 66, 77, 0.06), transparent 70%);">
+    <div class="container">
+      <div class="section-title">
+        <div class="status-pill" style="border-color: rgba(255, 66, 77, 0.4); color: #ff7b82; background: rgba(255, 66, 77, 0.08); margin: 0 auto 16px;">
+          <span class="status-dot" style="background: #ff424d; box-shadow: 0 0 8px #ff424d;"></span>
+          <span>SUPPORT STANDALONE DEVELOPMENT • THE PATREON CAFE</span>
+        </div>
+        <h2>Support DayZ Studio on <span style="background: linear-gradient(135deg, #ff424d, #f97316); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Patreon</span></h2>
+        <p>The core application will always remain free and open-source. Backing the project funds continuous engine updates and unlocks standalone compiled experimental builds (.exe), private Discord channels, and feature voting.</p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; margin-top: 40px;">
+        <!-- Card 1: Studio Insider -->
+        <div class="feature-card" style="border-top: 3px solid #38bdf8; display: flex; flex-direction: column;">
+          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">
+            <h3 style="margin: 0; color: #f8fafc;">Studio Insider</h3>
+            <span style="font-size: 20px; font-weight: 800; color: #38bdf8;">$5 <span style="font-size: 13px; font-weight: 500; color: var(--text-dim);">/mo</span></span>
+          </div>
+          <p style="font-size: 14px; margin-bottom: 20px; color: var(--text-muted);">For creators and community members who want behind-the-scenes dev logs and a direct vote on tool features.</p>
+          <ul style="list-style: none; padding: 0; margin: 0 0 24px; font-size: 13.5px; line-height: 1.8; color: var(--text); flex-grow: 1;">
+            <li>🔹 Discord <strong>Studio Insider</strong> role</li>
+            <li>🔹 Private dev logs &amp; sneak peeks (<code>#🏠│insider-info</code>)</li>
+            <li>🔹 Community feature voting (<code>#💡│feature-suggestions</code>)</li>
+            <li>🔹 Supporter recognition in repository credits</li>
+          </ul>
+          <a href="https://www.patreon.com/checkout/GhostHexDev?rid=29944159" target="_blank" class="btn btn-secondary" style="width: 100%; text-align: center; border-color: #38bdf8; color: #38bdf8;">
+            Join Insider Tier
+          </a>
+        </div>
+
+        <!-- Card 2: Experimental Tester (Featured) -->
+        <div class="feature-card" style="border: 1px solid rgba(251, 191, 36, 0.4); border-top: 3px solid #fbbf24; background: rgba(251, 191, 36, 0.03); display: flex; flex-direction: column; position: relative;">
+          <div style="position: absolute; top: -12px; right: 20px; background: #fbbf24; color: #000; font-size: 11px; font-weight: 800; padding: 2px 10px; border-radius: 12px; letter-spacing: 1px; text-transform: uppercase;">
+            RECOMMENDED
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">
+            <h3 style="margin: 0; color: #f8fafc;">Experimental Tester</h3>
+            <span style="font-size: 20px; font-weight: 800; color: #fbbf24;">$15 <span style="font-size: 13px; font-weight: 500; color: var(--text-dim);">/mo</span></span>
+          </div>
+          <p style="font-size: 14px; margin-bottom: 20px; color: var(--text-muted);">Direct access to download standalone compiled Alpha/Experimental <code>.exe</code> builds without compiling from source.</p>
+          <ul style="list-style: none; padding: 0; margin: 0 0 24px; font-size: 13.5px; line-height: 1.8; color: var(--text); flex-grow: 1;">
+            <li>⚡ <strong>Standalone compiled experimental builds (.exe)</strong></li>
+            <li>⚡ Direct download channel (<code>#🚀│experimental-builds</code>)</li>
+            <li>⚡ Priority bug triage &amp; logging (<code>#🪲│testing-feedback</code>)</li>
+            <li>⚡ Early access to unreleased editors &amp; terrain tools</li>
+            <li>⚡ <em>Includes all perks from the Insider tier</em></li>
+          </ul>
+          <a href="https://www.patreon.com/checkout/GhostHexDev?rid=29944187" target="_blank" class="btn btn-patreon" style="width: 100%; text-align: center; background: linear-gradient(135deg, #f59e0b, #fbbf24); color: #000; font-weight: 800;">
+            Get Experimental Builds
+          </a>
+        </div>
+
+        <!-- Card 3: Core Contributor -->
+        <div class="feature-card" style="border-top: 3px solid #34d399; display: flex; flex-direction: column;">
+          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">
+            <h3 style="margin: 0; color: #f8fafc;">Core Contributor</h3>
+            <span style="font-size: 20px; font-weight: 800; color: #34d399;">$35 <span style="font-size: 13px; font-weight: 500; color: var(--text-dim);">/mo</span></span>
+          </div>
+          <p style="font-size: 14px; margin-bottom: 20px; color: var(--text-muted);">High-tier architectural advisory for server networks and creators who want 1-on-1 input with the developer.</p>
+          <ul style="list-style: none; padding: 0; margin: 0 0 24px; font-size: 13.5px; line-height: 1.8; color: var(--text); flex-grow: 1;">
+            <li>🌟 Private chat &amp; voice advisory lounge (<code>#🤝│roundtable-hq</code>)</li>
+            <li>🌟 1-on-1 feedback and workflow consultations</li>
+            <li>🌟 Priority influence on custom exporters &amp; tooling</li>
+            <li>🌟 Prominent VIP credit on application startup splash</li>
+            <li>🌟 <em>Includes all Tester &amp; Insider perks</em></li>
+          </ul>
+          <a href="https://www.patreon.com/checkout/GhostHexDev?rid=29944198" target="_blank" class="btn btn-secondary" style="width: 100%; text-align: center; border-color: #34d399; color: #34d399;">
+            Become Core Contributor
+          </a>
+        </div>
+      </div>
+
+      <div style="text-align: center; margin-top: 36px;">
+        <a href="https://www.patreon.com/c/GhostHexDev" target="_blank" class="btn btn-patreon" style="padding: 12px 28px; font-size: 15px;">
+          ❤️ Visit the Official GhostHex Dev Patreon Page ➜
+        </a>
+      </div>
+    </div>
+  </section>
+
   <!-- FAQ Section -->
   <section class="faq-section" id="faq" style="padding: 60px 0; border-top: 1px solid var(--line);">
     <div class="container" style="max-width: 860px;">
@@ -1438,6 +1540,7 @@
     <div class="container">
       <div class="footer-links">
         <a href="https://github.com/ghosthex-dev/dayz-studio">GitHub Repository</a>
+        <a href="https://www.patreon.com/c/GhostHexDev" target="_blank" style="color: #ff7b82; font-weight: 600;">❤️ Support on Patreon</a>
         <a href="manual/">📖 User Manual</a>
         <a href="https://github.com/ghosthex-dev/dayz-studio/releases/latest">Download Latest Release</a>
         <a href="https://github.com/ghosthex-dev/dayz-studio/issues/new?template=bug_report.md&amp;labels=bug">Report a Bug</a>
