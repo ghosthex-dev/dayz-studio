@@ -164,6 +164,7 @@
           h.type === 'bar' ? sel(h.stat, statOpts, (v) => { h.stat = v; ch(); redraw(); }) : null,
           txt(h.text, (v) => { h.text = v; ch(); }, h.type === 'bar' ? 'Text on the bar (optional): {xp} / {xp.max} XP' : 'Text: Reputation {reputation}'),
           el('button', { class: 'btn icon', title: 'Delete this widget', onclick: () => { P.hud.splice(i, 1); ch(); S.commit(); redraw(); } }, '🗑')),
+        h.type === 'panel' ? null : hudValues(h, redraw),
         el('div', { class: 'btn-row st-row' },
           el('span', { class: 'ins-help' }, 'x %'), pct(h.x, (v) => { h.x = v; ch(); }),
           el('span', { class: 'ins-help' }, 'y %'), pct(h.y, (v) => { h.y = v; ch(); }),
@@ -183,6 +184,19 @@
       el('button', { class: 'btn', onclick: () => { P.hud.push({ id: nid('text'), type: 'text', x: 0.02, y: 0.3, w: 0.2, h: 0.03, color: '#ffffff', bg: '', size: 22, stat: '', text: xp ? `${xp.name || xp.id}: {${xp.id}}` : 'Text' }); ch(); S.commit(); redraw(); } }, '+ Text'),
       el('button', { class: 'btn', onclick: () => { P.hud.push({ id: nid('panel'), type: 'panel', x: 0.02, y: 0.28, w: 0.22, h: 0.12, color: '#ffffff', bg: '#000000', size: 22, stat: '', text: '' }); ch(); S.commit(); redraw(); } }, '+ Panel')));
     return wrap;
+  }
+
+  /** the {values} a HUD text can show, as buttons that add them to it */
+  function hudValues(h, redraw) {
+    const P = S.project;
+    const add = (tok) => { h.text = ((h.text || '') + ' ' + tok).trim(); S.changed('stats'); S.commit(); redraw(); };
+    const chip = (tok, label) => el('button', { class: 'chip', title: 'Add ' + tok, onclick: () => add(tok) }, label);
+    const stats = (P.stats || []).map((st) => chip(`{${st.id}}`, st.name));
+    const facs = ((P.factions && P.factions.list) || []).flatMap((f) => [chip(`{rep.${f.id}}`, `${f.name} points`), chip(`{rep.${f.id}.tier}`, `${f.name} tier`)]);
+    const empty = h.type === 'text' && !/\{[^}]+\}/.test(h.text || '');
+    return el('div', { class: 'btn-row st-row', style: { flexWrap: 'wrap' } },
+      empty ? el('span', { class: 'ins-help', style: { color: 'var(--warn, #e0a030)' } }, 'This text shows no value yet. Add one:') : el('span', { class: 'ins-help' }, 'Add a value:'),
+      ...stats, ...facs);
   }
 
   /* ---------- factions & reputation ---------- */
