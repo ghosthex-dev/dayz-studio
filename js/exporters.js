@@ -881,10 +881,9 @@ Format used: 24-byte header [cells, cells, mapWidth, mapHeight, ${DS.Zones.ubits
   };
 
   /** files add-ons put into a build (hook 'build.files'): [{ path, text, desc }] - scripts under scripts/4_World or
-      scripts/5_Mission, data under profile/DZStudioQuests - or images and layouts under gui/, by text or from a file
-      of the add-on ({ path, from: '/addons/<id>/<file>' }) */
+      scripts/5_Mission, data under profile/DZStudioQuests */
   function extraFiles(P, kind) {
-    return DS.Hooks ? DS.Hooks.collect('build.files', { P, kind }).filter((f) => f && f.path && (f.text != null || (f.from && kind !== 'source'))) : [];
+    return DS.Hooks ? DS.Hooks.collect('build.files', { P, kind }).filter((f) => f && f.path && f.text != null) : [];
   }
   X.extraFiles = (kind) => extraFiles(S.project, kind);
 

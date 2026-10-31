@@ -1009,12 +1009,10 @@ def factions_file(body):
 
 def extra_files(body):
     """the files add-ons add to a build (js hook 'build.files') -> (scripts [(relative path, text)], data [(name, text)]);
-    raises ValueError for any other path (gui/ files: see copy_assets)"""
+    raises ValueError for any other path"""
     scripts, data = [], []
     for f in body.get('files') or []:
         path, text = str(f.get('path', '')), f.get('text')
-        if ASSET_PATH.match(path):
-            continue
         if not isinstance(text, str):
             raise ValueError('add-on file without text: %s' % path)
         if re.match(r'^scripts/(4_World|5_Mission)/[A-Za-z0-9_]+\.c$', path):
@@ -1024,27 +1022,6 @@ def extra_files(body):
         else:
             raise ValueError('an add-on tried to write outside the mod: %s' % path)
     return scripts, data
-
-
-ASSET_PATH = re.compile(r'^gui/[A-Za-z0-9_/.-]+\.(paa|layout|imageset)$')
-
-
-def copy_assets(body, dest):
-    """images and layouts add-ons put into a mod: { path: 'gui/...', from: '/addons/<id>/<file>' } or { path, text }"""
-    for f in body.get('files') or []:
-        path = str(f.get('path', ''))
-        if not ASSET_PATH.match(path) or '..' in path:
-            continue
-        out = os.path.join(dest, *path.split('/'))
-        os.makedirs(os.path.dirname(out), exist_ok=True)
-        if isinstance(f.get('text'), str):
-            with open(out, 'w', encoding='utf-8', newline='\n') as o:
-                o.write(f['text'])
-            continue
-        source = ADD.file_path(str(f.get('from', '')))
-        if not source or not os.path.isfile(source):
-            raise ValueError('an add-on file is missing: %s' % f.get('from'))
-        shutil.copy2(source, out)
 
 
 def copy_profile_extras(dest):
@@ -1090,10 +1067,6 @@ def build_export(body):
     w(os.path.join('scripts', '5_Mission', 'DSMission.c'), body['hook'])
     for rel, text in add_scripts:
         w(rel, text)
-    try:
-        copy_assets(body, src)
-    except ValueError as e:
-        return {'ok': False, 'error': str(e)}
     n_snd = 0
     for s_ in body.get('sounds', []):
         sid = re.sub(r'[^A-Za-z0-9]', '', str(s_.get('id', '')))
@@ -1349,10 +1322,6 @@ def playtest_prepare(body):
     for rel, text in add_scripts:
         with open(os.path.join(QT_SRC, rel), 'w', encoding='utf-8') as f:
             f.write(text)
-    try:
-        copy_assets(body, QT_SRC)
-    except ValueError as e:
-        return {'ok': False, 'error': str(e)}
     snd_dir = os.path.join(QT_SRC, 'sounds')
     for s in body.get('sounds', []):
         sid = re.sub(r'[^A-Za-z0-9]', '', str(s.get('id', '')))

@@ -610,7 +610,6 @@ class DSTradeFile
 class DSTradeRow
 {
 	int i;
-	string c;
 	string name;
 	string cat;
 	int n;
@@ -4778,7 +4777,6 @@ class DSQuests
 			DSTradeItem it = tr.items.Get(i);
 			DSTradeRow r = new DSTradeRow();
 			r.i = i;
-			r.c = it.c;
 			r.name = TradeName(it);
 			r.cat = it.cat;
 			r.n = it.n;
@@ -5622,7 +5620,6 @@ class DSDialogUI
 	float m_PanelX;
 	float m_PanelY;
 	float m_OptY;
-	float m_OptH = 30;
 	float m_PanelW;
 	Camera m_Cam;
 	vector m_CamFrom;
@@ -5801,26 +5798,6 @@ class DSDialogUI
 		vector cp = GetGame().GetCurrentCameraPosition();
 		vector cd = GetGame().GetCurrentCameraDirection();
 		vector head = Vector(m_Pkt.x, m_Pkt.y + 1.55, m_Pkt.z);
-		// aim at the NPC's real head: it may be sitting or crouching
-		array<Object> nearby = new array<Object>;
-		GetGame().GetObjectsAtPosition(Vector(m_Pkt.x, m_Pkt.y, m_Pkt.z), 2.5, nearby, null);
-		float bestDist = 1000;
-		for (int n = 0; n < nearby.Count(); n++)
-		{
-			Human who = Human.Cast(nearby.Get(n));
-			if (!who || who == GetGame().GetPlayer())
-				continue;
-			float dist = vector.Distance(who.GetPosition(), Vector(m_Pkt.x, m_Pkt.y, m_Pkt.z));
-			if (dist < bestDist)
-			{
-				int bone = who.GetBoneIndexByName("Head");
-				if (bone >= 0)
-				{
-					bestDist = dist;
-					head = who.GetBonePositionWS(bone);
-				}
-			}
-		}
 		vector away = cp - head;
 		away[1] = 0;
 		if (away.Length() < 0.3)
@@ -6045,13 +6022,7 @@ class DSDialogUI
 				dyaw = dyaw - 360;
 			while (dyaw < -180)
 				dyaw = dyaw + 360;
-			// pitch wraps around too: from 5 to 355 is 10 degrees, not a swing through upside down
-			float dpitch = m_OriTo[1] - m_OriFrom[1];
-			while (dpitch > 180)
-				dpitch = dpitch - 360;
-			while (dpitch < -180)
-				dpitch = dpitch + 360;
-			vector co = Vector(m_OriFrom[0] + dyaw * s, m_OriFrom[1] + dpitch * s, 0);
+			vector co = Vector(m_OriFrom[0] + dyaw * s, Math.Lerp(m_OriFrom[1], m_OriTo[1], s), 0);
 			m_Cam.SetPosition(cp);
 			m_Cam.SetOrientation(co);
 		}
@@ -6121,8 +6092,8 @@ class DSDialogUI
 		GetMousePos(mx, my);
 		for (int j = 0; j < m_OptCount; j++)
 		{
-			float ry = m_OptY + j * m_OptH;
-			if (mx >= m_PanelX && mx <= m_PanelX + m_PanelW && my >= ry && my < ry + m_OptH)
+			float ry = m_OptY + j * 30;
+			if (mx >= m_PanelX && mx <= m_PanelX + m_PanelW && my >= ry && my < ry + 30)
 			{
 				if (m_Sel != j)
 				{
@@ -6134,7 +6105,7 @@ class DSDialogUI
 		bool down2 = (GetMouseState(MouseState.LEFT) & MB_PRESSED_MASK) != 0;
 		if (down2 && !m_MouseDown)
 		{
-			if (my >= m_OptY && my < m_OptY + m_OptCount * m_OptH && mx >= m_PanelX && mx <= m_PanelX + m_PanelW)
+			if (my >= m_OptY && my < m_OptY + m_OptCount * 30 && mx >= m_PanelX && mx <= m_PanelX + m_PanelW)
 			{
 				m_MouseDown = down2;
 				Choose(m_Sel);
@@ -6645,8 +6616,6 @@ class DSJournalUI
 	bool m_TrackedLoaded;
 	vector m_Target;
 	bool m_HasTarget;
-	float m_HudX;
-	float m_HudY;
 
 	// journal
 	bool m_Open;
@@ -6867,19 +6836,17 @@ class DSJournalUI
 	{
 		int sw, sh;
 		GetScreenSize(sw, sh);
-		float w = 420;
-		float x = sw - w - 20;
-		float y = 20;
-		m_HudX = x;
-		m_HudY = y;
-		m_HudTitle = DSQText(x, y, w, 28, 24, 0xFFE8D29A, 990);
+		float w = 560;
+		float x = sw - w - 30;
+		float y = sh * 0.16;
+		m_HudTitle = DSQText(x, y, w, 38, 32, 0xFFE8D29A, 990);
 		m_HudLines.Clear();
 		for (int i = 0; i < 4; i++)
 		{
-			TextWidget tl = DSQText(x + 8, y + 30 + i * 24, w - 8, 24, 20, 0xFFFFFFFF, 990);
+			TextWidget tl = DSQText(x + 12, y + 42 + i * 32, w - 12, 32, 26, 0xFFFFFFFF, 990);
 			m_HudLines.Insert(tl);
 		}
-		m_HudHint = DSQText(x, y + 30 + 4 * 24, w, 20, 16, 0xFF9A9A9A, 990);
+		m_HudHint = DSQText(x, y + 42 + 4 * 32, w, 26, 20, 0xFF9A9A9A, 990);
 		m_Marker = DSQText(0, 0, 240, 32, 24, 0xFFFFE9A8, 980);
 		m_Banner = DSQText(sw * 0.5 - 400, sh * 0.12, 800, 44, 36, 0x00FFE9A8, 995);
 		m_BannerSub = DSQText(sw * 0.5 - 400, sh * 0.12 + 46, 800, 32, 26, 0x00FFFFFF, 995);
@@ -6966,7 +6933,6 @@ class DSJournalUI
 			shown++;
 		}
 		m_HudHint.SetText("[J] Journal");
-		m_HudHint.SetPos(m_HudX, m_HudY + 30 + shown * 24);
 
 		// world marker over the objective position
 		if (target)
@@ -7637,7 +7603,6 @@ class DSItemGate
 // ---- HUD widgets made in Studio (bars and text bound to the player's stats) ------------
 class DSHudDef
 {
-	ref array<Widget> wParts;
 	string id;
 	string type;      // bar | text | panel
 	float x;          // fractions of the screen
@@ -7656,30 +7621,6 @@ class DSHudDef
 	Widget wBg;
 	Widget wFill;
 	TextWidget wText;
-}
-
-// how the HUD widgets made in Studio are drawn (an add-on can mod this class)
-class DSQStyle
-{
-	TextWidget HudText(string type, float x, float y, float w, float h, int size, int color)
-	{
-		return DSQText(x + 6, y, w - 12, h, size, color, 987);
-	}
-
-	Widget HudBack(float x, float y, float w, float h, int color)
-	{
-		return DSQRect(x, y, w, h, color, 985);
-	}
-
-	Widget HudFill(float x, float y, float w, float h, int color)
-	{
-		return DSQRect(x, y, w, h, color, 986);
-	}
-
-	// anything more around a widget: what goes into parts shows and hides with it
-	void HudFrame(string type, float x, float y, float w, float h, array<Widget> parts)
-	{
-	}
 }
 
 class DSHud
@@ -7718,7 +7659,6 @@ class DSHud
 	{
 		int sw, sh;
 		GetScreenSize(sw, sh);
-		DSQStyle style = new DSQStyle();
 		for (int i = 0; i < s_Defs.Count(); i++)
 		{
 			DSHudDef d = s_Defs.Get(i);
@@ -7726,18 +7666,16 @@ class DSHud
 			d.py = d.y * sh;
 			d.pw = d.w * sw;
 			d.ph = d.h * sh;
-			d.wParts = new array<Widget>;
-			style.HudFrame(d.type, d.px, d.py, d.pw, d.ph, d.wParts);
 			if (d.type == "bar" || d.type == "panel")
-				d.wBg = style.HudBack(d.px, d.py, d.pw, d.ph, d.bg);
+				d.wBg = DSQRect(d.px, d.py, d.pw, d.ph, d.bg, 985);
 			if (d.type == "bar")
-				d.wFill = style.HudFill(d.px, d.py, d.pw, d.ph, d.color);
+				d.wFill = DSQRect(d.px, d.py, d.pw, d.ph, d.color, 986);
 			if (d.type == "text" || d.text != "")
 			{
 				int tc = 0xFFFFFFFF;
 				if (d.type == "text")
 					tc = d.color;
-				d.wText = style.HudText(d.type, d.px, d.py, d.pw, d.ph, d.size, tc);
+				d.wText = DSQText(d.px + 6, d.py, d.pw - 12, d.ph, d.size, tc, 987);
 			}
 		}
 		s_Built = true;
@@ -7777,11 +7715,6 @@ class DSHud
 			d.wFill.Show(on);
 		if (d.wText)
 			d.wText.Show(on);
-		for (int k = 0; k < d.wParts.Count(); k++)
-		{
-			if (d.wParts.Get(k))
-				d.wParts.Get(k).Show(on);
-		}
 	}
 
 	static void Update(float dt, bool covered, DSJournal jn)
